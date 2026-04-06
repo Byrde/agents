@@ -4,9 +4,9 @@ This file defines the GitHub integration context and conventions for all workflo
 
 ## Required Fields
 
-**Account:** <!-- The GitHub account or organization (e.g. byrde) -->
-**Repository:** <!-- The GitHub repository (e.g. byrde/my-app) -->
-**Project:** <!-- The GitHub Project board name (e.g. My App) -->
+**Account:** {{ACCOUNT}}
+**Repository:** {{REPOSITORY}}
+**Project:** {{PROJECT}}
 
 ## Conventions
 
