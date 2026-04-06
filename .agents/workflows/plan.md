@@ -6,57 +6,69 @@ Plan and decompose a user request into fully spec'd, GitHub-tracked work items, 
 
 This workflow composes the following jobs, in order:
 
-1. **Technical Planner** — `jobs/plan.md`
-2. **Systems Architect** — `jobs/architect.md`
+1. **Technical Planner** — `.agents/jobs/plan.md`
+2. **Systems Architect** — `.agents/jobs/architect.md`
+
+## Tooling
+
+**This workflow operates entirely in GitHub.** All work items, containers, and tracking must be created and managed through the GitHub API using the configuration and conventions defined in `.agents/tools/github.md`.
+
+Concretely:
+- **Epics** are GitHub Milestones.
+- **Features** are GitHub Issues labeled `Type: Feature`, associated with their parent milestone when one exists.
+- **Bugs** are GitHub Issues labeled `Type: Bug`.
+- **All issues** are added to the GitHub Project board.
+- **All conventions** (labels, naming, lifecycle states) come from `.agents/tools/github.md`.
 
 ## Dependencies
 
 ### Required Files
 
-These files **must** exist before this workflow can execute. If any are missing, **fail immediately** and tell the user what needs to be created.
+These files **must** exist and be fully populated before this workflow can execute. If any are missing or incomplete, **fail immediately** and tell the user what needs to be created.
 
 | File | Purpose |
 | --- | --- |
-| `tools/github.md` | GitHub account, repository, and project board configuration. |
+| `.agents/tools/github.md` | GitHub account, repository, project board configuration, and conventions. |
 
 ### Discovered Context
 
 The following context is **not** pre-configured. It must be elicited from the user (or inferred from the codebase) at the start of the workflow. Do not assume — ask.
 
 - **Tech stack:** Languages, frameworks, databases, and key libraries in use.
-- **Conventions:** Branch naming, label taxonomy, issue templates, PR process, or any team-specific norms.
+- **Conventions:** Any team-specific norms beyond what is already captured in `.agents/tools/github.md`.
 - **Non-negotiables:** Hard constraints the plan must respect (e.g. compliance requirements, performance budgets, dependency policies, compatibility guarantees).
 
 ## Steps
 
 ### Step 1 — Planning (same context)
 
-**Job:** Technical Planner (`jobs/plan.md`)
+**Job:** Technical Planner (`.agents/jobs/plan.md`)
 **Runs in:** The current conversation context (interactive, collaborative).
 
 **Procedure:**
 
-1. **Validate dependencies:** Confirm `tools/github.md` and `practices/development.md` exist and are populated. Fail if not.
+1. **Validate dependencies:** Confirm `.agents/tools/github.md` exists and is populated. Fail if not.
 2. **Gather context:** Elicit the discovered context (tech stack, conventions, non-negotiables) from the user. Keep it conversational — ask only what is needed for the scope at hand, not an exhaustive questionnaire.
 3. Receive the user's raw request (feature idea, bug report, initiative, or vague direction).
 4. Classify the request into a scope bucket (epic, feature, or bugfix) per the job definition. If ambiguous, make the call explicit with the user before proceeding.
-5. Decompose the request into GitHub-tracked work:
-   - **Epic** — create a milestone, then break it into feature issues and stories.
-   - **Feature** — create a single issue (or tight set) with acceptance criteria, linked to an existing milestone if applicable.
-   - **Bugfix** — create a bug issue with repro steps, expected vs actual, and scope limited to the fix.
+5. Decompose the request into GitHub work items:
+   - **Epic** — create a GitHub Milestone, then break it into feature issues and stories, all associated with that milestone.
+   - **Feature** — create a GitHub Issue labeled `Type: Feature`, linked to an existing milestone if applicable.
+   - **Bugfix** — create a GitHub Issue labeled `Type: Bug` with repro steps, expected vs actual, and scope limited to the fix.
 6. Every issue must satisfy the Ironclad Rule from the job spec: acceptance criteria, t-shirt size, priority, and a dependencies section.
-7. Present the full breakdown to the user for review. Iterate until the user confirms the plan.
+7. Add all issues to the GitHub Project board specified in `.agents/tools/github.md`.
+8. Present the full breakdown to the user for review. Iterate until the user confirms the plan.
 
 **Completion gate:** The user has explicitly approved the breakdown — all issues are created on the GitHub project board and correctly linked/milestoned.
 
 ### Step 2 — Architectural Enrichment (MUST RUN AS SUBAGENT)
 
-**Job:** Systems Architect (`jobs/architect.md`)
+**Job:** Systems Architect (`.agents/jobs/architect.md`)
 **Runs in:** A sub-agent (isolated context, launched after Step 1 completes).
 
 **Input to sub-agent:**
 - The list of GitHub issues created in Step 1 (numbers and repository).
-- The contents of `tools/github.md` and `practices/development.md`.
+- The contents of `.agents/tools/github.md` and `.agents/practices/development.md`.
 - Any discovered context (tech stack, conventions, non-negotiables) gathered in Step 1.
 
 **Procedure:**
