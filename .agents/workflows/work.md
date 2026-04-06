@@ -6,17 +6,17 @@ Take a spec'd work item through implementation and QA validation.
 
 This workflow composes the following jobs, in order:
 
-1. **Software Developer** — `.agents/jobs/develop.md`
-2. **QA Specialist** — `.agents/jobs/test.md`
+1. **Software Developer** — `jobs/develop.md`
+2. **QA Specialist** — `jobs/test.md`
 
 ## Tooling
 
-**This workflow operates entirely in GitHub.** All branch creation, issue state transitions, pull requests, and QA reporting must be performed through the GitHub API using the configuration and conventions defined in `.agents/tools/github.md`.
+**This workflow operates entirely in GitHub.** All branch creation, issue state transitions, pull requests, and QA reporting must be performed through the GitHub API using the configuration and conventions defined in `tools/github.md`.
 
 Concretely:
-- **Branches** follow the naming conventions in `.agents/tools/github.md` (`feature/`, `bugfix/`, `patch/`).
+- **Branches** follow the naming conventions in `tools/github.md` (`feature/`, `bugfix/`, `patch/`).
 - **Issue lifecycle** (In Progress → Ready to Test → Done) is managed on the GitHub Project board.
-- **Pull requests** follow the format and content requirements in `.agents/tools/github.md`.
+- **Pull requests** follow the format and content requirements in `tools/github.md`.
 - **All communication** (implementation notes, QA results, defect reports) is posted as comments on the relevant GitHub issue.
 
 ## Dependencies
@@ -27,7 +27,8 @@ These files **must** exist and be fully populated before this workflow can execu
 
 | File | Purpose |
 | --- | --- |
-| `.agents/tools/github.md` | GitHub account, repository, project board configuration, and conventions. |
+| `tools/github.md` | GitHub account, repository, project board configuration, and conventions. |
+| `practices/development.md` | Shared architectural and engineering standards. |
 
 ### Work Item (mandatory, no exceptions)
 
@@ -88,7 +89,8 @@ If no issue is provided and no matching item exists on the project board, **stop
 **Procedure:**
 
 1. **Baseline validation:** Verify the implementation meets every condition in the acceptance criteria.
-2. **Entropy testing:** Attack inputs, edge cases, error states, and latency paths — the unwritten seams where implementations break.
+2. **Standards validation:** Verify the code adheres to the architectural and engineering standards in `.agents/practices/development.md` — dependency rules, folder structure, testing strategy, and separation of concerns. Deviations are defects.
+3. **Entropy testing:** Attack inputs, edge cases, error states, and latency paths — the unwritten seams where implementations break.
 3. **If defects found:** Reject the work. Comment on the GitHub issue with the defect report (defect description, reproduction steps, expected vs actual, environmental context). Move the issue back to **In Progress**. Escalate to the user.
 4. **If passed:** Comment on the issue confirming QA approval. Move the issue to **Done**.
 
