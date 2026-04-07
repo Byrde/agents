@@ -55,10 +55,8 @@ When a GitHub issue is provided, much of this context may already be captured in
 
 **Procedure:**
 
-1. **Baseline validation:** Verify the implementation meets every condition in the acceptance criteria.
-2. **Standards validation:** Verify the code adheres to the architectural and engineering standards in `.agents/practices/development.md` — dependency rules, folder structure, testing strategy, and separation of concerns. Deviations are defects.
-3. **Entropy testing:** Attack inputs, edge cases, error states, and latency paths — the unwritten seams where implementations break.
-3. **Deliver based on mode:**
+1. **Execute the review protocol** as defined in the QA Specialist job (`.agents/jobs/test.md`): baseline validation, standards validation, and entropy testing.
+2. **Deliver based on mode:**
    - **GitHub issue in scope — defects found:** Comment on the GitHub issue with the rejection: defect description, reproduction steps, expected vs actual, environmental context. Move the issue back to **In Progress**. If a defect warrants its own tracked item, open a new blocking bug issue per `.agents/tools/github.md` conventions.
    - **GitHub issue in scope — passed:** Comment on the issue confirming QA approval. Move the issue to **Done**.
    - **Ad-hoc — defects found:** Deliver the full defect report directly in the conversation: defect description, reproduction steps, expected vs actual, environmental context.

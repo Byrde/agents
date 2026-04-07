@@ -56,7 +56,6 @@ When a GitHub issue is provided, much of this context may already be captured in
 
 **Procedure:**
 
-1. **Follow software structure:** Always follow the coding standards and structure outlined in `.agents/practices/development.md`
 1. **TDD loop:** Write contract tests encoding the acceptance criteria, implement to green, refactor within scope.
 2. **If blocked:** Stop implementation. Flag the gap to the user and wait for resolution before continuing.
 3. **Deliver based on mode:**

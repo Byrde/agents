@@ -1,6 +1,6 @@
 # Tool: GitHub
 
-This file defines the GitHub integration context and conventions for all workflows. If this file does not exist or is missing required fields, any workflow that depends on it **must fail immediately** with a clear error explaining what is missing.
+This file defines the GitHub integration context and conventions for all workflows. Any workflow or job that depends on this file **must** validate it before proceeding — if this file does not exist, is missing required fields, or the MCP server fails the preflight checks below, the workflow **must fail immediately** with a clear error explaining what is wrong.
 
 ## Required Fields
 
@@ -8,10 +8,44 @@ This file defines the GitHub integration context and conventions for all workflo
 **Repository:** {{REPOSITORY}}
 **Project:** {{PROJECT}}
 
+## MCP Server
+
+All GitHub operations are performed through the **GitHub MCP server**. Direct CLI usage, raw API calls, or any other access method is not permitted — the MCP server is the sole interface.
+
+### Preflight Check (mandatory, every session)
+
+Before executing any GitHub operation, the consuming workflow **must** run the following preflight sequence. If any step fails, **halt immediately** and report the failure to the user — do not fall back to alternative methods.
+
+#### 1. Server Health
+
+Verify the GitHub MCP server is available and responding. Issue a lightweight, read-only call (e.g. list repositories or get authenticated user). If the server is unreachable, returns an authentication error, or otherwise fails to respond:
+
+- **Fail** with a clear message: the MCP server is not available, and the user should verify their MCP configuration (`.cursor/mcp.json` or `.mcp.json`) and authentication (e.g. `gh auth status`).
+
+#### 2. Context Validation
+
+Verify the MCP server is operating against the correct repository and account as defined in the **Required Fields** above.
+
+- Query the current repository context from the MCP server.
+- **If the context matches** the Account and Repository fields: proceed.
+- **If the context does not match:** attempt to switch the MCP server's context to the correct Account and Repository. If the switch succeeds, proceed. If the switch fails (e.g. the repository does not exist, the authenticated user lacks access, or the MCP server does not support context switching):
+  - **Fail** with a clear message: the MCP server is connected but configured for a different repository, the automatic switch failed, and the user must reconfigure manually.
+
+#### 3. Project Board Validation
+
+Verify the GitHub Project board specified in the **Project** field exists and is accessible.
+
+- Query for the project board by name under the Account.
+- **If found:** proceed.
+- **If not found:** attempt to create a project board with the exact name specified in the **Project** field. If creation succeeds, proceed. If creation fails:
+  - **Fail** with a clear message: the specified project board does not exist and could not be created automatically.
+
+Only after all three preflight steps pass may the workflow proceed with GitHub operations.
+
 ## Conventions
 
 ### Project Board
-If a GitHub Project board does not exist for the repository, create one using the exact same name as the repository. All work items must be tracked against this board.
+All work items must be tracked against the project board specified in the **Project** field above. If the board does not exist at preflight time, the preflight check will attempt to create it.
 
 ### Labels
 * `Type: Feature` — for feature work items.

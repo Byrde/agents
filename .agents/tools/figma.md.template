@@ -1,0 +1,210 @@
+# Tool: Figma
+
+This file defines the Figma integration context and conventions for all design workflows. Any workflow or job that depends on this file **must** validate it before proceeding — if this file does not exist, is missing required fields, or the MCP server fails the preflight checks below, the workflow **must fail immediately** with a clear error explaining what is wrong.
+
+## Required Fields
+
+**Team:** {{TEAM}}
+**Project:** {{PROJECT}}
+**Design System File:** {{DESIGN_SYSTEM_FILE}}
+
+## MCP Server
+
+All Figma operations are performed through the **Figma MCP server**. Direct Figma REST API calls, manual file manipulation, or any other access method is not permitted — the MCP server is the sole interface.
+
+### Preflight Check (mandatory, every session)
+
+Before executing any Figma operation, the consuming workflow **must** run the following preflight sequence. If any step fails, **halt immediately** and report the failure to the user — do not fall back to alternative methods.
+
+#### 1. Server Health
+
+Verify the Figma MCP server is available and responding. Issue a lightweight, read-only call (e.g. list files or get the authenticated user's identity). If the server is unreachable, returns an authentication error, or otherwise fails to respond:
+
+- **Fail** with a clear message: the MCP server is not available, and the user should verify their MCP configuration (`.cursor/mcp.json` or `.mcp.json`) and Figma authentication.
+
+#### 2. Context Validation
+
+Verify the MCP server can access the correct Team and Project as defined in the **Required Fields** above.
+
+- Query for the Project by name under the Team.
+- **If accessible:** proceed.
+- **If not accessible** (e.g. the project does not exist, the authenticated user lacks access, or the team is not found):
+  - **Fail** with a clear message: the MCP server is connected but cannot access the specified Team or Project, and the user must verify their Figma permissions or reconfigure.
+
+#### 3. Design System File Validation
+
+Verify the Design System file specified in the **Design System File** field exists and is accessible.
+
+- Query for the file using its URL or key.
+- **If found and accessible:** proceed.
+- **If not found or inaccessible:**
+  - **Fail** with a clear message: the specified Design System file does not exist or cannot be accessed. The user must create the file manually or run the setup script, then update this configuration.
+
+#### 4. Design System Structure Validation
+
+Verify the Design System file contains the required page structure defined in the **Design System File Structure** section below.
+
+- Check that all required pages exist by name.
+- **If all required pages are present:** proceed.
+- **If any required pages are missing:** attempt to create the missing pages. If creation succeeds, proceed. If creation fails:
+  - **Fail** with a clear message listing which pages are missing and could not be created automatically.
+
+Only after all four preflight steps pass may the workflow proceed with Figma operations.
+
+## File Organization
+
+### Hierarchy
+
+All design work is organized within a single Figma **Project** (specified in the Required Fields above). This project is the direct counterpart to the GitHub repository — one product, one project. Inside this project, files are organized by purpose:
+
+- **One Design System file** — the shared library for tokens, foundations, and components. Published as a Figma library so all other files inherit from it.
+- **One Feature file per epic or major feature** — where UX and UI work happens for a specific scope of work.
+- **One Sandbox file (optional)** — a scratch space for component exploration before promoting work into the Design System file.
+
+### File Naming
+
+- **Design System:** `[Product Name] — Design System`
+- **Feature files:** `[Epic/Feature Name]` (e.g. `Onboarding`, `Payment Flow`, `Settings Redesign`)
+- **Sandbox:** `[Product Name] — Sandbox`
+
+Do not use generic names like `Untitled` or `Design File 1`.
+
+## Design System File Structure
+
+The Design System file is the single source of truth for the product's visual language. It **must** be published as a Figma library so all feature files can consume its tokens and components. It contains the following required pages, in order:
+
+### Page: Cover
+
+A clear thumbnail identifying the file. Must include:
+- Product name
+- File purpose ("Design System")
+- Current status (e.g. Active, Draft)
+- Last updated date
+
+### Page: Foundations
+
+The visual reference documentation for the token system. This page presents the design decisions in a human-readable format. Organized into the following sections:
+
+- **Color** — All color roles: primitive palette, semantic mappings (surface, text, border, status colors), and mode variants (light/dark) where applicable.
+- **Typography** — The type scale: typeface(s), sizes, weights, line heights, and letter spacing. Named styles for each role (heading, body, caption, label, code, etc.).
+- **Spacing** — The spacing rhythm: base unit and scale (e.g. 4px base with multiples). Named spacing values for padding, gaps, and margins.
+- **Border Radius** — The radius scale: values for small, medium, large, and full-round contexts.
+- **Elevation / Shadows** — Shadow definitions by level (e.g. low, medium, high). When each level is used.
+- **Iconography** — Icon set, sizing convention, and stroke/fill rules.
+
+### Page: Atoms
+
+The smallest indivisible components. Each atom is built exclusively from the token system — no hardcoded values. Examples: buttons, text inputs, checkboxes, radio buttons, toggles, badges, tags, icons, labels, dividers.
+
+For every interactive atom, the following states **must** be explicitly designed:
+- Default
+- Hover
+- Active / Pressed
+- Focused
+- Disabled
+- Error (where applicable)
+
+### Page: Molecules
+
+Composed atoms functioning as a single unit. Examples: search bars (input + icon + button), form fields (label + input + helper text + error message), card headers (avatar + name + timestamp), navigation items (icon + label + badge).
+
+### Page: Organisms
+
+Larger composed units made of molecules and/or atoms. Examples: navigation bars, form sections, card layouts, modal dialogs, data table rows, page headers.
+
+### Page: Templates (as needed)
+
+Page-level structural layouts showing how organisms compose into full screens. These use placeholder content to demonstrate layout patterns without binding to specific feature content. Templates are added as the system matures — this page may be empty initially.
+
+## Feature File Structure
+
+Each feature file represents one epic or major feature area. It is the shared workspace for both UX (wireframes, flows) and UI (visual design) work on that scope. Every feature file **must** contain the following pages, in order:
+
+### Page: Cover
+
+A clear thumbnail identifying the file. Must include:
+- Feature or epic name
+- Status (Draft / In Review / Approved / In Development / Complete)
+- Owner (designer name or role)
+- Link to the corresponding GitHub milestone or issue, when applicable
+
+### Page: User Flows
+
+Flow diagrams detailing the step-by-step logic and decision trees of the user journey. These are the structural maps created **before** any screens are drawn. Must include:
+- Entry points
+- Decision nodes and branches
+- Exit points (success, failure, abandonment)
+- Edge case paths
+
+### Page: Wireframes
+
+Low to mid-fidelity screens focused purely on layout, hierarchy, and component roles — **not** visual styling. Wireframes must be:
+- Grayscale (no brand colors or final typography)
+- Annotated with intent: why the layout is structured this way, accessibility expectations (focus order, semantics, announcements), and friction points that were deliberately removed
+- Inclusive of unhappy paths: empty states, error states, loading states
+
+Frame naming must be sequential and descriptive (e.g. `01_Signup_Start`, `02_Signup_Email`, `03_Signup_Error`). Do not use generic names like `Frame 1`.
+
+### Page: Visual Design
+
+High-fidelity screens for the feature, built using components from the Design System library. This page represents the final intended look and behavior. All elements must:
+- Use components from the published Design System library (no detached instances)
+- Reference design tokens via Figma variables (no hardcoded color, spacing, or typography values)
+- Include all interactive states relevant to the feature
+
+### Page: Prototypes
+
+Interactive click-throughs and micro-interactions. This page is **separate** from Visual Design because prototypes often require duplicate frames for animation sequences, loading transitions, and state changes. Keeping them separate prevents confusion about which frames represent final designs versus animation intermediaries.
+
+### Page: Ready for Development
+
+The signed-off, final screens that developers should reference. Screens on this page:
+- Have been approved by the user / stakeholder
+- Are marked with Figma's "Ready for development" section status for Dev Mode
+- Represent the definitive source of truth for implementation
+
+No work-in-progress frames belong on this page.
+
+### Page: Archive / Exploration
+
+A graveyard for rejected ideas, earlier iterations, and exploration branches. This page:
+- Preserves historical context without cluttering the active workspace
+- Should include brief annotations explaining why directions were rejected, for future reference
+
+## Conventions
+
+### Token Implementation
+
+Design tokens are implemented using **Figma Variables**, organized into collections by category:
+
+- **Primitives** — Raw values: every color in the palette, every spacing increment, every font size. These define *what values exist*. Named by property and scale (e.g. `color/blue/500`, `spacing/16`, `font-size/14`).
+- **Semantics** — Contextual mappings: how primitives are applied. These define *how values are used*. Named by role (e.g. `color/surface/primary`, `color/text/default`, `color/border/error`, `spacing/component/padding`). Semantic tokens reference primitives — they never contain raw values.
+- **Component-specific** (as needed) — Tokens scoped to a particular component when the semantic layer is insufficient. Named by component, element, property, and state (e.g. `button/primary/background/hover`). These reference semantic tokens.
+
+Modes (e.g. light/dark) are implemented as **Figma Variable modes** on the semantic collections, not as duplicate token sets.
+
+### Component Rules
+
+- All components in the Design System file must be built from tokens — no hardcoded values.
+- Components must use **Figma auto layout** for responsive behavior.
+- Components must define **variants** for their meaningful variations (size, style, state) using Figma's component properties.
+- Component naming follows a slash-delimited hierarchy: `Category / Name / Variant` (e.g. `Buttons / Primary / Default`, `Inputs / Text / Error`).
+- Components are organized using the atomic design hierarchy (Atoms → Molecules → Organisms), with each level on its own page in the Design System file.
+
+### Library Publishing
+
+- The Design System file **must** be published as a Figma library to the team.
+- After any token or component change, the library must be re-published with a descriptive update note.
+- Feature files consume the library — they do not duplicate or detach components. If a component needs modification, the change is made in the Design System file and published, not overridden locally.
+
+### Frame & Layer Naming
+
+- **Frames** are named sequentially and descriptively to represent the user journey or component state (e.g. `01_Onboarding_Start`, `02_Onboarding_Profile_Setup`).
+- **Layers** are given meaningful names that describe their content or role (e.g. `Header`, `CTA Button`, `Error Message`). Do not leave auto-generated names like `Frame 42` or `Rectangle 7`.
+- **Sections** in Figma are used to group related frames on a page, with clear section titles.
+
+### Handoff
+
+- Screens that are ready for development must be moved to the **Ready for Development** page and marked with Figma's "Ready for development" section status.
+- Dev Mode should be used by developers to inspect designs — layer names, component properties, and variables must be clean and meaningful for this purpose.
+- Design annotations (using Figma comments or sticky-note components) must explain interaction intent, state transitions, and accessibility requirements for anything not self-evident from the visual design.

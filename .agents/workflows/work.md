@@ -6,17 +6,17 @@ Take a spec'd work item through implementation and QA validation.
 
 This workflow composes the following jobs, in order:
 
-1. **Software Developer** — `jobs/develop.md`
-2. **QA Specialist** — `jobs/test.md`
+1. **Software Developer** — `.agents/jobs/develop.md`
+2. **QA Specialist** — `.agents/jobs/test.md`
 
 ## Tooling
 
-**This workflow operates entirely in GitHub.** All branch creation, issue state transitions, pull requests, and QA reporting must be performed through the GitHub API using the configuration and conventions defined in `tools/github.md`.
+**This workflow operates entirely in GitHub.** All branch creation, issue state transitions, pull requests, and QA reporting must be performed through the GitHub API using the configuration and conventions defined in `.agents/tools/github.md`.
 
 Concretely:
-- **Branches** follow the naming conventions in `tools/github.md` (`feature/`, `bugfix/`, `patch/`).
+- **Branches** follow the naming conventions in `.agents/tools/github.md` (`feature/`, `bugfix/`, `patch/`).
 - **Issue lifecycle** (In Progress → Ready to Test → Done) is managed on the GitHub Project board.
-- **Pull requests** follow the format and content requirements in `tools/github.md`.
+- **Pull requests** follow the format and content requirements in `.agents/tools/github.md`.
 - **All communication** (implementation notes, QA results, defect reports) is posted as comments on the relevant GitHub issue.
 
 ## Dependencies
@@ -27,8 +27,7 @@ These files **must** exist and be fully populated before this workflow can execu
 
 | File | Purpose |
 | --- | --- |
-| `tools/github.md` | GitHub account, repository, project board configuration, and conventions. |
-| `practices/development.md` | Shared architectural and engineering standards. |
+| `.agents/tools/github.md` | GitHub account, repository, project board configuration, and conventions. |
 
 ### Work Item (mandatory, no exceptions)
 
@@ -46,7 +45,7 @@ If no issue is provided and no matching item exists on the project board, **stop
 **Procedure:**
 
 1. **Validate dependencies:** Confirm `.agents/tools/github.md` exists and is populated. Fail if not.
-2. **Identify the work item:** Confirm the GitHub issue (or patch-exception scope) with the user. Read the issue's description, acceptance criteria, and any architectural comments.
+2. **Identify the work item:** Confirm the GitHub issue with the user. Read the issue's description, acceptance criteria, and any architectural comments.
 3. **Verify current state:** Check that the issue is not already implemented (merged PRs, closed-as-done, codebase matches criteria). If partially implemented, map what remains.
 4. **Extract and verify requirements:** List implicit assumptions or ambiguities. Resolve with the user before proceeding. If gaps require a spec update, halt and route back to planning.
 5. **Flag to proceed:** Present the developer's understanding of the work — what will be built, what the tests will cover, and any decisions made. **Wait for explicit user confirmation** before moving to implementation.
@@ -61,16 +60,15 @@ If no issue is provided and no matching item exists on the project board, **stop
 **Input to sub-agent:**
 - The verified requirements and decisions from Step 1.
 - The GitHub issue number and repository from `.agents/tools/github.md`.
-- The contents of `.agents/practices/development.md`.
 - The conventions from `.agents/tools/github.md`.
 
 **Procedure:**
 
-1. **Create branch** following `tools/github.md` conventions.
+1. **Create branch** following `.agents/tools/github.md` conventions.
 2. **Move issue** to **In Progress** on the project board.
 3. **TDD loop:** Write contract tests encoding the acceptance criteria, implement to green, refactor within scope.
 4. **If blocked:** Stop implementation. Comment on the GitHub issue describing the gap and escalate back to the user.
-5. **Open PR** following the format in `tools/github.md`.
+5. **Open PR** following the format in `.agents/tools/github.md`.
 6. **Update issue:** Move to **Ready to Test**. Comment on the issue with what was done, the PR link, and anything the tester should know.
 
 **Completion gate:** PR is open, issue is in Ready to Test, and the implementation comment is posted.
@@ -88,10 +86,8 @@ If no issue is provided and no matching item exists on the project board, **stop
 
 **Procedure:**
 
-1. **Baseline validation:** Verify the implementation meets every condition in the acceptance criteria.
-2. **Standards validation:** Verify the code adheres to the architectural and engineering standards in `.agents/practices/development.md` — dependency rules, folder structure, testing strategy, and separation of concerns. Deviations are defects.
-3. **Entropy testing:** Attack inputs, edge cases, error states, and latency paths — the unwritten seams where implementations break.
-3. **If defects found:** Reject the work. Comment on the GitHub issue with the defect report (defect description, reproduction steps, expected vs actual, environmental context). Move the issue back to **In Progress**. Escalate to the user.
-4. **If passed:** Comment on the issue confirming QA approval. Move the issue to **Done**.
+1. **Execute the review protocol** as defined in the QA Specialist job (`.agents/jobs/test.md`): baseline validation, standards validation, and entropy testing.
+2. **If defects found:** Reject the work. Comment on the GitHub issue with the defect report (defect description, reproduction steps, expected vs actual, environmental context). Move the issue back to **In Progress**. Escalate to the user.
+3. **If passed:** Comment on the issue confirming QA approval. Move the issue to **Done**.
 
 **Completion gate:** The issue is either rejected with documented defects and returned for fixes, or approved and marked done. The user is notified of the outcome.

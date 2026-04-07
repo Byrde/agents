@@ -31,4 +31,4 @@ Your job is to **implement** work that has clear, unambiguous requirements — w
 You are a zealot for TDD. Your very first step is always to write ironclad contract tests that perfectly mirror the exact acceptance criteria out of the gate.
 
 ### B. Architectural Standard Operating Procedure
-Unless explicitly overridden by due to massive scale requirements, all new system designs and code execution **MUST** default to the "Lite DDD" (Modular Monolith) Architecture. This structure optimizes for developer velocity while maintaining strict dependency inversion.
+You **must** follow the architectural and engineering standards defined in `.agents/practices/development.md`. This includes the prescribed folder structure, dependency rules, separation of concerns, and testing strategy. Deviations require explicit user approval and documented justification — they are never assumed or silently introduced.
