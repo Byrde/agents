@@ -70,7 +70,7 @@ print_intro() {
 }
 
 list_gh_accounts() {
-  gh auth status --json hosts | jq -r '
+  gh auth status --json hosts 2>/dev/null | jq -r '
     .hosts
     | to_entries[]
     | .key as $host
@@ -106,6 +106,39 @@ pick_from_menu() {
   done
 }
 
+prompt_repo() {
+  local owner="$1"
+  local sel
+  while true; do
+    echo "" >&2
+    read -r -p "Repository name (under $owner): " sel || die "stdin closed"
+    [[ -n "$sel" ]] || { echo "Repository name cannot be empty." >&2; continue; }
+    if gh repo view "$owner/$sel" >/dev/null 2>&1; then
+      echo "$owner/$sel"
+      return 0
+    else
+      echo "Repository not found: $owner/$sel" >&2
+    fi
+  done
+}
+
+prompt_project_id() {
+  local owner="$1"
+  local sel
+  while true; do
+    echo "" >&2
+    read -r -p "Project ID (numeric): " sel || die "stdin closed"
+    [[ -n "$sel" ]] || { echo "Project ID cannot be empty." >&2; continue; }
+    [[ "$sel" =~ ^[0-9]+$ ]] || { echo "Must be a number." >&2; continue; }
+    if gh project view "$sel" --owner "$owner" >/dev/null 2>&1; then
+      echo "$sel"
+      return 0
+    else
+      echo "Project not found: ID $sel under $owner" >&2
+    fi
+  done
+}
+
 parse_account_row() {
   local row="$1"
   GH_HOST="${row%%$'\t'*}"
@@ -117,22 +150,11 @@ list_org_logins() {
   gh api user/orgs --paginate --jq '.[].login' 2>/dev/null | sort -f || true
 }
 
-list_repos_for_owner() {
-  local owner="$1"
-  gh repo list "$owner" -L 200 --json nameWithOwner | jq -r '.[].nameWithOwner'
-}
-
-list_projects_for_owner() {
-  local owner="$1"
-  gh project list --owner "$owner" -L 100 --closed --format json |
-    jq -r '.projects[] | "\(.title)\t\(.number)\(if .closed then " (closed)" else "" end)"'
-}
-
 render_github_md() {
-  local account="$1" repo="$2" project="$3"
+  local account="$1" repo="$2" project_id="$3"
   [[ -f "$GITHUB_TEMPLATE" ]] || die "missing template: $GITHUB_TEMPLATE"
   GITHUB_TEMPLATE="$GITHUB_TEMPLATE" GITHUB_OUT="$GITHUB_OUT" \
-    RENDER_ACCOUNT="$account" RENDER_REPOSITORY="$repo" RENDER_PROJECT="$project" \
+    RENDER_ACCOUNT="$account" RENDER_REPOSITORY="$repo" RENDER_PROJECT_ID="$project_id" \
     python3 <<'PY'
 from pathlib import Path
 import os
@@ -142,7 +164,7 @@ text = src.read_text()
 out = (
     text.replace("{{ACCOUNT}}", os.environ["RENDER_ACCOUNT"])
     .replace("{{REPOSITORY}}", os.environ["RENDER_REPOSITORY"])
-    .replace("{{PROJECT}}", os.environ["RENDER_PROJECT"])
+    .replace("{{PROJECT_ID}}", os.environ["RENDER_PROJECT_ID"])
 )
 dst.write_text(out)
 print("Wrote", dst)
@@ -272,9 +294,7 @@ main() {
   parse_account_row "${account_rows[$found]}"
 
   [[ "$GH_HOST" == "github.com" ]] || die "only github.com is supported (selected: $GH_HOST)"
-
-  echo "Switching active GitHub CLI account to $GH_LOGIN …"
-  gh auth switch -u "$GH_LOGIN" -h github.com
+  gh auth switch -u "$GH_LOGIN" -h github.com >/dev/null 2>&1
 
   local repo_owner=""
   local orgs=()
@@ -299,37 +319,16 @@ main() {
     fi
   fi
 
-  local repos=()
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ -n "$line" ]] && repos+=("$line")
-  done < <(list_repos_for_owner "$repo_owner")
-  [[ ${#repos[@]} -gt 0 ]] || die "no repositories returned for owner: $repo_owner"
-
   local repo_pick
-  repo_pick="$(pick_from_menu "Repositories for $repo_owner:" "${repos[@]}")"
+  repo_pick="$(prompt_repo "$repo_owner")"
 
-  local project_lines=()
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ -n "$line" ]] && project_lines+=("$line")
-  done < <(list_projects_for_owner "$repo_owner")
-  local project_name=""
-  if [[ ${#project_lines[@]} -eq 0 ]]; then
-    read -r -p "No GitHub Projects found for '$repo_owner'. Enter project board title: " project_name || true
-    [[ -n "$project_name" ]] || die "project title required"
-  else
-    local -a proj_labels=()
-    local line
-    for line in "${project_lines[@]}"; do
-      local t="${line%%$'\t'*}"
-      proj_labels+=("$t")
-    done
-    project_name="$(pick_from_menu "Project boards for $repo_owner:" "${proj_labels[@]}")"
-  fi
+  local project_id
+  project_id="$(prompt_project_id "$repo_owner")"
 
-  render_github_md "$repo_owner" "$repo_pick" "$project_name"
+  render_github_md "$repo_owner" "$repo_pick" "$project_id"
 
   local tok
-  tok="$(gh auth token -h github.com)"
+  tok="$(gh auth token -h github.com 2>/dev/null)"
 
   echo ""
   read -r -p "Merge GitHub MCP into $cursor_mcp? [Y/n] " a_cursor

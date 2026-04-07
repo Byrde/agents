@@ -6,7 +6,7 @@ This file defines the GitHub integration context and conventions for all workflo
 
 **Account:** {{ACCOUNT}}
 **Repository:** {{REPOSITORY}}
-**Project:** {{PROJECT}}
+**Project ID:** {{PROJECT_ID}}
 
 ## MCP Server
 
@@ -33,23 +33,70 @@ Verify the MCP server is operating against the correct repository and account as
 
 #### 3. Project Board Validation
 
-Verify the GitHub Project board specified in the **Project** field exists and is accessible.
+Verify the GitHub Project board specified in the **Project ID** field exists and is accessible.
 
-- Query for the project board by name under the Account.
+- Query for the project board by numeric ID under the Account.
 - **If found:** proceed.
-- **If not found:** attempt to create a project board with the exact name specified in the **Project** field. If creation succeeds, proceed. If creation fails:
-  - **Fail** with a clear message: the specified project board does not exist and could not be created automatically.
+- **If not found:**
+  - **Fail** with a clear message: the specified project board ID does not exist or the authenticated user lacks access to it.
 
 Only after all three preflight steps pass may the workflow proceed with GitHub operations.
 
 ## Conventions
 
-### Project Board
-All work items must be tracked against the project board specified in the **Project** field above. If the board does not exist at preflight time, the preflight check will attempt to create it.
+### Issue Titles
+Issue titles must be plain English descriptions of the work. Do **not** use conventional commit format (e.g. `feat(scope): ...`) — that format is for commit messages and PR titles, not issue titles.
 
-### Labels
-* `Type: Feature` — for feature work items.
-* `Type: Bug` — for bug work items.
+### Issue Types
+Use the native GitHub issue type field (the `type` parameter on `issue_write`) to classify work items:
+* `Feature` — for new capabilities or improvements.
+* `Bug` — for defects and regressions.
+
+Do **not** encode the type as a label.
+
+### Issue Fields
+Use the native GitHub project fields for structured metadata — do **not** put these in the issue body:
+* **Size** — set the t-shirt size (`XS`, `S`, `M`, `L`, `XL`) using the project's Size field.
+* **Priority** — set the priority (`P0`, `P1`, `P2`, `P3`) using the project's Priority field.
+
+### Project Board
+All work items must be tracked against the project board specified in the **Project ID** field above.
+
+After creating any issue, immediately add it to the project board and set its fields. The GitHub MCP server does not support project board operations, so these steps use the `gh` CLI — this is the one permitted exception to the MCP-only rule.
+
+#### Step 1 — Add to board
+
+```bash
+gh project item-add {{PROJECT_ID}} --owner {{ACCOUNT}} --url <issue-url>
+```
+
+#### Step 2 — Resolve the project node ID
+
+The `gh project item-edit` command requires the project's GraphQL node ID, not its number. Resolve it once per session:
+
+```bash
+gh project list --owner {{ACCOUNT}} --format json
+# Find the entry with "number": {{PROJECT_ID}} and copy its "id" value (e.g. PVT_kwDO...)
+```
+
+#### Step 3 — Resolve the project item ID
+
+```bash
+gh project item-list {{PROJECT_ID}} --owner {{ACCOUNT}} --format json
+# Find the entry matching the issue number and copy its "id" value (e.g. PVTI_...)
+```
+
+#### Step 4 — Set Priority and Size fields
+
+```bash
+# Set Priority (get field IDs and option IDs from: gh project field-list {{PROJECT_ID}} --owner {{ACCOUNT}} --format json)
+gh project item-edit --id <item-id> --project-id <project-node-id> --field-id <priority-field-id> --single-select-option-id <option-id>
+
+# Set Size
+gh project item-edit --id <item-id> --project-id <project-node-id> --field-id <size-field-id> --single-select-option-id <option-id>
+```
+
+All four steps are **mandatory** — an issue that is not on the board with Priority and Size set is considered incomplete.
 
 ### Milestones
 Epics are represented as GitHub Milestones. All subordinate feature and bug issues are associated with their parent milestone.
