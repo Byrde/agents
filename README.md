@@ -9,15 +9,13 @@ Use this repository as a submodule so another project keeps `.agents` at a pinne
 From the **root** of the host repository:
 
 ```bash
-git submodule add <this-repo-clone-url> .agents
+git submodule add https://github.com/Byrde/agents.git .agents
 git commit -m "Add .agents submodule"
 ```
 
-Replace `<this-repo-clone-url>` with the same HTTPS or SSH URL you would use for a normal clone (for example `git@github.com:byrde/agents.git`).
-
 **Cloning a host repo that already includes this submodule:** use `git clone --recurse-submodules <host-repo-url>`, or after a plain clone run `git submodule update --init --recursive`.
 
-**Updating the submodule** to a newer commit: `cd .agents && git fetch && git checkout <branch-or-commit> && cd ..` then commit the updated submodule pointer in the host repo. Alternatively, `git submodule update --remote .agents` follows the submodule’s configured remote branch; set `branch = <name>` under `[submodule ".agents"]` in `.gitmodules` if you want `--remote` to track a specific branch.
+**Updating the submodule** `git submodule update --remote .agents` follows the submodule’s configured remote branch.
 
 ## Setup Tools
 
