@@ -472,6 +472,25 @@ write_mempalaceignore() {
     return
   fi
   printf '%s' "$IGNORE_PATTERNS" >"$ignore_file"
+
+  echo ""
+  echo "Default ignore patterns have been written to .mempalaceignore."
+  echo "You can add extra folders or files to ignore (comma-separated)."
+  echo "  Examples: logs/,tmp/,*.csv,data/"
+  echo ""
+  read -r -p "Additional ignores (or press Enter to skip): " extra_ignores
+  if [[ -n "$extra_ignores" ]]; then
+    printf '\n# Custom ignores\n' >>"$ignore_file"
+    # Split on comma, trim whitespace, write one pattern per line
+    local IFS=','
+    for entry in $extra_ignores; do
+      # Trim leading/trailing whitespace
+      entry="${entry#"${entry%%[![:space:]]*}"}"
+      entry="${entry%"${entry##*[![:space:]]}"}"
+      [[ -n "$entry" ]] && printf '%s\n' "$entry" >>"$ignore_file"
+    done
+  fi
+
   echo "Wrote $ignore_file"
 }
 
