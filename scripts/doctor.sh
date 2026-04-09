@@ -263,14 +263,6 @@ check_mempalace() {
     fail "Cursor hooks: $cursor_hooks not found"
   fi
 
-  # Cursor rules
-  local cursor_rules="$PROJECT_ROOT/.cursor/rules/mempalace.mdc"
-  if [[ -f "$cursor_rules" ]]; then
-    pass "Cursor rules: mempalace.mdc"
-  else
-    fail "Cursor rules: $cursor_rules missing"
-  fi
-
   # Claude Code MCP config
   if json_has "$CLAUDE_MCP" '.mcpServers.mempalace'; then
     pass "Claude MCP: mcpServers.mempalace configured in .mcp.json"

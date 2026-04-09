@@ -7,10 +7,10 @@
 # Run from the repository/project root you want to configure (current working directory).
 # Writes:
 #   - .mempalace/                     — project-local palace data
+#   - .mempalace/hooks/               — save and precompact hook scripts
 #   - .mempalaceignore                — ignore patterns for mining (node_modules, etc.)
 #   - .cursor/mcp.json                — Cursor project MCP (mempalace server merged in)
 #   - .cursor/hooks.json              — Cursor hooks (stop + preCompact)
-#   - .cursor/rules/mempalace.mdc     — Cursor auto-save rules
 #   - .mcp.json                       — Claude Code project MCP (fallback if CLI unavailable)
 #   - .claude/settings.local.json     — Claude Code hooks (Stop + PreCompact)
 #
@@ -216,75 +216,33 @@ merge_cursor_mcp_mempalace() {
   echo "Updated $path"
 }
 
-# ─── Cursor auto-save rules ─────────────────────────────────────────────────
-
-write_cursor_rules() {
-  local rules_dir="$1/.cursor/rules"
-  local rules_file="$rules_dir/mempalace.mdc"
-  mkdir -p "$rules_dir"
-
-  cat >"$rules_file" <<'MDC'
----
-description: Mempalace memory system — persistent context across conversations
-globs: ["**/*"]
-alwaysApply: true
----
-
-# Mempalace Memory System
-
-You have access to the **mempalace** MCP server for persistent memory across conversations. Use it proactively — do not wait for the user to ask.
-
-## Start of conversation
-
-Search mempalace for context relevant to the current task before beginning work. Load any prior decisions, discoveries, or preferences that apply.
-
-## During conversation
-
-When you make important decisions, encounter surprising behaviour, or the user shares preferences or corrections — save them to mempalace immediately using the MCP tools. Do not batch saves for the end.
-
-## End of conversation
-
-Before the conversation ends, save a summary of:
-- Key decisions made and their rationale
-- Changes implemented and why
-- Unfinished work or known issues
-- Any new user preferences or corrections
-
-## Long conversations
-
-If the conversation is getting long, proactively save important context to mempalace to prevent information loss if the context window compresses.
-MDC
-
-  echo "Wrote $rules_file"
-}
-
 # ─── Cursor hooks ────────────────────────────────────────────────────────────
 
 merge_cursor_hooks() {
-  local hooks_path="$1" save_cmd="$2" precompact_cmd="$3"
+  local hooks_path="$1" save_script="$2" precompact_script="$3"
   local tmp
   tmp="$(mktemp)"
   mkdir -p "$(dirname "$hooks_path")"
 
   if [[ -f "$hooks_path" ]]; then
-    jq --arg save "$save_cmd" --arg precompact "$precompact_cmd" '
+    jq --arg save "$save_script" --arg precompact "$precompact_script" '
       .version = (.version // 1) |
       .hooks = (.hooks // {}) |
 
       # Replace any existing mempalace stop hook
       .hooks.stop = (
-        [(.hooks.stop // [])[] | select(.command | contains("mempalace save") | not)] +
+        [(.hooks.stop // [])[] | select(.command | contains("mempal_") | not)] +
         [{ command: $save }]
       ) |
 
       # Replace any existing mempalace preCompact hook
       .hooks.preCompact = (
-        [(.hooks.preCompact // [])[] | select(.command | contains("mempalace save") | not)] +
+        [(.hooks.preCompact // [])[] | select(.command | contains("mempal_") | not)] +
         [{ command: $precompact }]
       )
     ' "$hooks_path" >"$tmp" || die "jq failed on $hooks_path (invalid JSON?)"
   else
-    jq -n --arg save "$save_cmd" --arg precompact "$precompact_cmd" '{
+    jq -n --arg save "$save_script" --arg precompact "$precompact_script" '{
       version: 1,
       hooks: {
         stop: [{ command: $save }],
@@ -343,40 +301,168 @@ merge_claude_mcp_fallback() {
   echo "Restart Claude Code if it is running so MCP picks up changes."
 }
 
-# ─── Claude Code hooks ──────────────────────────────────────────────────────
+# ─── Hook scripts ──────────────────────────────────────────────────────────
 
-# Build the inline shell command that the hook will execute.
-# Uses the resolved system python and absolute palace path so hooks work
-# regardless of cwd or virtualenv state.
-build_hook_command() {
-  local py="$1" palace_path="$2" mode="$3"
-  echo "$py -m mempalace save --palace $palace_path --mode $mode"
+# Write the actual mempalace hook scripts to .mempalace/hooks/.
+# These are the real hooks from the mempalace project — they read JSON from
+# stdin, count transcript messages, and return block/allow decisions.
+# See: https://github.com/milla-jovovich/mempalace/tree/main/hooks
+write_hook_scripts() {
+  local hooks_dir="$1/hooks"
+  mkdir -p "$hooks_dir"
+
+  # ── Save hook ──────────────────────────────────────────────────────────
+  cat >"$hooks_dir/mempal_save_hook.sh" <<'SAVEHOOK'
+#!/bin/bash
+# MEMPALACE SAVE HOOK — Auto-save every N exchanges
+#
+# Claude Code / Cursor "Stop" hook. After every assistant response:
+# 1. Counts human messages in the session transcript
+# 2. Every SAVE_INTERVAL messages, BLOCKS the AI from stopping
+# 3. Returns a reason telling the AI to save structured entries
+# 4. AI does the save (topics, decisions, code, quotes → organized into palace)
+# 5. Next Stop fires with stop_hook_active=true → lets AI stop normally
+
+SAVE_INTERVAL=15  # Save every N human messages (adjust to taste)
+STATE_DIR="$HOME/.mempalace/hook_state"
+mkdir -p "$STATE_DIR"
+
+# Read JSON input from stdin
+INPUT=$(cat)
+
+# Parse all fields in a single Python call
+eval $(echo "$INPUT" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+sid = data.get('session_id', 'unknown')
+sha = data.get('stop_hook_active', False)
+tp = data.get('transcript_path', '')
+import re
+safe = lambda s: re.sub(r'[^a-zA-Z0-9_/.\-~]', '', str(s))
+print(f'SESSION_ID=\"{safe(sid)}\"')
+print(f'STOP_HOOK_ACTIVE=\"{sha}\"')
+print(f'TRANSCRIPT_PATH=\"{safe(tp)}\"')
+" 2>/dev/null)
+
+# Expand ~ in path
+TRANSCRIPT_PATH="${TRANSCRIPT_PATH/#\~/$HOME}"
+
+# If we're already in a save cycle, let the AI stop normally
+# This is the infinite-loop prevention: block once → AI saves → tries to stop again → we let it through
+if [ "$STOP_HOOK_ACTIVE" = "True" ] || [ "$STOP_HOOK_ACTIVE" = "true" ]; then
+    echo "{}"
+    exit 0
+fi
+
+# Count human messages in the JSONL transcript
+if [ -f "$TRANSCRIPT_PATH" ]; then
+    EXCHANGE_COUNT=$(python3 - "$TRANSCRIPT_PATH" <<'PYEOF'
+import json, sys
+count = 0
+with open(sys.argv[1]) as f:
+    for line in f:
+        try:
+            entry = json.loads(line)
+            msg = entry.get('message', {})
+            if isinstance(msg, dict) and msg.get('role') == 'user':
+                content = msg.get('content', '')
+                if isinstance(content, str) and '<command-message>' in content:
+                    continue
+                count += 1
+        except:
+            pass
+print(count)
+PYEOF
+2>/dev/null)
+else
+    EXCHANGE_COUNT=0
+fi
+
+# Track last save point for this session
+LAST_SAVE_FILE="$STATE_DIR/${SESSION_ID}_last_save"
+LAST_SAVE=0
+if [ -f "$LAST_SAVE_FILE" ]; then
+    LAST_SAVE=$(cat "$LAST_SAVE_FILE")
+fi
+
+SINCE_LAST=$((EXCHANGE_COUNT - LAST_SAVE))
+
+# Log for debugging (check ~/.mempalace/hook_state/hook.log)
+echo "[$(date '+%H:%M:%S')] Session $SESSION_ID: $EXCHANGE_COUNT exchanges, $SINCE_LAST since last save" >> "$STATE_DIR/hook.log"
+
+# Time to save?
+if [ "$SINCE_LAST" -ge "$SAVE_INTERVAL" ] && [ "$EXCHANGE_COUNT" -gt 0 ]; then
+    echo "$EXCHANGE_COUNT" > "$LAST_SAVE_FILE"
+    echo "[$(date '+%H:%M:%S')] TRIGGERING SAVE at exchange $EXCHANGE_COUNT" >> "$STATE_DIR/hook.log"
+
+    cat << 'HOOKJSON'
+{
+  "decision": "block",
+  "reason": "AUTO-SAVE checkpoint. Save key topics, decisions, quotes, and code from this session to your memory system. Organize into appropriate categories. Use verbatim quotes where possible. Continue conversation after saving."
+}
+HOOKJSON
+else
+    echo "{}"
+fi
+SAVEHOOK
+
+  # ── PreCompact hook ────────────────────────────────────────────────────
+  cat >"$hooks_dir/mempal_precompact_hook.sh" <<'PRECOMPACTHOOK'
+#!/bin/bash
+# MEMPALACE PRE-COMPACT HOOK — Emergency save before compaction
+#
+# Claude Code / Cursor "PreCompact" hook. Fires RIGHT BEFORE the conversation
+# gets compressed to free up context window space.
+#
+# This ALWAYS blocks — compaction is always worth saving before.
+
+STATE_DIR="$HOME/.mempalace/hook_state"
+mkdir -p "$STATE_DIR"
+
+INPUT=$(cat)
+
+SESSION_ID=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_id','unknown'))" 2>/dev/null)
+
+echo "[$(date '+%H:%M:%S')] PRE-COMPACT triggered for session $SESSION_ID" >> "$STATE_DIR/hook.log"
+
+cat << 'HOOKJSON'
+{
+  "decision": "block",
+  "reason": "COMPACTION IMMINENT. Save ALL topics, decisions, quotes, code, and important context from this session to your memory system. Be thorough — after compaction, detailed context will be lost. Organize into appropriate categories. Use verbatim quotes where possible. Save everything, then allow compaction to proceed."
+}
+HOOKJSON
+PRECOMPACTHOOK
+
+  chmod +x "$hooks_dir/mempal_save_hook.sh" "$hooks_dir/mempal_precompact_hook.sh"
+  echo "Wrote hook scripts to $hooks_dir/"
 }
 
+# ─── Claude Code hooks ──────────────────────────────────────────────────────
+
 merge_claude_hooks() {
-  local settings_path="$1" save_cmd="$2" precompact_cmd="$3"
+  local settings_path="$1" save_script="$2" precompact_script="$3"
   local tmp
   tmp="$(mktemp)"
   mkdir -p "$(dirname "$settings_path")"
 
   if [[ -f "$settings_path" ]]; then
-    jq --arg save "$save_cmd" --arg precompact "$precompact_cmd" '
+    jq --arg save "$save_script" --arg precompact "$precompact_script" '
       .hooks = (.hooks // {}) |
 
-      # Replace any existing mempalace Stop hook (match by "mempalace save")
+      # Replace any existing mempalace Stop hook (match by "mempal_")
       .hooks.Stop = (
-        [(.hooks.Stop // [])[] | select((.hooks // []) | all(.command | contains("mempalace save") | not))] +
+        [(.hooks.Stop // [])[] | select((.hooks // []) | all(.command | contains("mempal_") | not))] +
         [{ matcher: "*", hooks: [{ type: "command", command: $save, timeout: 30 }] }]
       ) |
 
       # Replace any existing mempalace PreCompact hook
       .hooks.PreCompact = (
-        [(.hooks.PreCompact // [])[] | select((.hooks // []) | all(.command | contains("mempalace save") | not))] +
+        [(.hooks.PreCompact // [])[] | select((.hooks // []) | all(.command | contains("mempal_") | not))] +
         [{ hooks: [{ type: "command", command: $precompact, timeout: 30 }] }]
       )
     ' "$settings_path" >"$tmp" || die "jq failed on $settings_path (invalid JSON?)"
   else
-    jq -n --arg save "$save_cmd" --arg precompact "$precompact_cmd" '{
+    jq -n --arg save "$save_script" --arg precompact "$precompact_script" '{
       hooks: {
         Stop: [{
           matcher: "*",
@@ -565,12 +651,15 @@ mine_project() {
 # Returns 0 (true) only if every piece is present.
 is_fully_setup() {
   local py="$1" palace_path="$2" cursor_mcp="$3" cursor_hooks="$4"
-  local claude_mcp="$5" claude_settings="$6" cursor_rules="$7" ignore_file="$8"
+  local claude_mcp="$5" claude_settings="$6" ignore_file="$7"
 
   # mempalace importable
   check_mempalace_installed "$py" || return 1
   # Palace directory
   [[ -d "$palace_path" ]] || return 1
+  # Hook scripts
+  [[ -x "$palace_path/hooks/mempal_save_hook.sh" ]] || return 1
+  [[ -x "$palace_path/hooks/mempal_precompact_hook.sh" ]] || return 1
   # Ignore file
   [[ -f "$ignore_file" ]] || return 1
   # Cursor MCP entry
@@ -579,8 +668,6 @@ is_fully_setup() {
   # Cursor hooks
   [[ -f "$cursor_hooks" ]] \
     && jq -e '.hooks.stop' "$cursor_hooks" >/dev/null 2>&1 || return 1
-  # Cursor rules
-  [[ -f "$cursor_rules" ]] || return 1
   # Claude MCP (via .mcp.json or claude CLI)
   local claude_ok=false
   if [[ -f "$claude_mcp" ]] \
@@ -618,10 +705,10 @@ main() {
       echo ""
       echo "Full setup installs mempalace (if needed) and configures:"
       echo "  .mempalace/                     — project-local palace data"
+      echo "  .mempalace/hooks/               — save and precompact hook scripts"
       echo "  .mempalaceignore                — ignore patterns for mining"
       echo "  .cursor/mcp.json                — Cursor project MCP"
       echo "  .cursor/hooks.json              — Cursor hooks (stop + preCompact)"
-      echo "  .cursor/rules/mempalace.mdc     — Cursor auto-save rules"
       echo "  .mcp.json                       — Claude Code project MCP (fallback)"
       echo "  .claude/settings.local.json     — Claude Code auto-save hooks"
       exit 0
@@ -650,7 +737,6 @@ main() {
   local palace_path="$project_root/.mempalace"
   local cursor_mcp="$project_root/.cursor/mcp.json"
   local cursor_hooks="$project_root/.cursor/hooks.json"
-  local cursor_rules="$project_root/.cursor/rules/mempalace.mdc"
   local claude_mcp="$project_root/.mcp.json"
   local claude_settings="$project_root/.claude/settings.local.json"
   local ignore_file="$project_root/.mempalaceignore"
@@ -660,15 +746,15 @@ main() {
   # ── Pre-flight: detect existing setup ─────────────────────────────────────
 
   if is_fully_setup "$py" "$palace_path" "$cursor_mcp" "$cursor_hooks" \
-                    "$claude_mcp" "$claude_settings" "$cursor_rules" "$ignore_file"; then
+                    "$claude_mcp" "$claude_settings" "$ignore_file"; then
     local ver
     ver="$(get_mempalace_version "$py")"
     echo "mempalace $ver is already fully configured for this project."
     echo ""
     echo "  Palace:         $palace_path"
+    echo "  Hook scripts:   $palace_path/hooks/"
     echo "  Cursor MCP:     $cursor_mcp"
     echo "  Cursor hooks:   $cursor_hooks"
-    echo "  Cursor rules:   $cursor_rules"
     echo "  Claude MCP:     configured"
     echo "  Claude hooks:   $claude_settings"
     echo "  Ignore file:    $ignore_file"
@@ -716,30 +802,50 @@ main() {
   # ── Step 3: Write .mempalaceignore ─────────────────────────────────────────
 
   echo ""
-  write_mempalaceignore "$project_root"
+  read -r -p "Configure .mempalaceignore? [Y/n] " a_ignore
+  if [[ "${a_ignore:-y}" =~ ^[Yy] ]]; then
+    write_mempalaceignore "$project_root"
+  else
+    echo "Skipping .mempalaceignore."
+  fi
 
-  # ── Step 4: Build hook commands (shared by both editors) ──────────────────
-
-  local save_cmd precompact_cmd
-  save_cmd="$(build_hook_command "$py" "$palace_path" stop)"
-  precompact_cmd="$(build_hook_command "$py" "$palace_path" precompact)"
-
-  # ── Step 5: Cursor — MCP + hooks + rules ─────────────────────────────────
+  # ── Step 4: Write hook scripts ────────────────────────────────────────────
 
   echo ""
-  echo "── Cursor ──"
-  merge_cursor_mcp_mempalace "$cursor_mcp" "$py" "$palace_path"
-  merge_cursor_hooks "$cursor_hooks" "$save_cmd" "$precompact_cmd"
-  write_cursor_rules "$project_root"
+  read -r -p "Write hook scripts (save + precompact)? [Y/n] " a_hooks
+  local save_script="$palace_path/hooks/mempal_save_hook.sh"
+  local precompact_script="$palace_path/hooks/mempal_precompact_hook.sh"
+  if [[ "${a_hooks:-y}" =~ ^[Yy] ]]; then
+    write_hook_scripts "$palace_path"
+  else
+    echo "Skipping hook scripts."
+  fi
+
+  # ── Step 5: Cursor — MCP + hooks ─────────────────────────────────────────
+
+  echo ""
+  read -r -p "Configure Cursor (MCP + hooks)? [Y/n] " a_cursor
+  if [[ "${a_cursor:-y}" =~ ^[Yy] ]]; then
+    echo "── Cursor ──"
+    merge_cursor_mcp_mempalace "$cursor_mcp" "$py" "$palace_path"
+    merge_cursor_hooks "$cursor_hooks" "$save_script" "$precompact_script"
+  else
+    echo "Skipping Cursor setup."
+  fi
 
   # ── Step 6: Claude Code — MCP + hooks ─────────────────────────────────────
 
   echo ""
-  echo "── Claude Code ──"
-  setup_claude_mcp "$py" "$palace_path" "$claude_mcp"
-  merge_claude_hooks "$claude_settings" "$save_cmd" "$precompact_cmd"
+  read -r -p "Configure Claude Code (MCP + hooks)? [Y/n] " a_claude
+  if [[ "${a_claude:-y}" =~ ^[Yy] ]]; then
+    echo "── Claude Code ──"
+    setup_claude_mcp "$py" "$palace_path" "$claude_mcp"
+    merge_claude_hooks "$claude_settings" "$save_script" "$precompact_script"
+  else
+    echo "Skipping Claude Code setup."
+  fi
 
-  # ── Step 6: Mine project (optional) ──────────────────────────────────────
+  # ── Step 7: Mine project (optional) ──────────────────────────────────────
 
   echo ""
   read -r -p "Mine this project's files into the palace now? [y/N] " a_mine
@@ -762,7 +868,6 @@ main() {
   echo "  Cursor:"
   echo "    MCP:   $cursor_mcp"
   echo "    Hooks: $cursor_hooks"
-  echo "    Rules: $cursor_rules"
   echo ""
   echo "  Claude Code:"
   if command -v claude >/dev/null 2>&1; then

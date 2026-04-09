@@ -69,10 +69,10 @@ cd /your/project
 The script installs mempalace (via pip, uv, or ensurepip), initialises a project-local palace, and writes:
 
 - `.mempalace/` — project-local palace data
+- `.mempalace/hooks/` — save and precompact hook scripts
 - `.mempalaceignore` — ignore patterns for mining (node_modules, etc.)
 - `.cursor/mcp.json` — Cursor project MCP
 - `.cursor/hooks.json` — Cursor auto-save hooks (stop + preCompact)
-- `.cursor/rules/mempalace.mdc` — Cursor auto-save rules
 - `.mcp.json` — Claude Code project MCP (fallback if CLI unavailable)
 - `.claude/settings.local.json` — Claude Code auto-save hooks
 
