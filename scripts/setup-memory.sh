@@ -788,7 +788,7 @@ main() {
 
   # ── Step 2: Initialise the palace ─────────────────────────────────────────
 
-  if [[ -d "$palace_path" && -f "$palace_path/config.json" ]]; then
+  if [[ -d "$palace_path" && -f "$palace_path/chroma.sqlite3" ]]; then
     echo ""
     echo "Palace already initialised at $palace_path"
     read -r -p "Re-run mempalace init? [y/N] " do_reinit
