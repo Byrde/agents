@@ -309,6 +309,7 @@ merge_claude_mcp_fallback() {
 # See: https://github.com/milla-jovovich/mempalace/tree/main/hooks
 write_hook_scripts() {
   local hooks_dir="$1/hooks"
+  local save_interval="${2:-8}"
   mkdir -p "$hooks_dir"
 
   # ── Save hook ──────────────────────────────────────────────────────────
@@ -323,7 +324,7 @@ write_hook_scripts() {
 # 4. AI does the save (topics, decisions, code, quotes → organized into palace)
 # 5. Next Stop fires with stop_hook_active=true → lets AI stop normally
 
-SAVE_INTERVAL=15  # Save every N human messages (adjust to taste)
+SAVE_INTERVAL=__INTERVAL__  # Save every N human messages (adjust to taste)
 STATE_DIR="$HOME/.mempalace/hook_state"
 mkdir -p "$STATE_DIR"
 
@@ -433,8 +434,11 @@ cat << 'HOOKJSON'
 HOOKJSON
 PRECOMPACTHOOK
 
+  # Inject the chosen save interval into the hook script
+  sed -i '' "s/__INTERVAL__/${save_interval}/" "$hooks_dir/mempal_save_hook.sh"
+
   chmod +x "$hooks_dir/mempal_save_hook.sh" "$hooks_dir/mempal_precompact_hook.sh"
-  echo "Wrote hook scripts to $hooks_dir/"
+  echo "Wrote hook scripts to $hooks_dir/ (save interval: every ${save_interval} messages)"
 }
 
 # ─── Claude Code hooks ──────────────────────────────────────────────────────
@@ -816,7 +820,15 @@ main() {
   local save_script="$palace_path/hooks/mempal_save_hook.sh"
   local precompact_script="$palace_path/hooks/mempal_precompact_hook.sh"
   if [[ "${a_hooks:-y}" =~ ^[Yy] ]]; then
-    write_hook_scripts "$palace_path"
+    echo ""
+    read -r -p "Auto-save interval (number of user messages between saves) [8]: " save_interval
+    save_interval="${save_interval:-8}"
+    # Validate: must be a positive integer
+    if ! [[ "$save_interval" =~ ^[1-9][0-9]*$ ]]; then
+      echo "Invalid interval '$save_interval' — using default of 8."
+      save_interval=8
+    fi
+    write_hook_scripts "$palace_path" "$save_interval"
   else
     echo "Skipping hook scripts."
   fi
