@@ -49,7 +49,7 @@ When a feature file with approved wireframes exists, it is the primary input. Re
 **Procedure:**
 
 1. **Validate dependencies:** Confirm `.agents/tools/figma.md` exists and is populated. Run the Figma MCP preflight check (server health, context validation, design system file validation, design system structure validation). Fail if any check does not pass.
-2. **Determine mode:** Ask the user whether this work is scoped to a GitHub issue or ad-hoc. If a GitHub issue is provided, validate `.agents/tools/github.md` and read the issue for existing context.
+2. **Determine mode:** Ask the user whether this work is scoped to a GitHub issue or ad-hoc. If a GitHub issue is provided, validate `.agents/tools/github.md` and read the issue body **and all comments** for existing context (acceptance criteria, architectural decisions, design notes, prior discussion).
 3. **Identify the component:** Name the single component (or bounded composite) in scope for this session. Confirm with the user. Do not proceed with an open-ended "whole screen" scope.
 4. **Locate the wireframe:** Find the approved wireframe that contains this component on the Wireframes page of the feature file. Read the annotations for layout intent, interaction notes, and accessibility expectations. If no wireframe exists, gather equivalent structural input from the user before proceeding.
 5. **Audit the design system:** Query the Design System file via the Figma MCP server to understand what tokens, variables, and components already exist. Identify what can be reused for this component and what gaps exist.
@@ -106,8 +106,12 @@ This step runs **only if** the audit in Step 1 identified gaps in the design sys
 3. **Clean up:** Move rejected options and explorations to the **Archive / Exploration** page with brief annotations explaining why they were not selected.
 4. **Update Cover:** Update the feature file status to reflect progress (e.g. "In Development" if all components for the feature are designed).
 5. **Deliver based on mode:**
-   - **GitHub issue in scope:** Comment on the GitHub issue with a summary of the visual design decisions, a link to the Ready for Development page in the Figma feature file, and any implementation notes (token references, component variant usage, interaction details not captured in the static design).
-   - **Ad-hoc:** Deliver the summary directly in the conversation, including the Figma file link and implementation notes.
+   - **GitHub issue in scope:** Post a **`## UI Design`** comment on the GitHub issue containing:
+     - **Decisions:** A summary of the visual design decisions made during this session — what direction was chosen, key trade-offs, and why.
+     - **Figma link:** A direct link to the Ready for Development page in the Figma feature file.
+     - **Implementation notes:** Token references, component variant usage, interaction details, and anything not captured in the static design that a developer needs to know.
+     - **Open items:** Any unresolved questions, deferred decisions, or flags for implementation.
+   - **Ad-hoc:** Deliver the same summary directly in the conversation, including the Figma file link and implementation notes.
 6. **Surface open items:** Flag anything that needs further discussion — interaction details that require prototyping, responsive behavior questions, or edge cases deferred during this session.
 
 **Completion gate:** The component design is finalized and delivered. Approved screens are on the Ready for Development page. The Design System is updated if applicable. Open items are flagged. The user is notified that visual design for this component is locked and ready for implementation.

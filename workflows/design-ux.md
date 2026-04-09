@@ -37,7 +37,7 @@ The following context is **not** pre-configured. It must be elicited from the us
 - **Constraints:** Platform(s), regulatory or organizational requirements, timeline, and any non-negotiable technical or business limits.
 - **Context:** Existing product map, live flows, or legacy behavior when iterating; links or references to prior decisions if the work continues earlier UX.
 
-When a GitHub issue is provided, much of this context may already be captured in the issue body and comments. Read the issue first, then fill gaps conversationally.
+When a GitHub issue is provided, much of this context may already be captured in the issue body and comments. Read the issue body **and all comments** first — comments are where architectural decisions, design notes, and prior discussion live. Then fill gaps conversationally.
 
 ## Steps
 
@@ -49,7 +49,7 @@ When a GitHub issue is provided, much of this context may already be captured in
 **Procedure:**
 
 1. **Validate dependencies:** Confirm `.agents/tools/figma.md` exists and is populated. Run the Figma MCP preflight check (server health, context validation, design system file validation). Fail if any check does not pass.
-2. **Determine mode:** Ask the user whether this work is scoped to a GitHub issue or ad-hoc. If a GitHub issue is provided, validate `.agents/tools/github.md` and read the issue for existing context.
+2. **Determine mode:** Ask the user whether this work is scoped to a GitHub issue or ad-hoc. If a GitHub issue is provided, validate `.agents/tools/github.md` and read the issue body **and all comments** for existing context (acceptance criteria, architectural decisions, design notes, prior discussion).
 3. **Gather context:** Elicit the discovered context listed above. If a GitHub issue is in scope, use it as the starting point and only ask about gaps. Keep it conversational.
 4. **Frame the problem:** Summarize the problem space — who the product serves, the job to be done, success criteria, and constraints. Get explicit user confirmation that the framing is correct before proceeding.
 
@@ -119,8 +119,12 @@ When a GitHub issue is provided, much of this context may already be captured in
 1. **Final review:** Confirm with the user that the User Flows page and Wireframes page together represent the complete, approved UX for this scope.
 2. **Update Cover:** Change the feature file status to "In Review" or "Approved" as appropriate.
 3. **Deliver based on mode:**
-   - **GitHub issue in scope:** Comment on the GitHub issue with a summary of the UX decisions, a link to the Figma feature file, and any flags or open questions for visual design or implementation. Note which wireframe screens map to which acceptance criteria.
-   - **Ad-hoc:** Deliver the summary directly in the conversation, including the Figma file link.
+   - **GitHub issue in scope:** Post a **`## UX Design`** comment on the GitHub issue containing:
+     - **Decisions:** A summary of the UX decisions made during this session — user flows chosen, structural rationale, and key trade-offs.
+     - **Figma link:** A direct link to the Figma feature file (User Flows and Wireframes pages).
+     - **Screen mapping:** Which wireframe screens map to which acceptance criteria.
+     - **Open items:** Any unresolved questions, deferred decisions, or flags for visual design and implementation.
+   - **Ad-hoc:** Deliver the same summary directly in the conversation, including the Figma file link.
 4. **Surface open items:** Flag anything that needs further discussion before visual design or implementation can proceed — ambiguous interactions, unresolved edge cases, or decisions deferred to visual design.
 
 **Completion gate:** UX artifacts are complete and delivered. The feature file is updated. Open items are explicitly flagged. The user is notified that UX work is locked and ready for visual design.

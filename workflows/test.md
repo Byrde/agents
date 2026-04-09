@@ -31,7 +31,7 @@ The following context is **not** pre-configured. It must be elicited from the us
 - **How to exercise it:** Enough context to run the product or build under test — branch, commit, environment, feature flags, test accounts, or data setup.
 - **Baseline expectations:** Known risks, areas of change, or "do not test" exclusions the user or spec calls out.
 
-When a GitHub issue is provided, much of this context may already be captured in the issue body, implementation comments, and linked PRs. Read the issue first, then fill gaps conversationally.
+When a GitHub issue is provided, much of this context may already be captured in the issue body, comments, and linked PRs. Read the issue body **and all comments** first — comments are where architectural decisions, design notes, implementation summaries, and prior discussion live. Then fill gaps conversationally.
 
 ## Steps
 
@@ -42,7 +42,7 @@ When a GitHub issue is provided, much of this context may already be captured in
 
 **Procedure:**
 
-1. **Determine mode:** Ask the user whether this work is scoped to a GitHub issue or ad-hoc. If a GitHub issue is provided, validate `.agents/tools/github.md` and read the issue for existing context (acceptance criteria, implementation comments, linked PRs).
+1. **Determine mode:** Ask the user whether this work is scoped to a GitHub issue or ad-hoc. If a GitHub issue is provided, validate `.agents/tools/github.md` and read the issue body **and all comments** for existing context (acceptance criteria, architectural decisions, design decisions, implementation summaries, linked PRs).
 2. **Gather context:** Elicit the discovered context listed above. If a GitHub issue is in scope, use it as the starting point and only ask about gaps. Keep it conversational.
 3. **Confirm test plan:** Present the QA specialist's understanding of what will be tested — the acceptance criteria that will be validated, the edge cases and unhappy paths that will be attacked, and how the build will be exercised. **Wait for explicit user confirmation** before starting the test pass.
 

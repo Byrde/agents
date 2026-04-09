@@ -30,7 +30,7 @@ The following context is **not** pre-configured. It must be elicited from the us
 - **Acceptance criteria:** The explicit conditions that must be true when the work is done. When a GitHub issue is in scope, these should already exist in the issue body.
 - **Constraints:** Technical limits, compatibility requirements, performance expectations, or anything that bounds the implementation approach.
 
-When a GitHub issue is provided, much of this context may already be captured in the issue body and architectural comments. Read the issue first, then fill gaps conversationally.
+When a GitHub issue is provided, much of this context may already be captured in the issue body and comments. Read the issue body **and all comments** first — comments are where architectural decisions, design notes, and prior discussion live. Then fill gaps conversationally.
 
 ## Steps
 
@@ -41,7 +41,7 @@ When a GitHub issue is provided, much of this context may already be captured in
 
 **Procedure:**
 
-1. **Determine mode:** Ask the user whether this work is scoped to a GitHub issue or ad-hoc. If a GitHub issue is provided, validate `.agents/tools/github.md` and read the issue for existing context (description, acceptance criteria, architectural comments).
+1. **Determine mode:** Ask the user whether this work is scoped to a GitHub issue or ad-hoc. If a GitHub issue is provided, validate `.agents/tools/github.md` and read the issue body **and all comments** for existing context (description, acceptance criteria, architectural decisions, design decisions, prior discussion).
 2. **Gather context:** Elicit the discovered context listed above. If a GitHub issue is in scope, use it as the starting point and only ask about gaps. Keep it conversational.
 3. **Verify current state:** If a GitHub issue is in scope, check that it is not already implemented. If partially implemented, map what remains.
 4. **Extract and verify requirements:** List implicit assumptions or ambiguities. Resolve with the user before proceeding. If gaps require a spec update, halt and clarify before moving forward.

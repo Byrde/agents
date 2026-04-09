@@ -31,7 +31,7 @@ The following context is **not** pre-configured. It must be elicited from the us
 - **Constraints:** Compliance, budget, team skill set, existing infrastructure, timeline, and any non-negotiable technology choices.
 - **Tech stack:** Languages, frameworks, databases, and key libraries in use or under consideration.
 
-When a GitHub issue is provided, much of this context may already be captured in the issue body and architectural comments. Read the issue first, then fill gaps conversationally.
+When a GitHub issue is provided, much of this context may already be captured in the issue body and comments. Read the issue body **and all comments** first — comments are where architectural decisions, design notes, and prior discussion live. Then fill gaps conversationally.
 
 ## Steps
 
@@ -42,7 +42,7 @@ When a GitHub issue is provided, much of this context may already be captured in
 
 **Procedure:**
 
-1. **Determine mode:** Ask the user whether this work is scoped to a GitHub issue or ad-hoc. If a GitHub issue is provided, validate `.agents/tools/github.md` and read the issue for existing context.
+1. **Determine mode:** Ask the user whether this work is scoped to a GitHub issue or ad-hoc. If a GitHub issue is provided, validate `.agents/tools/github.md` and read the issue body **and all comments** for existing context (architectural decisions, design notes, prior discussion).
 2. **Gather context:** Elicit the discovered context listed above. If a GitHub issue is in scope, use it as the starting point and only ask about gaps. Keep it conversational.
 3. **Reflect back:** Summarize the problem space, constraints, non-negotiables, and success criteria. Get explicit user confirmation that the framing is correct before designing anything.
 

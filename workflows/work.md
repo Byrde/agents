@@ -7,7 +7,8 @@ Take a spec'd work item through implementation and QA validation.
 This workflow composes the following jobs, in order:
 
 1. **Software Developer** — `.agents/jobs/develop.md`
-2. **QA Specialist** — `.agents/jobs/test.md`
+2. **UI Designer** *(conditional)* — `.agents/jobs/design-ui.md`
+3. **QA Specialist** — `.agents/jobs/test.md`
 
 ## Tooling
 
@@ -29,6 +30,12 @@ These files **must** exist and be fully populated before this workflow can execu
 | --- | --- |
 | `.agents/tools/github.md` | GitHub account, repository, project board configuration, and conventions. |
 
+### Optional Files
+
+| File | Required | Purpose |
+| --- | --- | --- |
+| `.agents/tools/figma.md` | **Only when UI design step is triggered.** | Figma team, project, design system file, and conventions. |
+
 ### Work Item (mandatory, no exceptions)
 
 A **fully spec'd GitHub issue** must be identified before execution begins. The issue must have acceptance criteria, and should have any architectural comments from a prior planning workflow.
@@ -45,20 +52,52 @@ If no issue is provided and no matching item exists on the project board, **stop
 **Procedure:**
 
 1. **Validate dependencies:** Confirm `.agents/tools/github.md` exists and is populated. Fail if not.
-2. **Identify the work item:** Confirm the GitHub issue with the user. Read the issue's description, acceptance criteria, and any architectural comments.
+2. **Identify the work item:** Confirm the GitHub issue with the user. Read the issue body **and all comments** — acceptance criteria, architectural decisions, design decisions, and any prior discussion.
 3. **Verify current state:** Check that the issue is not already implemented (merged PRs, closed-as-done, codebase matches criteria). If partially implemented, map what remains.
 4. **Extract and verify requirements:** List implicit assumptions or ambiguities. Resolve with the user before proceeding. If gaps require a spec update, halt and route back to planning.
-5. **Flag to proceed:** Present the developer's understanding of the work — what will be built, what the tests will cover, and any decisions made. **Wait for explicit user confirmation** before moving to implementation.
+5. **Assess design readiness:** Determine whether this work item requires UI design (e.g. new screens, components, or visual changes). Check the issue comments for an existing **`## UI Design`** comment — this indicates that visual design has already been completed. If the task requires UI work **and** no `## UI Design` comment exists, flag that Step 2 (UI Design) will run before implementation.
+6. **Flag to proceed:** Present the developer's understanding of the work — what will be built, what the tests will cover, whether UI design is needed (and whether it already exists), and any decisions made. **Wait for explicit user confirmation** before proceeding.
 
 **Completion gate:** The user has confirmed the developer's understanding and given the go-ahead.
 
-### Step 2 — Implementation (MUST RUN AS SUBAGENT)
+### Step 2 — UI Design (CONDITIONAL, MUST RUN AS SUBAGENT)
+
+**Job:** UI Designer (`.agents/jobs/design-ui.md`)
+**Workflow:** Design UI (`.agents/workflows/design-ui.md`)
+**Runs in:** A sub-agent (isolated context, launched after Step 1 completes).
+
+**This step runs ONLY IF** all of the following are true:
+- The work item involves UI changes (new screens, components, or visual modifications).
+- No `## UI Design` comment exists on the GitHub issue (i.e. visual design has not been completed in a prior session).
+- `.agents/tools/figma.md` exists and is populated.
+
+If any condition is not met, skip to Step 3.
+
+**Input to sub-agent:**
+- The GitHub issue number and repository.
+- The acceptance criteria and any architectural/UX decision comments from the issue.
+- The contents of `.agents/tools/figma.md`.
+- Instruction to execute the Design UI workflow (`.agents/workflows/design-ui.md`) scoped to this issue.
+
+**Procedure:**
+
+1. Execute the Design UI workflow (`.agents/workflows/design-ui.md`) in its entirety, scoped to the GitHub issue.
+2. On completion, post a **`## UI Design`** comment on the GitHub issue containing:
+   - **Decisions:** A summary of the visual design decisions — direction chosen, key trade-offs, and rationale.
+   - **Figma link:** A direct link to the Ready for Development page in the Figma feature file.
+   - **Implementation notes:** Token references, component variant usage, interaction details, and anything a developer needs to know.
+   - **Open items:** Any unresolved questions or deferred decisions.
+
+**Completion gate:** The `## UI Design` comment is posted on the issue with design decisions and Figma link. The sub-agent has completed the Design UI workflow.
+
+### Step 3 — Implementation (MUST RUN AS SUBAGENT)
 
 **Job:** Software Developer (`.agents/jobs/develop.md`)
-**Runs in:** A sub-agent (isolated context, launched after Step 1 completes).
+**Runs in:** A sub-agent (isolated context, launched after Step 1 — or Step 2 if it ran — completes).
 
 **Input to sub-agent:**
 - The verified requirements and decisions from Step 1.
+- Any design decisions from the `## UI Design` comment (from Step 2 or a prior session).
 - The GitHub issue number and repository from `.agents/tools/github.md`.
 - The conventions from `.agents/tools/github.md`.
 
@@ -66,22 +105,22 @@ If no issue is provided and no matching item exists on the project board, **stop
 
 1. **Create branch** following `.agents/tools/github.md` conventions.
 2. **Move issue** to **In Progress** on the project board.
-3. **TDD loop:** Write contract tests encoding the acceptance criteria, implement to green, refactor within scope.
+3. **TDD loop:** Write contract tests encoding the acceptance criteria, implement to green, refactor within scope. If a `## UI Design` comment exists, use the referenced Figma designs and implementation notes to guide the visual implementation.
 4. **If blocked:** Stop implementation. Comment on the GitHub issue describing the gap and escalate back to the user.
 5. **Open PR** following the format in `.agents/tools/github.md`.
 6. **Update issue:** Move to **Ready to Test**. Comment on the issue with what was done, the PR link, and anything the tester should know.
 
 **Completion gate:** PR is open, issue is in Ready to Test, and the implementation comment is posted.
 
-### Step 3 — QA Validation (MUST RUN AS SUBAGENT)
+### Step 4 — QA Validation (MUST RUN AS SUBAGENT)
 
 **Job:** QA Specialist (`.agents/jobs/test.md`)
-**Runs in:** A sub-agent (isolated context, launched after Step 2 completes).
+**Runs in:** A sub-agent (isolated context, launched after Step 3 completes).
 
 **Input to sub-agent:**
 - The GitHub issue number, PR number, and repository from `.agents/tools/github.md`.
 - The acceptance criteria from the issue.
-- The implementation summary comment from Step 2.
+- The implementation summary comment from Step 3.
 - Branch/commit to test against.
 
 **Procedure:**

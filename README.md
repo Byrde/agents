@@ -55,6 +55,39 @@ The script will ask for your PAT, then interactively walk you through selecting 
 
 The Figma MCP server uses OAuth — authentication happens interactively through your editor (Cursor or Claude Code) on first use.
 
+### Mempalace
+
+Installs and configures the [mempalace](https://github.com/milla-jovovich/mempalace) memory system for persistent AI context across conversations. Sets up MCP servers, auto-save hooks, and ignore patterns for both editors.
+
+**Requires:** `python3`, `jq`
+
+```bash
+cd /your/project
+.agents/scripts/setup-memory.sh
+```
+
+The script installs mempalace (via pip, uv, or ensurepip), initialises a project-local palace, and writes:
+
+- `.mempalace/` — project-local palace data
+- `.mempalaceignore` — ignore patterns for mining (node_modules, etc.)
+- `.cursor/mcp.json` — Cursor project MCP
+- `.cursor/hooks.json` — Cursor auto-save hooks (stop + preCompact)
+- `.cursor/rules/mempalace.mdc` — Cursor auto-save rules
+- `.mcp.json` — Claude Code project MCP (fallback if CLI unavailable)
+- `.claude/settings.local.json` — Claude Code auto-save hooks
+
+To mine project files after setup: `.agents/scripts/setup-memory.sh mine`
+
+### Doctor
+
+Diagnoses the health of all MCP servers configured by the setup scripts for both Cursor and Claude Code.
+
+```bash
+cd /your/project
+.agents/scripts/doctor.sh
+```
+
+Checks configuration, authentication, and server reachability for GitHub, Figma, and Mempalace.
 
 ## Jobs
 
@@ -82,3 +115,4 @@ Workflows compose jobs into gated pipelines. Each step has explicit dependencies
 | `develop.md` | Developer | Implement a feature or fix (ad-hoc or issue-scoped) |
 | `test.md` | QA Specialist | Validate an implementation against its requirements |
 | `work.md` | Developer → QA | Full pipeline — take a spec'd issue from implementation through QA |
+| `init.md` | Repository Initialiser | Initialise or refresh README overview and global AI rules |
