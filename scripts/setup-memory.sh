@@ -62,46 +62,110 @@ print_intro() {
 
 # ─── Python / mempalace helpers ──────────────────────────────────────────────
 
-# Resolve the system python, escaping any active virtualenv.
-# The MCP server command and all imports must use this path so mempalace is
-# available globally regardless of per-project venvs.
-resolve_python() {
-  local py=""
+# Returns 0 if the Python binary at $1 is compatible with mempalace's chromadb
+# dependency, 1 otherwise.
+#
+# Strategy:
+#   1. If chromadb is already installed for this interpreter, do a live import
+#      probe.  -W error::UserWarning turns pydantic's "not compatible with
+#      Python 3.14+" warning into a hard failure so the probe is accurate.
+#   2. If chromadb is not installed yet, fall back to a version check.
+#      Current chromadb / pydantic-v1 does not support Python >= 3.14.
+python_is_mempalace_compat() {
+  local py="$1"
+  if "$py" -W error::UserWarning -c "import chromadb" 2>/dev/null; then
+    return 0
+  fi
+  # chromadb not installed yet — use version as a proxy.
+  "$py" -c "import sys; sys.exit(0 if sys.version_info < (3, 14) else 1)" 2>/dev/null
+}
 
-  # If a virtualenv is active, look outside it for the system interpreter.
+# Resolve an appropriate Python interpreter for mempalace.
+#
+# Prefers version-specific interpreters (3.13 → 3.12 → 3.11 → 3.10) over the
+# generic python3 symlink so that a system python3 that happens to resolve to
+# 3.14 does not block setup.  Falls back to python3/python only after the
+# version-specific names are exhausted.
+#
+# Each candidate is tested with python_is_mempalace_compat() before selection.
+# If no compatible interpreter is found, the script exits with an actionable
+# error message.
+resolve_python() {
+  # Strip any active virtualenv/conda from PATH so we always target the system
+  # install — the same interpreter must be used for the MCP server at runtime.
+  local search_path="$PATH"
   if [[ -n "${VIRTUAL_ENV:-}" || -n "${CONDA_PREFIX:-}" ]]; then
-    # Strip the venv/conda bin dir from PATH and search again.
-    local clean_path
-    clean_path="$(echo "$PATH" \
+    search_path="$(printf '%s' "$PATH" \
       | tr ':' '\n' \
       | grep -v "${VIRTUAL_ENV:-__none__}" \
       | grep -v "${CONDA_PREFIX:-__none__}" \
       | tr '\n' ':')"
-    for candidate in python3 python; do
-      py="$(PATH="$clean_path" command -v "$candidate" 2>/dev/null)" && break
+  fi
+
+  # Build an ordered candidate list.  Version-specific names come first so we
+  # select the newest *compatible* interpreter rather than whatever python3
+  # symlinks to (which may be 3.14+).
+  local -a raw=()
+  local c name
+  for name in python3.13 python3.12 python3.11 python3.10 python3 python; do
+    c="$(PATH="$search_path" command -v "$name" 2>/dev/null)" || true
+    [[ -n "$c" ]] && raw+=("$c")
+  done
+
+  [[ ${#raw[@]} -gt 0 ]] || die "python3 not found in PATH"
+
+  # Deduplicate by resolved real path; drop venv-internal interpreters.
+  local -a candidates=()
+  local -a seen_real=()
+  local py real_py already item
+  for py in "${raw[@]}"; do
+    real_py="$(readlink -f "$py" 2>/dev/null || echo "$py")"
+    if [[ "$real_py" == */envs/* || "$real_py" == */.venv/* || "$real_py" == */venv/* ]]; then
+      continue
+    fi
+    already=false
+    for item in ${seen_real[@]+"${seen_real[@]}"}; do
+      [[ "$item" == "$real_py" ]] && already=true && break
     done
+    if [[ "$already" == false ]]; then
+      seen_real+=("$real_py")
+      candidates+=("$py")
+    fi
+  done
+
+  [[ ${#candidates[@]} -gt 0 ]] \
+    || die "all found Python interpreters appear to be inside a virtualenv — install a system python first"
+
+  # Pick the first candidate that passes the compatibility probe.
+  local chosen="" py_ver
+  local -a incompatible=()
+  for py in "${candidates[@]}"; do
+    py_ver="$("$py" --version 2>&1 | awk '{print $2}')"
+    if python_is_mempalace_compat "$py"; then
+      chosen="$py"
+      break
+    else
+      incompatible+=("$py ($py_ver)")
+    fi
+  done
+
+  if [[ -n "$chosen" ]]; then
+    if [[ ${#incompatible[@]} -gt 0 ]]; then
+      echo "note: skipped Python versions incompatible with chromadb: ${incompatible[*]}" >&2
+      echo "      (pydantic-v1 does not support Python >= 3.14)" >&2
+    fi
+    echo "$chosen"
+    return 0
   fi
 
-  # Fallback / no venv: normal lookup.
-  if [[ -z "$py" ]]; then
-    for candidate in python3 python; do
-      if command -v "$candidate" >/dev/null 2>&1; then
-        py="$(command -v "$candidate")"
-        break
-      fi
-    done
-  fi
-
-  [[ -n "$py" ]] || die "python3 not found in PATH"
-
-  # Final guard: reject interpreters that live inside a virtualenv directory.
-  local real_py
-  real_py="$(readlink -f "$py" 2>/dev/null || echo "$py")"
-  if [[ "$real_py" == */envs/* || "$real_py" == */.venv/* || "$real_py" == */venv/* ]]; then
-    die "resolved python ($real_py) appears to be inside a virtualenv — install a system python first"
-  fi
-
-  echo "$py"
+  # Nothing compatible found — give the user a clear path forward.
+  local tried="${incompatible[*]:-none}"
+  die "no compatible Python interpreter found for mempalace.
+mempalace uses chromadb, which requires Python < 3.14 (pydantic-v1 incompatibility).
+Tried: $tried
+Fix: install Python 3.12 or 3.13, then re-run this script.
+  brew install python@3.13   # recommended
+  brew install python@3.12"
 }
 
 check_mempalace_installed() {
