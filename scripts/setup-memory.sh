@@ -245,10 +245,33 @@ verify_import() {
 
 init_palace() {
   local py="$1" project_root="$2" palace_path="$3"
+  local gitignore="$project_root/.gitignore"
+
+  # mempalace init respects .gitignore but has no --ignore-file flag.
+  # Temporarily append editor/agent dirs so init skips them.
+  local fence="# --- setup-memory: temporary ignores (safe to remove) ---"
+  local tmp_ignores=".claude
+.cursor
+.agents"
+
+  if [[ -f "$gitignore" ]]; then
+    printf '\n%s\n%s\n%s\n' "$fence" "$tmp_ignores" "$fence" >>"$gitignore"
+  else
+    printf '%s\n%s\n%s\n' "$fence" "$tmp_ignores" "$fence" >"$gitignore"
+  fi
+
   echo ""
   echo "Running mempalace init …"
+  local init_rc=0
   MEMPALACE_PALACE_PATH="$palace_path" "$py" -m mempalace init "$project_root" \
-    || die "mempalace init failed"
+    || init_rc=$?
+
+  # Remove the temporary fence block from .gitignore
+  sed -i '' "/$fence/,/$fence/d" "$gitignore"
+  # Clean up trailing blank lines left behind
+  sed -i '' -e :a -e '/^[[:space:]]*$/{ $d; N; ba; }' "$gitignore"
+
+  [[ "$init_rc" -eq 0 ]] || die "mempalace init failed"
   echo ""
   echo "Palace initialised at $palace_path"
 }
