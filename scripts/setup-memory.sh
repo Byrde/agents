@@ -584,8 +584,14 @@ env/
 
 # IDE / editor
 .idea/
+.cursor/
+.vscode/
 *.swp
 *.swo
+
+# AI tooling
+.claude/
+.agents/
 
 # Version control
 .git/
@@ -854,7 +860,17 @@ main() {
     install_mempalace "$py"
   fi
 
-  # ── Step 2: Initialise the palace ─────────────────────────────────────────
+  # ── Step 2: Write .mempalaceignore ─────────────────────────────────────────
+
+  echo ""
+  read -r -p "Configure .mempalaceignore? [Y/n] " a_ignore
+  if [[ "${a_ignore:-y}" =~ ^[Yy] ]]; then
+    write_mempalaceignore "$project_root"
+  else
+    echo "Skipping .mempalaceignore."
+  fi
+
+  # ── Step 3: Initialise the palace ─────────────────────────────────────────
 
   if [[ -d "$palace_path" && -f "$palace_path/chroma.sqlite3" ]]; then
     echo ""
@@ -867,17 +883,7 @@ main() {
     init_palace "$py" "$project_root" "$palace_path"
   fi
 
-  # ── Step 3: Write .mempalaceignore ─────────────────────────────────────────
-
-  echo ""
-  read -r -p "Configure .mempalaceignore? [Y/n] " a_ignore
-  if [[ "${a_ignore:-y}" =~ ^[Yy] ]]; then
-    write_mempalaceignore "$project_root"
-  else
-    echo "Skipping .mempalaceignore."
-  fi
-
-  # ── Step 4: Write hook scripts ────────────────────────────────────────────
+  # ── Step 4: Write hook scripts + register hooks ───────────────────────────
 
   echo ""
   read -r -p "Write hook scripts (save + precompact)? [Y/n] " a_hooks
@@ -893,32 +899,33 @@ main() {
       save_interval=8
     fi
     write_hook_scripts "$palace_path" "$save_interval"
+
+    echo ""
+    echo "── Registering hooks ──"
+    merge_cursor_hooks "$cursor_hooks" "$save_script" "$precompact_script"
+    merge_claude_hooks "$claude_settings" "$save_script" "$precompact_script"
   else
     echo "Skipping hook scripts."
   fi
 
-  # ── Step 5: Cursor — MCP + hooks ─────────────────────────────────────────
+  # ── Step 5: Cursor MCP ───────────────────────────────────────────────────
 
   echo ""
-  read -r -p "Configure Cursor (MCP + hooks)? [Y/n] " a_cursor
+  read -r -p "Configure Cursor MCP server? [Y/n] " a_cursor
   if [[ "${a_cursor:-y}" =~ ^[Yy] ]]; then
-    echo "── Cursor ──"
     merge_cursor_mcp_mempalace "$cursor_mcp" "$py" "$palace_path"
-    merge_cursor_hooks "$cursor_hooks" "$save_script" "$precompact_script"
   else
-    echo "Skipping Cursor setup."
+    echo "Skipping Cursor MCP setup."
   fi
 
-  # ── Step 6: Claude Code — MCP + hooks ─────────────────────────────────────
+  # ── Step 6: Claude Code MCP ──────────────────────────────────────────────
 
   echo ""
-  read -r -p "Configure Claude Code (MCP + hooks)? [Y/n] " a_claude
+  read -r -p "Configure Claude Code MCP server? [Y/n] " a_claude
   if [[ "${a_claude:-y}" =~ ^[Yy] ]]; then
-    echo "── Claude Code ──"
     setup_claude_mcp "$py" "$palace_path" "$claude_mcp"
-    merge_claude_hooks "$claude_settings" "$save_script" "$precompact_script"
   else
-    echo "Skipping Claude Code setup."
+    echo "Skipping Claude Code MCP setup."
   fi
 
   # ── Step 7: Mine project (optional) ──────────────────────────────────────
