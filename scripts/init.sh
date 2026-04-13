@@ -125,13 +125,11 @@ copy_skills() {
     die "skills directory not found at $SKILLS_DIR"
   fi
 
-  mkdir -p "$project_root/.cursor" "$project_root/.claude"
+  cp -R "$SKILLS_DIR" "$project_root/.cursor/skills"
+  cp -R "$SKILLS_DIR" "$project_root/.claude/skills"
 
-  cp -R "$SKILLS_DIR"/* "$project_root/.cursor/"
-  cp -R "$SKILLS_DIR"/* "$project_root/.claude/"
-
-  echo "  skills/ → .cursor/"
-  echo "  skills/ → .claude/"
+  echo "  skills/ → .cursor/skills/"
+  echo "  skills/ → .claude/skills/"
   echo ""
   echo "  ✓ Skills installed."
   echo ""
