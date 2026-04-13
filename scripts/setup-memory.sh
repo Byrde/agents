@@ -627,10 +627,6 @@ htmlcov/
 write_mempalaceignore() {
   local project_root="$1"
   local ignore_file="$project_root/.mempalaceignore"
-  if [[ -f "$ignore_file" ]]; then
-    echo ".mempalaceignore already exists — skipping."
-    return
-  fi
   printf '%s' "$IGNORE_PATTERNS" >"$ignore_file"
 
   echo ""
