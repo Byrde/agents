@@ -17,6 +17,24 @@ git commit -m "Add .agents submodule"
 
 **Updating the submodule** `git submodule update --remote .agents` follows the submodule’s configured remote branch.
 
+## Init
+
+One-command bootstrap that sets up mempalace, installs rules and skills, and launches the `/create-readme` workflow:
+
+```bash
+cd /your/project
+.agents/scripts/init.sh
+```
+
+The script runs four steps in sequence:
+
+1. **Mempalace setup** — runs `setup-memory.sh` interactively
+2. **Rules** — copies `.agents/rules/` into `.cursor/rules/` and `.claude/rules/`
+3. **Skills** — copies `.agents/.skills/` into `.cursor/skills/` and `.claude/skills/`
+4. **Claude CLI** — launches `claude` with the `/create-readme` workflow to bootstrap the README overview
+
+**Requires:** `claude` (Claude Code CLI), plus all `setup-memory.sh` requirements (`python3`, `jq`)
+
 ## Setup Tools
 
 ### GitHub
@@ -115,4 +133,4 @@ Workflows compose jobs into gated pipelines. Each step has explicit dependencies
 | `develop.md` | Developer | Implement a feature or fix (ad-hoc or issue-scoped) |
 | `test.md` | QA Specialist | Validate an implementation against its requirements |
 | `work.md` | Developer → QA | Full pipeline — take a spec'd issue from implementation through QA |
-| `init.md` | Repository Initialiser | Initialise or refresh README overview and global AI rules |
+| `create-readme.md` | — | Create or refresh the README overview |

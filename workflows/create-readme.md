@@ -1,6 +1,6 @@
-# Workflow: Init
+# Workflow: Create README
 
-Initialise or refresh a repository's core documentation and global AI rules by deeply analysing the codebase and collaborating with the user.
+Create or refresh a repository's README overview by deeply analysing the codebase and collaborating with the user.
 
 This is a standalone workflow — it does not compose any jobs. All instructions are self-contained below.
 
@@ -136,59 +136,3 @@ If the README exists but has no `## Overview` section, insert one after the titl
 If no README exists, create one with a title and the overview section only. The user can add other sections later.
 
 **Completion gate:** The `## Overview` section is written to the README and the user is satisfied.
-
-### Step 3 — Global AI Rules (same context)
-
-**Runs in:** The current conversation context (interactive).
-
-Create a baseline rules file that grounds **every** AI conversation in project context. Write one file for each editor:
-
-- `.cursor/rules/global.mdc`
-- `.claude/rules/global.md`
-
-#### Rules file content
-
-The rules file must contain:
-
-**Section 1 — Project grounding:**
-
-Direct the AI to read the README at the start of every conversation before doing any work. The README is the source of truth for what this project is, how it is organized, and what conventions it follows.
-
-**Section 2 — Memory bank (conditional):**
-
-**Only include this section if mempalace is set up** (check for `.mempalace/` directory and `mcpServers.mempalace` in `.cursor/mcp.json` or `.mcp.json`).
-
-If present, inform the AI that:
-- It has access to a **mempalace** MCP server for persistent memory across conversations.
-- At the start of each conversation, it should **search** mempalace for prior context relevant to the current task.
-- Memory **saving is handled automatically by hooks** — the AI should **not** write to mempalace directly through MCP tools. Read only.
-
-If mempalace is not set up, omit this section entirely.
-
-#### Format details
-
-**Cursor** (`.cursor/rules/global.mdc`):
-```
----
-description: Project-wide baseline — README grounding and memory bank access
-globs: ["**/*"]
-alwaysApply: true
----
-
-(content here)
-```
-
-**Claude Code** (`.claude/rules/global.md`):
-Plain markdown, no frontmatter required. Claude Code loads all `.md` files in `.claude/rules/` automatically.
-
-#### Updating existing rules
-
-If the rules files already exist, update them in place. Do not duplicate sections. If the mempalace status has changed (added or removed), add or remove the memory bank section accordingly.
-
-#### Procedure
-
-1. Check whether mempalace is set up (`.mempalace/` directory, `mcpServers.mempalace` in `.cursor/mcp.json` or `.mcp.json`).
-2. Write `.cursor/rules/global.mdc` and `.claude/rules/global.md` following the format and content rules above.
-3. Inform the user what was written and whether the memory bank section was included.
-
-**Completion gate:** Both rules files are written. If mempalace was not detected, the user is informed they can run `.agents/scripts/setup-memory.sh` to enable it and re-run init.

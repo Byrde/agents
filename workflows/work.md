@@ -7,7 +7,7 @@ Take a spec'd work item through implementation and QA validation.
 This workflow composes the following jobs, in order:
 
 1. **Software Developer** — `.agents/jobs/develop.md`
-2. **UI Designer** *(conditional)* — `.agents/jobs/design-ui.md`
+2. **UI Designer** *(optional, user-initiated)* — `.agents/jobs/design-ui.md`
 3. **QA Specialist** — `.agents/jobs/test.md`
 
 ## Tooling
@@ -34,7 +34,7 @@ These files **must** exist and be fully populated before this workflow can execu
 
 | File | Required | Purpose |
 | --- | --- | --- |
-| `.agents/tools/figma.md` | **Only when UI design step is triggered.** | Figma team, project, design system file, and conventions. |
+| `.agents/tools/figma.md` | **Only if the user opts into the UI design step.** | Figma team, project, design system file, and conventions. |
 
 ### Work Item (mandatory, no exceptions)
 
@@ -55,23 +55,22 @@ If no issue is provided and no matching item exists on the project board, **stop
 2. **Identify the work item:** Confirm the GitHub issue with the user. Read the issue body **and all comments** — acceptance criteria, architectural decisions, design decisions, and any prior discussion.
 3. **Verify current state:** Check that the issue is not already implemented (merged PRs, closed-as-done, codebase matches criteria). If partially implemented, map what remains.
 4. **Extract and verify requirements:** List implicit assumptions or ambiguities. Resolve with the user before proceeding. If gaps require a spec update, halt and route back to planning.
-5. **Assess design readiness:** Determine whether this work item requires UI design (e.g. new screens, components, or visual changes). Check the issue comments for an existing **`## UI Design`** comment — this indicates that visual design has already been completed. If the task requires UI work **and** no `## UI Design` comment exists, flag that Step 2 (UI Design) will run before implementation.
-6. **Flag to proceed:** Present the developer's understanding of the work — what will be built, what the tests will cover, whether UI design is needed (and whether it already exists), and any decisions made. **Wait for explicit user confirmation** before proceeding.
+5. **Check for design context:** Check the issue comments for an existing **`## UI Design`** comment. If one exists, incorporate the design decisions and implementation notes into your understanding. If none exists and the work involves UI changes, **offer** to run the Design UI workflow (Step 2) before implementation — but do not block on it. The user may choose to proceed without formal designs and iterate on the UI during development.
+6. **Flag to proceed:** Present the developer's understanding of the work — what will be built, what the tests will cover, and any decisions made. **Wait for explicit user confirmation** before proceeding.
 
 **Completion gate:** The user has confirmed the developer's understanding and given the go-ahead.
 
-### Step 2 — UI Design (CONDITIONAL, MUST RUN AS SUBAGENT)
+### Step 2 — UI Design (OPTIONAL, USER-INITIATED, MUST RUN AS SUBAGENT)
 
 **Job:** UI Designer (`.agents/jobs/design-ui.md`)
 **Workflow:** Design UI (`.agents/workflows/design-ui.md`)
 **Runs in:** A sub-agent (isolated context, launched after Step 1 completes).
 
-**This step runs ONLY IF** all of the following are true:
-- The work item involves UI changes (new screens, components, or visual modifications).
-- No `## UI Design` comment exists on the GitHub issue (i.e. visual design has not been completed in a prior session).
-- `.agents/tools/figma.md` exists and is populated.
+**This step only runs if the user explicitly accepts the offer from Step 1.** It does not run automatically. If the user declines or does not respond, skip straight to Step 3.
 
-If any condition is not met, skip to Step 3.
+**Prerequisites:**
+- The user accepted the offer to run UI design.
+- `.agents/tools/figma.md` exists and is populated. If not, inform the user and skip to Step 3.
 
 **Input to sub-agent:**
 - The GitHub issue number and repository.
@@ -88,7 +87,7 @@ If any condition is not met, skip to Step 3.
    - **Implementation notes:** Token references, component variant usage, interaction details, and anything a developer needs to know.
    - **Open items:** Any unresolved questions or deferred decisions.
 
-**Completion gate:** The `## UI Design` comment is posted on the issue with design decisions and Figma link. The sub-agent has completed the Design UI workflow.
+**Completion gate:** The `## UI Design` comment is posted on the issue with design decisions and Figma link.
 
 ### Step 3 — Implementation (MUST RUN AS SUBAGENT)
 
@@ -97,7 +96,7 @@ If any condition is not met, skip to Step 3.
 
 **Input to sub-agent:**
 - The verified requirements and decisions from Step 1.
-- Any design decisions from the `## UI Design` comment (from Step 2 or a prior session).
+- Any design decisions from a `## UI Design` comment on the issue (from Step 2 or a prior session).
 - The GitHub issue number and repository from `.agents/tools/github.md`.
 - The conventions from `.agents/tools/github.md`.
 
