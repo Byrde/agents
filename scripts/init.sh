@@ -7,8 +7,8 @@
 #
 # Run from the repository/project root you want to initialise.
 # Writes:
-#   - .cursor/skills/            — agent skills for Cursor
-#   - .claude/skills/            — agent skills for Claude Code
+#   - .cursor/                   — agent skills copied into Cursor dir
+#   - .claude/                   — agent skills copied into Claude Code dir
 #   - .cursor/rules/global.mdc  — global AI rules for Cursor
 #   - .claude/rules/global.md   — global AI rules for Claude Code
 #   - (everything setup-memory.sh writes — see that script's header)
@@ -24,7 +24,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SKILLS_DIR="$AGENTS_ROOT/.skills"
+SKILLS_DIR="$AGENTS_ROOT/skills"
 RULES_DIR="$AGENTS_ROOT/rules"
 
 TOOL_VERSION="0.1.0"
@@ -122,14 +122,16 @@ copy_skills() {
   echo ""
 
   if [[ ! -d "$SKILLS_DIR" ]]; then
-    die ".skills directory not found at $SKILLS_DIR"
+    die "skills directory not found at $SKILLS_DIR"
   fi
 
-  cp -R "$SKILLS_DIR" "$project_root/.cursor/skills"
-  cp -R "$SKILLS_DIR" "$project_root/.claude/skills"
+  mkdir -p "$project_root/.cursor" "$project_root/.claude"
 
-  echo "  .agents/.skills/ → .cursor/skills/"
-  echo "  .agents/.skills/ → .claude/skills/"
+  cp -R "$SKILLS_DIR"/* "$project_root/.cursor/"
+  cp -R "$SKILLS_DIR"/* "$project_root/.claude/"
+
+  echo "  skills/ → .cursor/"
+  echo "  skills/ → .claude/"
   echo ""
   echo "  ✓ Skills installed."
   echo ""
