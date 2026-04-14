@@ -144,7 +144,7 @@ launch_claude() {
   echo ""
 
   require_cmd claude
-  exec claude "/create-readme"
+  exec claude --dangerously-skip-permissions "/create-readme"
 }
 
 # ─── Main ────────────────────────────────────────────────────────────────────
