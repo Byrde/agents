@@ -927,31 +927,18 @@ main() {
     echo "Skipping hook scripts."
   fi
 
-  # ── Step 5: Cursor MCP ───────────────────────────────────────────────────
+  # ── Step 5: MCP servers (always configured — mempalace needs them) ──────
 
   echo ""
-  read -r -p "Configure Cursor MCP server? [Y/n] " a_cursor
-  if [[ "${a_cursor:-y}" =~ ^[Yy] ]]; then
-    merge_cursor_mcp_mempalace "$cursor_mcp" "$py" "$palace_path"
-  else
-    echo "Skipping Cursor MCP setup."
-  fi
-
-  # ── Step 6: Claude Code MCP ──────────────────────────────────────────────
-
-  echo ""
-  read -r -p "Configure Claude Code MCP server? [Y/n] " a_claude
-  if [[ "${a_claude:-y}" =~ ^[Yy] ]]; then
-    setup_claude_mcp "$py" "$palace_path" "$claude_mcp"
-  else
-    echo "Skipping Claude Code MCP setup."
-  fi
+  echo "── Configuring MCP servers ──"
+  merge_cursor_mcp_mempalace "$cursor_mcp" "$py" "$palace_path"
+  setup_claude_mcp "$py" "$palace_path" "$claude_mcp"
 
   # ── Step 7: Mine project (optional) ──────────────────────────────────────
 
   echo ""
-  read -r -p "Mine this project's files into the palace now? [y/N] " a_mine
-  if [[ "${a_mine:-n}" =~ ^[Yy] ]]; then
+  read -r -p "Mine this project's files into the palace now? [Y/n] " a_mine
+  if [[ "${a_mine:-y}" =~ ^[Yy] ]]; then
     mine_project "$py" "$project_root" "$palace_path"
   fi
 
