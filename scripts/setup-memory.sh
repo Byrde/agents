@@ -269,7 +269,7 @@ init_palace() {
   # Remove the temporary fence block from .gitignore
   sed -i '' "/$fence/,/$fence/d" "$gitignore"
   # Clean up trailing blank lines left behind
-  sed -i '' -e :a -e '/^[[:space:]]*$/{ $d; N; ba; }' "$gitignore"
+  sed -i '' -e :a -e '/^[[:space:]]*$/{' -e '$d' -e N -e ba -e '}' "$gitignore"
 
   [[ "$init_rc" -eq 0 ]] || die "mempalace init failed"
   echo ""
