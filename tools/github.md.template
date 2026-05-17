@@ -108,8 +108,10 @@ Epics are represented as GitHub Milestones. All subordinate feature and bug issu
 
 ### Issue Lifecycle
 * Move to **In Progress** when active implementation starts.
-* Move to **Ready to Test** when implementation is complete and a PR is open.
-* Move to **Done** when QA passes and the PR is merged.
+* Move to the post-PR status (often named **In review** or **Ready to Test**, depending on the project's status set) when implementation is complete and a PR is open. The same status survives QA approval — do NOT advance further on QA approval alone.
+* **Do NOT manually move to Done.** The expectation is that PR-merge automation moves the card to "Done" when the PR is merged. Manual transitions to "Done" before merge bypass the merge gate. After QA approves, leave the card in the post-PR status; the merge closes the loop.
+
+Resolve the actual status set for the project board with `gh project field-list <project-number> --owner <owner> --format json` once per session and align lifecycle moves to that set.
 
 ### Pull Requests
 Every PR must include a robust body containing:
