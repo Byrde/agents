@@ -126,6 +126,6 @@ If no issue is provided and no matching item exists on the project board, **stop
 
 1. **Execute the review protocol** as defined in the QA Specialist job (`.agents/jobs/test.md`): baseline validation, standards validation, and entropy testing.
 2. **If defects found:** Reject the work. Comment on the GitHub issue with the defect report (defect description, reproduction steps, expected vs actual, environmental context). Move the issue back to **In Progress**. Escalate to the user.
-3. **If passed:** Comment on the issue confirming QA approval. Move the issue to **Done**.
+3. **If passed:** Comment on the issue confirming QA approval. **Leave the issue in "In review"** — do NOT move it to "Done". The repo's PR-merge automation moves the issue to "Done" when the PR is merged. Moving it to "Done" manually before merge bypasses the merge gate and confuses the automation.
 
-**Completion gate:** The issue is either rejected with documented defects and returned for fixes, or approved and marked done. The user is notified of the outcome.
+**Completion gate:** The issue is either rejected with documented defects and returned for fixes, or approved with the issue remaining in "In review" awaiting PR merge. The user is notified of the outcome and merges the PR; the merge automation closes the loop by moving the card to "Done".
