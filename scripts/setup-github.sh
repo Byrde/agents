@@ -122,19 +122,30 @@ prompt_repo() {
   done
 }
 
+require_project_scope() {
+  local scopes
+  scopes="$(gh auth status -h github.com 2>&1 | sed -n 's/.*Token scopes: //p')"
+  if [[ "$scopes" != *"'read:project'"* && "$scopes" != *"'project'"* ]]; then
+    die "GitHub token is missing the read:project scope (current: ${scopes:-unknown}).
+       Run: gh auth refresh -h github.com -s read:project
+       Then re-run this script."
+  fi
+}
+
 prompt_project_id() {
   local owner="$1"
-  local sel
+  local sel err
   while true; do
     echo "" >&2
     read -r -p "Project ID (numeric): " sel || die "stdin closed"
     [[ -n "$sel" ]] || { echo "Project ID cannot be empty." >&2; continue; }
     [[ "$sel" =~ ^[0-9]+$ ]] || { echo "Must be a number." >&2; continue; }
-    if gh project view "$sel" --owner "$owner" >/dev/null 2>&1; then
+    if err="$(gh project view "$sel" --owner "$owner" 2>&1 >/dev/null)"; then
       echo "$sel"
       return 0
     else
-      echo "Project not found: ID $sel under $owner" >&2
+      echo "Project lookup failed for ID $sel under $owner:" >&2
+      echo "  $err" >&2
     fi
   done
 }
@@ -295,6 +306,8 @@ main() {
 
   [[ "$GH_HOST" == "github.com" ]] || die "only github.com is supported (selected: $GH_HOST)"
   gh auth switch -u "$GH_LOGIN" -h github.com >/dev/null 2>&1
+
+  require_project_scope
 
   local repo_owner=""
   local orgs=()
