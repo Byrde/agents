@@ -1,0 +1,82 @@
+---
+name: figma-design-system
+description: Owns design-system operations in Figma for this project: read
+  design tokens, read design component, add design token, add design component,
+  publish design library. Consulted whenever a practice skill needs to audit
+  or extend the project's reusable visual vocabulary. Configured for the
+  {{TEAM}} team, project {{PROJECT}}, file {{DESIGN_SYSTEM_FILE}}. Overlays on
+  top of figma-use, which owns the Figma plugin-API mechanics — load both when
+  executing operations.
+category: tool
+---
+
+# Figma Design System
+
+This project's design-system tool. Owns the reusable visual vocabulary — components, typography, colors, spacing, icons, logos — in the Design System file at **{{DESIGN_SYSTEM_FILE}}** (team **{{TEAM}}**, project **{{PROJECT}}**).
+
+## Built on figma-use
+
+This skill is an **overlay** on [figma-use](../figma-use/SKILL.md), Figma's official skill for driving the MCP server. `figma-use` owns the plugin-API mechanics — the `use_figma` tool, page-loading rules, font-loading recipes, query/set helpers, error recovery. This skill owns the project-specific *conventions* — what reusable pieces live in the design system, how they're organised, and when to republish.
+
+**Whenever an operation here requires programmatic execution in Figma, follow `figma-use` for how to drive the API.** This skill never duplicates that material.
+
+## Owned operations
+
+- **read design tokens** — query Figma Variables for colors, typography, spacing, etc.
+- **read design component** — query published components and their variants.
+- **add design token** — add a new variable to the appropriate collection.
+- **add design component** — add a new reusable component.
+- **publish design library** — re-publish after changes with a descriptive note.
+
+Feature files **consume** this library; they do not duplicate or detach components. Modifications happen here and propagate via library publishing.
+
+## Access
+
+All operations go through the **Figma MCP server**, driven via `figma-use`. Direct REST API calls or manual edits outside the MCP server are not permitted.
+
+### Preflight (first operation of the session)
+
+1. **Load figma-use.** Read [figma-use/SKILL.md](../figma-use/SKILL.md) before any `use_figma` call.
+2. **Server health.** Verify the Figma MCP server is reachable and authenticated.
+3. **Team / project access.** Verify the server can access team **{{TEAM}}** and project **{{PROJECT}}**.
+4. **File access.** Verify file **{{DESIGN_SYSTEM_FILE}}** is reachable.
+
+## File structure
+
+The Design System file is the single source of truth for the product's visual vocabulary. The structure is **flat by default** — categories of reusable things, no hierarchy. Suggested pages:
+
+- **Cover** — what this file is. Product name, status, last updated.
+- **Components** — reusable visual elements (buttons, inputs, cards, nav, modal, etc.). Whatever gets used in more than one place. No atomic-hierarchy distinction — if it's reused, it's a component.
+- **Typography** — the type system. Typeface(s), scale, weights, line heights, named styles per role.
+- **Colors** — the palette and how it's used. Brand colors, semantic roles (surface, text, border, status), modes (light/dark) where applicable.
+- **Spacing** — the rhythm. Base unit and scale, named values.
+- **Icons** — the icon set and sizing rules.
+- **Logos** — brand marks, lockups, and usage rules.
+
+These are defaults, not mandates. If a project doesn't need a separate Logos page, fold it into Components. If it needs an Effects/Shadows or Motion page, add one. The principle: **a flat catalog of reusable building blocks, organised by category, not by abstraction level.**
+
+## Conventions
+
+### Components
+
+- Built from the design tokens — no hardcoded colors, sizes, or typography.
+- Use **Figma auto layout** for responsive behavior.
+- Define meaningful **variants** via Figma component properties (size, style, state).
+- Naming is `Category / Name / Variant` (e.g., `Buttons / Primary / Default`) — but the team picks the granularity that fits.
+- All interactive components define the relevant states (Default, Hover, Active/Pressed, Focused, Disabled, Error where applicable).
+
+### Tokens
+
+- Implemented as **Figma Variables**.
+- Names are semantically meaningful (e.g., `color.surface.primary`, `spacing.large`, `text.heading.lg`). Pick a convention the team likes and apply it consistently.
+- Modes (light/dark) live as Figma Variable modes on the relevant collections, not as duplicate token sets.
+- No mandated primitives/semantics/component-specific hierarchy — use what fits. Most projects don't need three layers.
+
+### Library publishing
+
+- Published as a Figma library to team **{{TEAM}}**.
+- Re-publish after any token or component change, with a descriptive update note.
+
+## Composition
+
+When the `figma-feature-files` skill is installed, feature files consume this library. Changes propagate via republish — feature files never detach instances or override locally; modifications round-trip through this skill.

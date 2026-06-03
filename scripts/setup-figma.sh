@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
-# Configure the Figma tool: .agents/tools/figma.md from template + project-local MCP.
+# Configure the Figma tool skills: render per-capability templates into
+# .agents/skills/ and merge the Figma MCP server into project-local configs.
 #
-# Run from the repository/project root you want to configure (current working directory).
-# Writes:
-#   - .agents/tools/figma.md   — rendered from figma.md.template
-#   - .cursor/mcp.json         — Cursor project MCP (Figma server merged in)
-#   - .mcp.json                — Claude Code project MCP (Figma server merged in)
+# Two opt-in capabilities:
+#   - figma-design-system   → tokens, components, library publishing
+#   - figma-feature-files   → per-feature workspaces (flows, wireframes, visual)
+# Pick either, both, or neither.
 #
-# Does not modify $HOME. Does not invoke the cursor or claude CLIs; only merges JSON with jq.
+# Run from the repository/project root you want to configure (current working
+# directory).
+#
+# Writes (per opted-in capability):
+#   - .agents/skills/figma-design-system/SKILL.md
+#   - .agents/skills/figma-feature-files/SKILL.md
+#   - .cursor/mcp.json   — Cursor project MCP (Figma server merged in)
+#   - .mcp.json          — Claude Code project MCP (Figma server merged in)
+#
+# Does not modify $HOME. Does not invoke the cursor or claude CLIs; only
+# merges JSON with jq.
 #
 # Usage: cd /path/to/project && /path/to/setup-figma.sh
 #
@@ -19,8 +29,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TOOL_DIR="$AGENTS_ROOT/tools"
-FIGMA_TEMPLATE="$TOOL_DIR/figma.md.template"
-FIGMA_OUT="$TOOL_DIR/figma.md"
+SKILLS_DIR="$AGENTS_ROOT/skills"
+DESIGN_SYSTEM_TEMPLATE="$TOOL_DIR/figma-design-system.md.template"
+DESIGN_SYSTEM_OUT="$SKILLS_DIR/figma-design-system/SKILL.md"
+FEATURE_FILES_TEMPLATE="$TOOL_DIR/figma-feature-files.md.template"
+FEATURE_FILES_OUT="$SKILLS_DIR/figma-feature-files/SKILL.md"
+
+# Upstream figma-use skill — vendored from Figma's official MCP guide.
+# Our skills overlay on top of this; it owns the plugin-API mechanics.
+FIGMA_USE_REPO="https://github.com/figma/mcp-server-guide.git"
+FIGMA_USE_SUBPATH="skills/figma-use"
+FIGMA_USE_OUT="$SKILLS_DIR/figma-use"
 
 FIGMA_API="https://api.figma.com"
 FIGMA_MCP_URL="https://mcp.figma.com/mcp"
@@ -46,14 +65,66 @@ print_intro() {
   echo "$bar"
   echo "  $PROG_NAME · Byrde Agents  v$TOOL_VERSION"
   echo ""
-  echo "  Configure the Figma agent tool for this project: interactive picker"
-  echo "  (Figma REST API), then render .agents/tools/figma.md and merge the"
-  echo "  Figma MCP server into project-local .cursor/mcp.json and .mcp.json."
+  echo "  Install Figma tool skills into .agents/skills/ and wire up the"
+  echo "  Figma MCP server in your editor's project config."
+  echo ""
+  echo "  Two opt-in capabilities — install either, both, or neither:"
+  echo "    • figma-design-system   tokens, components, library publishing"
+  echo "    • figma-feature-files   per-feature workspaces (flows, mocks, handoff)"
+  echo ""
+  echo "  Both overlay on figma-use (Figma's official plugin-API skill),"
+  echo "  which is vendored from upstream on every run."
   echo ""
   printf '  %-16s %s\n' "Project Root" "$project_root"
   printf '  %-16s %s\n' "Auth" "Figma Personal Access Token"
   echo "$bar"
   echo ""
+}
+
+print_summary() {
+  local bar
+  bar="$(printf '%*s' 68 '' | tr ' ' '=')"
+  echo ""
+  echo "$bar"
+  echo "  $PROG_NAME · Summary"
+  echo "$bar"
+  echo ""
+  printf '  %-16s %s\n' "Team" "${team_name:-$team_id}"
+  printf '  %-16s %s\n' "Project" "$selected_project_name"
+  if [[ "$install_ds" == "y" ]]; then
+    printf '  %-16s %s\n' "Design System" "$ds_file_name"
+  fi
+  echo ""
+  echo "  Skills:"
+  printf '    %s figma-use              %s\n' "✓" "${figma_use_status:-skipped} → $FIGMA_USE_OUT"
+  if [[ "$install_ds" == "y" ]]; then
+    echo "    ✓ figma-design-system    → $DESIGN_SYSTEM_OUT"
+  else
+    echo "    - figma-design-system    (declined)"
+  fi
+  if [[ "$install_ff" == "y" ]]; then
+    echo "    ✓ figma-feature-files    → $FEATURE_FILES_OUT"
+  else
+    echo "    - figma-feature-files    (declined)"
+  fi
+  echo ""
+  echo "  MCP server:"
+  printf '    %-13s %s\n' "Cursor:"      "${cursor_status:-skipped}"
+  printf '    %-13s %s\n' "Claude Code:" "${claude_status:-skipped}"
+  if [[ "$install_ds" == "y" && "$ds_file_url" == *"pending"* ]]; then
+    echo ""
+    echo "  ⚠  Follow-up — Design System file is pending:"
+    echo "     1. Create '$ds_file_name' in Figma inside '$selected_project_name'."
+    echo "     2. Add the suggested pages: Cover, Components, Typography,"
+    echo "        Colors, Spacing, Icons. (Logos optional. Flat structure —"
+    echo "        no atomic hierarchy.)"
+    echo "     3. Publish it as a team library."
+    echo "     4. Re-run this script to update the file reference."
+  fi
+  echo ""
+  echo "  Authenticate the MCP server through your editor on first use (OAuth)."
+  echo "  Verify with: .agents/scripts/doctor.sh"
+  echo "$bar"
 }
 
 # ─── Interactive menu (Bash 3.2 safe) ────────────────────────────────────────
@@ -133,16 +204,63 @@ extract_team_id() {
 
 # ─── Template rendering ─────────────────────────────────────────────────────
 
-render_figma_md() {
-  local team="$1" project="$2" ds_file="$3"
-  [[ -f "$FIGMA_TEMPLATE" ]] || die "missing template: $FIGMA_TEMPLATE"
-  FIGMA_TEMPLATE="$FIGMA_TEMPLATE" FIGMA_OUT="$FIGMA_OUT" \
+install_figma_use() {
+  echo ""
+  echo "Installing figma-use (Figma's official MCP usage skill) …"
+
+  local tmpdir
+  tmpdir="$(mktemp -d)" || die "mktemp failed"
+
+  # shellcheck disable=SC2064
+  trap "rm -rf '$tmpdir'" EXIT
+
+  if ! git clone --quiet --depth=1 "$FIGMA_USE_REPO" "$tmpdir/repo" 2>/dev/null; then
+    rm -rf "$tmpdir"
+    trap - EXIT
+    die "failed to clone $FIGMA_USE_REPO — check network or git availability"
+  fi
+
+  local src="$tmpdir/repo/$FIGMA_USE_SUBPATH"
+  [[ -d "$src" ]] || {
+    rm -rf "$tmpdir"
+    trap - EXIT
+    die "upstream path $FIGMA_USE_SUBPATH missing from $FIGMA_USE_REPO"
+  }
+
+  local commit_sha
+  commit_sha="$(git -C "$tmpdir/repo" rev-parse HEAD 2>/dev/null || echo unknown)"
+
+  # Replace any existing install so we always reflect upstream
+  rm -rf "$FIGMA_USE_OUT"
+  mkdir -p "$(dirname "$FIGMA_USE_OUT")"
+  cp -R "$src" "$FIGMA_USE_OUT"
+
+  # Write an upstream marker so it's clear where this came from
+  cat >"$FIGMA_USE_OUT/.upstream" <<EOF
+source: $FIGMA_USE_REPO
+path: $FIGMA_USE_SUBPATH
+commit: $commit_sha
+fetched: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+
+  figma_use_status="commit ${commit_sha:0:7}"
+  echo "  ✓ skills/figma-use/ updated ($figma_use_status)"
+
+  rm -rf "$tmpdir"
+  trap - EXIT
+}
+
+render_skill() {
+  local template="$1" out="$2" team="$3" project="$4" ds_file="$5"
+  [[ -f "$template" ]] || die "missing template: $template"
+  mkdir -p "$(dirname "$out")"
+  RENDER_TEMPLATE="$template" RENDER_OUT="$out" \
     RENDER_TEAM="$team" RENDER_PROJECT="$project" RENDER_DS_FILE="$ds_file" \
     python3 <<'PY'
 from pathlib import Path
 import os
-src = Path(os.environ["FIGMA_TEMPLATE"])
-dst = Path(os.environ["FIGMA_OUT"])
+src = Path(os.environ["RENDER_TEMPLATE"])
+dst = Path(os.environ["RENDER_OUT"])
 text = src.read_text()
 out = (
     text.replace("{{TEAM}}", os.environ["RENDER_TEAM"])
@@ -216,13 +334,25 @@ main() {
     -h | --help | help)
       echo "$PROG_NAME · Byrde Agents v$TOOL_VERSION"
       echo ""
+      echo "Installs Figma tool skills into .agents/skills/ and merges the"
+      echo "Figma MCP server into your editor's project-local config."
+      echo ""
       echo "Usage:"
       echo "  cd /your/project && $0"
       echo ""
+      echo "Opt-in capabilities (pick either, both, or neither):"
+      echo "  figma-design-system   tokens, components, library publishing"
+      echo "  figma-feature-files   per-feature workspaces (flows, mocks, handoff)"
+      echo ""
+      echo "Both overlay on figma-use, vendored from upstream on every run:"
+      echo "  https://github.com/figma/mcp-server-guide/tree/main/skills/figma-use"
+      echo ""
       echo "Writes:"
-      echo "  .agents/tools/figma.md      — from figma.md.template"
-      echo "  .cursor/mcp.json            — Cursor project MCP"
-      echo "  .mcp.json                   — Claude Code project MCP"
+      echo "  .agents/skills/figma-use/                — always (refreshed each run)"
+      echo "  .agents/skills/figma-design-system/SKILL.md  — per opt-in"
+      echo "  .agents/skills/figma-feature-files/SKILL.md  — per opt-in"
+      echo "  .cursor/mcp.json   — Cursor project MCP"
+      echo "  .mcp.json          — Claude Code project MCP"
       exit 0
       ;;
   esac
@@ -230,6 +360,7 @@ main() {
   require_cmd jq
   require_cmd python3
   require_cmd curl
+  require_cmd git
 
   local project_root
   project_root="$(pwd -P)"
@@ -237,6 +368,26 @@ main() {
   local claude_mcp="$project_root/.mcp.json"
 
   print_intro "$project_root"
+
+  # ── Step 0: Capability selection ─────────────────────────────────────────
+  local install_ds="n" install_ff="n"
+  local figma_use_status="skipped"
+  echo "Which Figma capabilities should be installed as skills?"
+  echo ""
+  read -r -p "Install figma-design-system (tokens, components, library)? [Y/n] " a_ds
+  [[ "${a_ds:-y}" =~ ^[Yy]|^$ ]] && install_ds="y"
+  read -r -p "Install figma-feature-files (flows, mocks, handoff)? [Y/n] " a_ff
+  [[ "${a_ff:-y}" =~ ^[Yy]|^$ ]] && install_ff="y"
+
+  if [[ "$install_ds" != "y" && "$install_ff" != "y" ]]; then
+    echo ""
+    echo "Nothing selected — exiting without changes."
+    exit 0
+  fi
+
+  # figma-use is a prerequisite for the Figma overlays — always (re-)install
+  # so the vendored copy reflects upstream on every setup run.
+  install_figma_use
 
   # ── Step 1: Authenticate ──────────────────────────────────────────────────
 
@@ -310,7 +461,14 @@ main() {
 
   echo "Selected project: $selected_project_name (ID: $selected_project_id)"
 
-  # ── Step 4: Select or identify Design System file ─────────────────────────
+  # ── Step 4: Select or identify Design System file (only if installing it) ─
+
+  local ds_file_key="" ds_file_name="" ds_file_url=""
+
+  if [[ "$install_ds" != "y" ]]; then
+    ds_file_name="N/A"
+    ds_file_url="N/A (figma-design-system not installed)"
+  else
 
   echo ""
   echo "Listing files in project '$selected_project_name' …"
@@ -322,8 +480,6 @@ main() {
     file_keys+=("$fkey")
     file_names+=("$fname")
   done < <(list_files "$selected_project_id")
-
-  local ds_file_key="" ds_file_name="" ds_file_url=""
 
   if [[ ${#file_names[@]} -eq 0 ]]; then
     echo ""
@@ -371,7 +527,7 @@ main() {
         [[ -n "$pg" ]] && existing_pages+=("$pg")
       done < <(get_file_pages "$ds_file_key")
 
-      local -a required_pages=("Cover" "Foundations" "Atoms" "Molecules" "Organisms")
+      local -a required_pages=("Cover" "Components" "Typography" "Colors" "Spacing" "Icons")
       local -a missing_pages=()
       for rp in "${required_pages[@]}"; do
         local found=false
@@ -409,24 +565,26 @@ main() {
     fi
   fi
 
-  # ── Step 5: Render template ───────────────────────────────────────────────
+  fi # end: install_ds gate
 
-  echo ""
-  echo "Configuration summary:"
-  echo "  Team:               ${team_name:-$team_id}"
-  echo "  Project:            $selected_project_name"
-  echo "  Design System File: $ds_file_name"
-  if [[ -n "$ds_file_key" ]]; then
-    echo "  Design System URL:  $ds_file_url"
-  fi
-  echo ""
+  # ── Step 5: Render skills ─────────────────────────────────────────────────
 
   local team_field="${team_name:-$team_id} (ID: $team_id)"
   local ds_field="$ds_file_name — $ds_file_url"
 
-  render_figma_md "$team_field" "$selected_project_name" "$ds_field"
+  if [[ "$install_ds" == "y" ]]; then
+    render_skill "$DESIGN_SYSTEM_TEMPLATE" "$DESIGN_SYSTEM_OUT" \
+      "$team_field" "$selected_project_name" "$ds_field"
+  fi
+  if [[ "$install_ff" == "y" ]]; then
+    render_skill "$FEATURE_FILES_TEMPLATE" "$FEATURE_FILES_OUT" \
+      "$team_field" "$selected_project_name" "$ds_field"
+  fi
 
   # ── Step 6: Merge MCP ────────────────────────────────────────────────────
+
+  local cursor_status="skipped"
+  local claude_status="skipped"
 
   echo ""
   echo "The Figma MCP server uses OAuth — authentication happens interactively"
@@ -436,28 +594,17 @@ main() {
   read -r -p "Merge Figma MCP into $cursor_mcp? [Y/n] " a_cursor
   if [[ "${a_cursor:-y}" =~ ^[Yy]|^$ ]]; then
     merge_cursor_mcp_figma "$cursor_mcp"
+    cursor_status="merged → $cursor_mcp"
   fi
 
   echo ""
   read -r -p "Merge Figma MCP into $claude_mcp (Claude Code project MCP)? [Y/n] " a_claude
   if [[ "${a_claude:-y}" =~ ^[Yy]|^$ ]]; then
     merge_claude_mcp_figma "$claude_mcp"
+    claude_status="merged → $claude_mcp"
   fi
 
-  echo ""
-  echo "Done."
-  echo ""
-  if [[ "$ds_file_url" == *"pending"* ]]; then
-    echo "⚠  NEXT STEPS:"
-    echo "   1. Create the Design System file '$ds_file_name' in Figma"
-    echo "      inside the '$selected_project_name' project."
-    echo "   2. Add the required pages: Cover, Foundations, Atoms, Molecules, Organisms"
-    echo "   3. Publish it as a team library."
-    echo "   4. Re-run this script to update the file reference."
-  else
-    echo "✓  Figma tool configured. Authenticate the MCP server through your"
-    echo "   editor (Cursor or Claude Code) on first use."
-  fi
+  print_summary
 }
 
 main "$@"

@@ -1,6 +1,6 @@
 # .agents
 
-A structured multi-agent framework for software development. It defines specialist roles, composable workflows, shared practices, and tool integrations that orchestrate the full lifecycle — from UX design through architecture, planning, implementation, and QA.
+A library of self-contained, opinionated Claude Code skills for software development. Drop it into any repository as a submodule. Two kinds of skills compose freely via shared verb+noun vocabulary: **practice skills** (the *what* — develop, plan, architect, design, test, create-readme) ship with the repo; **tool skills** (the *how* — `github-source-control`, `github-projects`, `figma-design-system`, `figma-feature-files`, the vendored `figma-use`) are installed per-project by setup scripts.
 
 ## Usage
 
@@ -15,31 +15,34 @@ git commit -m "Add .agents submodule"
 
 **Cloning a host repo that already includes this submodule:** use `git clone --recurse-submodules <host-repo-url>`, or after a plain clone run `git submodule update --init --recursive`.
 
-**Updating the submodule** `git submodule update --remote .agents` follows the submodule’s configured remote branch.
+**Updating the submodule:** `git submodule update --remote .agents` follows the submodule's configured remote branch.
 
 ## Init
 
-One-command bootstrap that sets up mempalace, installs rules and skills, and launches the `/create-readme` workflow:
+One-command bootstrap that installs rules and skills into your editor directories:
 
 ```bash
 cd /your/project
 .agents/scripts/init.sh
 ```
 
-The script runs four steps in sequence:
+The script runs two steps:
 
-1. **Mempalace setup** — runs `setup-memory.sh` interactively
-2. **Rules** — copies `.agents/rules/` into `.cursor/rules/` and `.claude/rules/`
-3. **Skills** — copies `.agents/.skills/` into `.cursor/skills/` and `.claude/skills/`
-4. **Claude CLI** — launches `claude` with the `/create-readme` workflow to bootstrap the README overview
+1. **Rules** — copies `.agents/rules/` into `.cursor/rules/` and `.claude/rules/`
+2. **Skills** — copies `.agents/skills/` into `.cursor/skills/` and `.claude/skills/`
 
-**Requires:** `claude` (Claude Code CLI), plus all `setup-memory.sh` requirements (`python3`, `jq`)
+Optional setup (run separately when you want them):
+
+- `.agents/scripts/setup-memory.sh` — mempalace memory
+- `.agents/scripts/setup-github.sh` — GitHub tool skills
+- `.agents/scripts/setup-figma.sh` — Figma tool skills
+- In your editor: `/create-readme` to bootstrap the README overview
 
 ## Setup Tools
 
 ### GitHub
 
-Configures the GitHub MCP server, renders `.agents/tools/github.md` from template, and merges MCP config into your editor.
+Configures opt-in GitHub tool skills and merges the GitHub MCP server into your editor's project config.
 
 **Requires:** `gh` (GitHub CLI, authenticated), `jq`, `python3`
 
@@ -48,89 +51,49 @@ cd /your/project
 .agents/scripts/setup-github.sh
 ```
 
-The script will interactively walk you through selecting your GitHub account, organization/owner, repository, and project board. It writes:
+Two opt-in capabilities — pick either, both, or neither:
 
-- `.agents/tools/github.md` — rendered tool configuration
-- `.cursor/mcp.json` — Cursor project MCP
-- `.mcp.json` — Claude Code project MCP
+- **`github-source-control`** — branches, pull requests, code review
+- **`github-projects`** — work items, milestones, project board (requires `read:project` scope)
+
+The script walks you through selecting your account, organisation/owner, repository, and (if installing `github-projects`) project board ID. It writes:
+
+- `.agents/skills/github-source-control/SKILL.md` — per opt-in
+- `.agents/skills/github-projects/SKILL.md` — per opt-in
+- `.cursor/mcp.json` and `.mcp.json` — MCP server merged in
 
 ### Figma
 
-Configures the Figma MCP server, renders `.agents/tools/figma.md` from template, and merges MCP config into your editor.
+Configures opt-in Figma tool skills, vendors Figma's official [`figma-use`](https://github.com/figma/mcp-server-guide/tree/main/skills/figma-use) skill into `skills/figma-use/`, and merges the Figma MCP server into your editor's project config.
 
-**Requires:** `curl`, `jq`, `python3`, a [Figma Personal Access Token](https://www.figma.com/developers/api#access-tokens) with `file_content:read` and `projects:read` scopes
+**Requires:** `curl`, `git`, `jq`, `python3`, a [Figma Personal Access Token](https://www.figma.com/developers/api#access-tokens) with `file_content:read` and `projects:read` scopes
 
 ```bash
 cd /your/project
 .agents/scripts/setup-figma.sh
 ```
 
-The script will ask for your PAT, then interactively walk you through selecting your Figma team (via URL), project, and Design System file. It writes:
+Two opt-in capabilities — pick either, both, or neither:
 
-- `.agents/tools/figma.md` — rendered tool configuration
-- `.cursor/mcp.json` — Cursor project MCP
-- `.mcp.json` — Claude Code project MCP
+- **`figma-design-system`** — tokens, components, library publishing
+- **`figma-feature-files`** — per-feature workspaces (flows, wireframes, visual design)
 
-The Figma MCP server uses OAuth — authentication happens interactively through your editor (Cursor or Claude Code) on first use.
+Both overlay on the vendored `figma-use` skill, which owns the Figma plugin-API mechanics. The script asks for your PAT, walks you through team/project selection, and (if installing `figma-design-system`) the Design System file. Re-running the script refreshes `figma-use` from upstream main. It writes:
 
-### Mempalace
+- `.agents/skills/figma-use/` — vendored from upstream (always refreshed)
+- `.agents/skills/figma-design-system/SKILL.md` — per opt-in
+- `.agents/skills/figma-feature-files/SKILL.md` — per opt-in
+- `.cursor/mcp.json` and `.mcp.json` — MCP server merged in
 
-Installs and configures the [mempalace](https://github.com/milla-jovovich/mempalace) memory system for persistent AI context across conversations. Sets up MCP servers, auto-save hooks, and ignore patterns for both editors.
-
-**Requires:** `python3`, `jq`
-
-```bash
-cd /your/project
-.agents/scripts/setup-memory.sh
-```
-
-The script installs mempalace (via pip, uv, or ensurepip), initialises a project-local palace, and writes:
-
-- `.mempalace/` — project-local palace data
-- `.mempalace/hooks/` — save and precompact hook scripts
-- `.mempalaceignore` — ignore patterns for mining (node_modules, etc.)
-- `.cursor/mcp.json` — Cursor project MCP
-- `.cursor/hooks.json` — Cursor auto-save hooks (stop + preCompact)
-- `.mcp.json` — Claude Code project MCP (fallback if CLI unavailable)
-- `.claude/settings.local.json` — Claude Code auto-save hooks
-
-To mine project files after setup: `.agents/scripts/setup-memory.sh mine`
+The Figma MCP server uses OAuth — authentication happens interactively through your editor on first use.
 
 ### Doctor
 
-Diagnoses the health of all MCP servers configured by the setup scripts for both Cursor and Claude Code.
+Diagnoses the health of all MCP servers and skill installations configured by the setup scripts.
 
 ```bash
 cd /your/project
 .agents/scripts/doctor.sh
 ```
 
-Checks configuration, authentication, and server reachability for GitHub, Figma, and Mempalace.
-
-## Jobs
-
-Each job defines a specialist role with a clear scope boundary, dependencies, and operating rules.
-
-| Job | Role | Scope |
-| --- | --- | --- |
-| `architect.md` | Marcus — Systems Architect | Macro-level system design, build-vs-buy decisions, Mermaid diagrams |
-| `design-ux.md` | Julian — UX Designer | User flows, wireframes, annotations, unhappy paths |
-| `design-ui.md` | Leo — UI Designer | One component at a time — tokens, variants, states, visual design |
-| `plan.md` | Elias — Technical Planner | Decomposing requests into spec'd, tracked work items |
-| `develop.md` | Victor — Software Developer | TDD implementation from clear requirements — halts on ambiguity |
-| `test.md` | Silas — QA Specialist | Adversarial testing — acceptance criteria, standards, entropy |
-
-## Workflows
-
-Workflows compose jobs into gated pipelines. Each step has explicit dependencies, a completion gate, and a defined handoff.
-
-| Workflow | Jobs | Purpose |
-| --- | --- | --- |
-| `architect.md` | Architect | Design or refine system architecture (ad-hoc or issue-scoped) |
-| `design-ux.md` | UX Designer | Map flows and wireframe a feature in Figma |
-| `design-ui.md` | UI Designer | Visually design a component using the design system in Figma |
-| `plan.md` | Planner → Architect | Decompose a request into GitHub issues, then enrich with architecture |
-| `develop.md` | Developer | Implement a feature or fix (ad-hoc or issue-scoped) |
-| `test.md` | QA Specialist | Validate an implementation against its requirements |
-| `work.md` | Developer → QA | Full pipeline — take a spec'd issue from implementation through QA |
-| `create-readme.md` | — | Create or refresh the README overview |
+Reports per-capability presence (`github-source-control`, `github-projects`, `figma-design-system`, `figma-feature-files`, `figma-use`), MCP configuration, authentication, and server reachability.

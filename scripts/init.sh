@@ -1,23 +1,22 @@
 #!/usr/bin/env bash
 # Bootstrap a host project with Byrde Agents.
 #
-# Runs setup-memory.sh interactively, copies rules and skills into the
-# project's editor directories, and launches the Claude CLI with the
-# /create-readme workflow.
+# Copies rules and skills into the project's editor directories so the
+# Claude and Cursor agents can pick them up. Optional setup steps
+# (mempalace memory, GitHub tool skills, Figma tool skills) are run
+# separately as their own scripts.
 #
 # Run from the repository/project root you want to initialise.
 # Writes:
-#   - .cursor/                   — agent skills copied into Cursor dir
-#   - .claude/                   — agent skills copied into Claude Code dir
-#   - .cursor/rules/global.mdc  — global AI rules for Cursor
-#   - .claude/rules/global.md   — global AI rules for Claude Code
-#   - (everything setup-memory.sh writes — see that script's header)
+#   - .cursor/rules/   — global AI rules for Cursor
+#   - .claude/rules/   — global AI rules for Claude Code
+#   - .cursor/skills/  — agent skills copied into Cursor dir
+#   - .claude/skills/  — agent skills copied into Claude Code dir
 #
 # Does not modify $HOME.
 #
 # Usage: cd /path/to/project && /path/to/init.sh
 #
-# Requires: claude (Claude Code CLI)
 # Compatible with Bash 3.2 (macOS): no mapfile/readarray.
 
 set -euo pipefail
@@ -37,10 +36,6 @@ die() {
   exit 1
 }
 
-require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1 (install or add to PATH)"
-}
-
 print_intro() {
   local project_root="$1"
   local bar
@@ -48,9 +43,9 @@ print_intro() {
   echo "$bar"
   echo "  $PROG_NAME · Byrde Agents  v$TOOL_VERSION"
   echo ""
-  echo "  Bootstrap a project with Byrde Agents."
-  echo "  Sets up mempalace, installs rules and skills, and launches"
-  echo "  the /create-readme workflow via the Claude CLI."
+  echo "  Bootstrap a project with Byrde Agents — installs rules and skills"
+  echo "  into your editor directories so Claude Code and Cursor can pick"
+  echo "  them up."
   echo ""
   printf '  %-16s %s\n' "Project Root" "$project_root"
   printf '  %-16s %s\n' "Agents Root" "$AGENTS_ROOT"
@@ -60,28 +55,34 @@ print_intro() {
   echo ""
 }
 
-# ─── Step 1: Setup Memory ───────────────────────────────────────────────────
-
-run_setup_memory() {
-  local setup_memory="$SCRIPT_DIR/setup-memory.sh"
-  if [[ ! -x "$setup_memory" ]]; then
-    die "setup-memory.sh not found or not executable at $setup_memory"
-  fi
-
-  echo "── Step 1/4: Mempalace Setup ──────────────────────────────────────"
+print_summary() {
+  local bar
+  bar="$(printf '%*s' 68 '' | tr ' ' '=')"
   echo ""
-  "$setup_memory"
+  echo "$bar"
+  echo "  $PROG_NAME · Summary"
+  echo "$bar"
   echo ""
-  echo "  ✓ Mempalace setup complete."
+  echo "  Installed:"
+  echo "    ✓ Rules   → .cursor/rules/  and  .claude/rules/"
+  echo "    ✓ Skills  → .cursor/skills/ and  .claude/skills/"
   echo ""
+  echo "  Optional next steps:"
+  echo "    • .agents/scripts/setup-memory.sh   (mempalace memory)"
+  echo "    • .agents/scripts/setup-github.sh   (GitHub tool skills)"
+  echo "    • .agents/scripts/setup-figma.sh    (Figma tool skills)"
+  echo "    • In your editor: run /create-readme to bootstrap the README"
+  echo ""
+  echo "  Verify with: .agents/scripts/doctor.sh"
+  echo "$bar"
 }
 
-# ─── Step 2: Install Rules ───────────────────────────────────────────────────
+# ─── Step 1: Install Rules ───────────────────────────────────────────────────
 
 copy_rules() {
   local project_root="$1"
 
-  echo "── Step 2/4: Install Rules ────────────────────────────────────────"
+  echo "── Step 1/2: Install Rules ────────────────────────────────────────"
   echo ""
 
   if [[ ! -d "$RULES_DIR" ]]; then
@@ -113,12 +114,12 @@ copy_rules() {
   echo ""
 }
 
-# ─── Step 3: Install Skills ─────────────────────────────────────────────────
+# ─── Step 2: Install Skills ─────────────────────────────────────────────────
 
 copy_skills() {
   local project_root="$1"
 
-  echo "── Step 3/4: Install Skills ───────────────────────────────────────"
+  echo "── Step 2/2: Install Skills ───────────────────────────────────────"
   echo ""
 
   if [[ ! -d "$SKILLS_DIR" ]]; then
@@ -135,18 +136,6 @@ copy_skills() {
   echo ""
 }
 
-# ─── Step 4: Launch Claude CLI ───────────────────────────────────────────────
-
-launch_claude() {
-  echo "── Step 4/4: Launch Claude CLI ────────────────────────────────────"
-  echo ""
-  echo "  Launching Claude Code with /create-readme workflow..."
-  echo ""
-
-  require_cmd claude
-  exec claude --dangerously-skip-permissions "/create-readme"
-}
-
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 main() {
@@ -155,10 +144,10 @@ main() {
 
   print_intro "$project_root"
 
-  run_setup_memory
   copy_rules "$project_root"
   copy_skills "$project_root"
-  launch_claude
+
+  print_summary
 }
 
 main "$@"

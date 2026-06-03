@@ -1,0 +1,115 @@
+---
+name: github-projects
+description: Owns work-item and project-board operations against GitHub for
+  this project: create work item, transition work item, comment on work item,
+  set work item field (priority, size, type), link work item to milestone,
+  place work item on board, create milestone. Consulted by any practice skill
+  that needs to create, query, transition, or annotate a work item. Configured
+  for {{ACCOUNT}}/{{REPOSITORY}} project board {{PROJECT_ID}}.
+category: tool
+---
+
+# GitHub Projects
+
+This project's project-management tool. Owns work items (GitHub Issues), milestones, and project-board state at **{{ACCOUNT}}/{{REPOSITORY}}**, board **{{PROJECT_ID}}**.
+
+## Owned operations
+
+- **create work item** — open a GitHub Issue with title, body, and type.
+- **transition work item** — change the issue's status on the project board.
+- **comment on work item** — post a threaded comment on the issue.
+- **set work item field** — Priority, Size, Type, Status, or any other project field.
+- **link work item to milestone** — associate the issue with a GitHub Milestone.
+- **place work item on board** — add the issue to project board {{PROJECT_ID}}.
+- **create milestone** — open a GitHub Milestone (used for epics).
+
+Any practice skill that mentions one of these operations routes through this skill.
+
+## Access
+
+Issue operations and milestone operations go through the **GitHub MCP server**. Project-board operations (`item-add`, `item-edit`, field resolution) use the **`gh` CLI** — the MCP server does not currently expose project-board operations, so this is the one permitted exception. Do not call the GitHub REST API directly.
+
+### Preflight (first operation of the session)
+
+1. **Server health.** Verify the GitHub MCP server is reachable and authenticated.
+2. **Context.** Verify the server is pointed at `{{ACCOUNT}}/{{REPOSITORY}}`. Switch if possible; halt if not.
+3. **Board.** Verify project board `{{PROJECT_ID}}` is accessible under `{{ACCOUNT}}` via `gh project view {{PROJECT_ID}} --owner {{ACCOUNT}}`. Halt if not.
+
+## Conventions
+
+### Work item titles
+
+Plain English descriptions of the work. **Do not** use conventional commit format (`feat(scope): ...`) — that's for commit messages and PR titles.
+
+### Work item types
+
+Use the native GitHub issue type field (the `type` parameter on `issue_write`):
+
+- `Feature` — new capabilities or improvements.
+- `Bug` — defects and regressions.
+
+Do not encode the type as a label.
+
+### Work item fields
+
+Set the project's structured fields — do not put these in the issue body:
+
+- **Size** — `XS`, `S`, `M`, `L`, `XL` via the project's Size field.
+- **Priority** — `P0`, `P1`, `P2`, `P3` via the project's Priority field.
+
+### Project board
+
+Every work item must be on board `{{PROJECT_ID}}` with Size and Priority set. The complete creation sequence:
+
+#### 1. Add the issue to the board
+
+```bash
+gh project item-add {{PROJECT_ID}} --owner {{ACCOUNT}} --url <issue-url>
+```
+
+#### 2. Resolve the project's GraphQL node ID (once per session)
+
+```bash
+gh project list --owner {{ACCOUNT}} --format json
+# Find the entry with "number": {{PROJECT_ID}} and copy its "id" (e.g. PVT_kwDO...).
+```
+
+#### 3. Resolve the project item ID for this issue
+
+```bash
+gh project item-list {{PROJECT_ID}} --owner {{ACCOUNT}} --format json
+# Find the entry matching the issue and copy its "id" (e.g. PVTI_...).
+```
+
+#### 4. Resolve field and option IDs (once per session)
+
+```bash
+gh project field-list {{PROJECT_ID}} --owner {{ACCOUNT}} --format json
+# Find the Priority field, the Size field, and the option IDs for the values you want.
+```
+
+#### 5. Set the fields
+
+```bash
+gh project item-edit --id <item-id> --project-id <project-node-id> \
+  --field-id <priority-field-id> --single-select-option-id <option-id>
+
+gh project item-edit --id <item-id> --project-id <project-node-id> \
+  --field-id <size-field-id> --single-select-option-id <option-id>
+```
+
+A work item that is not on the board with Size and Priority set is considered incomplete.
+
+### Work item lifecycle
+
+- Move to **In Progress** when active implementation starts.
+- Move to the post-PR status (often **In review** or **Ready to Test** — resolve the actual status set with `gh project field-list {{PROJECT_ID}} --owner {{ACCOUNT}} --format json` once per session) when implementation is complete and a PR is open. The same status survives QA approval.
+- **Do not manually move to Done.** PR-merge automation moves the card to Done when the PR is merged. Manual transitions before merge bypass that gate.
+
+### Milestones
+
+Epics are represented as GitHub Milestones. All subordinate feature and bug work items are associated with their parent milestone.
+
+## Composition
+
+When a source-control tool is installed (e.g., `github-source-control`), pull requests link back to work items by referencing the work-item number in branch names and PR bodies. This skill owns the work-item side of that link — adding the work item to the board, transitioning it, commenting on it — but does **not** own PRs.

@@ -84,13 +84,27 @@ check_github() {
   echo "GitHub"
   echo "------"
 
-  # Tool file
-  local tool_file="$AGENTS_ROOT/tools/github.md"
-  if [[ -f "$tool_file" ]]; then
-    pass "Tool file: tools/github.md"
+  # Skill files (per capability)
+  local sc_skill="$AGENTS_ROOT/skills/github-source-control/SKILL.md"
+  local pr_skill="$AGENTS_ROOT/skills/github-projects/SKILL.md"
+  local any=false
+
+  if [[ -f "$sc_skill" ]]; then
+    pass "Skill: skills/github-source-control/SKILL.md"
+    any=true
   else
-    skip "Tool file: tools/github.md not rendered (run setup-github.sh)"
-    # No point checking MCP if the tool was never set up
+    skip "Skill: skills/github-source-control/SKILL.md not installed"
+  fi
+
+  if [[ -f "$pr_skill" ]]; then
+    pass "Skill: skills/github-projects/SKILL.md"
+    any=true
+  else
+    skip "Skill: skills/github-projects/SKILL.md not installed"
+  fi
+
+  if [[ "$any" != "true" ]]; then
+    skip "No GitHub skills installed — run setup-github.sh to install"
     return
   fi
 
@@ -153,13 +167,43 @@ check_figma() {
   echo "Figma"
   echo "-----"
 
-  # Tool file
-  local tool_file="$AGENTS_ROOT/tools/figma.md"
-  if [[ -f "$tool_file" ]]; then
-    pass "Tool file: tools/figma.md"
+  # Skill files (per capability)
+  local ds_skill="$AGENTS_ROOT/skills/figma-design-system/SKILL.md"
+  local ff_skill="$AGENTS_ROOT/skills/figma-feature-files/SKILL.md"
+  local any=false
+
+  if [[ -f "$ds_skill" ]]; then
+    pass "Skill: skills/figma-design-system/SKILL.md"
+    any=true
   else
-    skip "Tool file: tools/figma.md not rendered (run setup-figma.sh)"
+    skip "Skill: skills/figma-design-system/SKILL.md not installed"
+  fi
+
+  if [[ -f "$ff_skill" ]]; then
+    pass "Skill: skills/figma-feature-files/SKILL.md"
+    any=true
+  else
+    skip "Skill: skills/figma-feature-files/SKILL.md not installed"
+  fi
+
+  if [[ "$any" != "true" ]]; then
+    skip "No Figma skills installed — run setup-figma.sh to install"
     return
+  fi
+
+  # figma-use overlay (vendored from figma/mcp-server-guide)
+  local figma_use="$AGENTS_ROOT/skills/figma-use/SKILL.md"
+  if [[ -f "$figma_use" ]]; then
+    local upstream="$AGENTS_ROOT/skills/figma-use/.upstream"
+    if [[ -f "$upstream" ]]; then
+      local sha
+      sha="$(sed -n 's/^commit: //p' "$upstream" 2>/dev/null | head -1)"
+      pass "Skill: skills/figma-use/SKILL.md (upstream ${sha:0:7})"
+    else
+      pass "Skill: skills/figma-use/SKILL.md"
+    fi
+  else
+    fail "Skill: skills/figma-use/SKILL.md missing — re-run setup-figma.sh to vendor the upstream skill"
   fi
 
   # Cursor MCP config

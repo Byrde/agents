@@ -1,4 +1,12 @@
 .cursor
 .claude
-tools/figma.md
-tools/github.md
+
+# Rendered tool skills — produced per-project by setup-*.sh scripts.
+# These are user-configured artefacts, not submodule-tracked content.
+skills/github-source-control/
+skills/github-projects/
+skills/figma-design-system/
+skills/figma-feature-files/
+
+# Vendored upstream skill — fetched from figma/mcp-server-guide by setup-figma.sh.
+skills/figma-use/

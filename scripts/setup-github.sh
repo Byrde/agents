@@ -1,12 +1,23 @@
 #!/usr/bin/env bash
-# Configure the GitHub tool: .agents/tools/github.md from template + project-local MCP.
+# Configure the GitHub tool skills: render per-capability templates into
+# .agents/skills/ and merge the GitHub MCP server into project-local configs.
 #
-# Run from the repository/project root you want to configure (current working directory).
-# Writes:
-#   - .cursor/mcp.json          — Cursor project MCP
-#   - .mcp.json                 — Claude Code project MCP (root file; upstream does not use .claude/ for MCP)
+# Two opt-in capabilities:
+#   - github-source-control  → branches, pull requests, code review
+#   - github-projects        → work items, milestones, project board
+# Pick either, both, or neither.
 #
-# Does not modify $HOME. Does not invoke the cursor or claude CLIs; only merges JSON with jq.
+# Run from the repository/project root you want to configure (current working
+# directory).
+#
+# Writes (per opted-in capability):
+#   - .agents/skills/github-source-control/SKILL.md
+#   - .agents/skills/github-projects/SKILL.md
+#   - .cursor/mcp.json   — Cursor project MCP
+#   - .mcp.json          — Claude Code project MCP
+#
+# Does not modify $HOME. Does not invoke the cursor or claude CLIs; only
+# merges JSON with jq.
 #
 # Usage: cd /path/to/project && /path/to/setup-github.sh
 #
@@ -18,8 +29,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TOOL_DIR="$AGENTS_ROOT/tools"
-GITHUB_TEMPLATE="$TOOL_DIR/github.md.template"
-GITHUB_OUT="$TOOL_DIR/github.md"
+SKILLS_DIR="$AGENTS_ROOT/skills"
+SOURCE_CONTROL_TEMPLATE="$TOOL_DIR/github-source-control.md.template"
+SOURCE_CONTROL_OUT="$SKILLS_DIR/github-source-control/SKILL.md"
+PROJECTS_TEMPLATE="$TOOL_DIR/github-projects.md.template"
+PROJECTS_OUT="$SKILLS_DIR/github-projects/SKILL.md"
 
 TOOL_VERSION="0.1.0"
 PROG_NAME="$(basename "${BASH_SOURCE[0]}")"
@@ -59,14 +73,50 @@ print_intro() {
   echo "$bar"
   echo "  $PROG_NAME · Byrde Agents  v$TOOL_VERSION"
   echo ""
-  echo "  Configure the GitHub agent tool for this project: interactive picker"
-  echo "  (gh), then render .agents/tools/github.md and merge the GitHub MCP"
-  echo "  server into project-local .cursor/mcp.json and .mcp.json."
+  echo "  Install GitHub tool skills into .agents/skills/ and wire up the"
+  echo "  GitHub MCP server in your editor's project config."
+  echo ""
+  echo "  Two opt-in capabilities — install either, both, or neither:"
+  echo "    • github-source-control  branches, PRs, code review"
+  echo "    • github-projects        work items, milestones, project board"
   echo ""
   printf '  %-16s %s\n' "Project Root" "$project_root"
   printf '  %-16s %s\n' "Auth" "GitHub CLI (token via gh auth token)"
   echo "$bar"
   echo ""
+}
+
+print_summary() {
+  local bar
+  bar="$(printf '%*s' 68 '' | tr ' ' '=')"
+  echo ""
+  echo "$bar"
+  echo "  $PROG_NAME · Summary"
+  echo "$bar"
+  echo ""
+  printf '  %-16s %s\n' "Repository" "$repo_pick"
+  if [[ "$install_pr" == "y" ]]; then
+    printf '  %-16s %s\n' "Project board" "$project_id"
+  fi
+  echo ""
+  echo "  Skills:"
+  if [[ "$install_sc" == "y" ]]; then
+    echo "    ✓ github-source-control  → $SOURCE_CONTROL_OUT"
+  else
+    echo "    - github-source-control  (declined)"
+  fi
+  if [[ "$install_pr" == "y" ]]; then
+    echo "    ✓ github-projects        → $PROJECTS_OUT"
+  else
+    echo "    - github-projects        (declined)"
+  fi
+  echo ""
+  echo "  MCP server:"
+  printf '    %-13s %s\n' "Cursor:"      "${cursor_status:-skipped}"
+  printf '    %-13s %s\n' "Claude Code:" "${claude_status:-skipped}"
+  echo ""
+  echo "  Verify with: .agents/scripts/doctor.sh"
+  echo "$bar"
 }
 
 list_gh_accounts() {
@@ -161,16 +211,17 @@ list_org_logins() {
   gh api user/orgs --paginate --jq '.[].login' 2>/dev/null | sort -f || true
 }
 
-render_github_md() {
-  local account="$1" repo="$2" project_id="$3"
-  [[ -f "$GITHUB_TEMPLATE" ]] || die "missing template: $GITHUB_TEMPLATE"
-  GITHUB_TEMPLATE="$GITHUB_TEMPLATE" GITHUB_OUT="$GITHUB_OUT" \
+render_skill() {
+  local template="$1" out="$2" account="$3" repo="$4" project_id="$5"
+  [[ -f "$template" ]] || die "missing template: $template"
+  mkdir -p "$(dirname "$out")"
+  RENDER_TEMPLATE="$template" RENDER_OUT="$out" \
     RENDER_ACCOUNT="$account" RENDER_REPOSITORY="$repo" RENDER_PROJECT_ID="$project_id" \
     python3 <<'PY'
 from pathlib import Path
 import os
-src = Path(os.environ["GITHUB_TEMPLATE"])
-dst = Path(os.environ["GITHUB_OUT"])
+src = Path(os.environ["RENDER_TEMPLATE"])
+dst = Path(os.environ["RENDER_OUT"])
 text = src.read_text()
 out = (
     text.replace("{{ACCOUNT}}", os.environ["RENDER_ACCOUNT"])
@@ -252,13 +303,22 @@ main() {
     -h | --help | help)
       echo "$PROG_NAME · Byrde Agents v$TOOL_VERSION"
       echo ""
+      echo "Installs GitHub tool skills into .agents/skills/ and merges the"
+      echo "GitHub MCP server into your editor's project-local config."
+      echo ""
       echo "Usage:"
       echo "  cd /your/project && $0"
       echo ""
-      echo "Writes:"
-      echo "  .agents/tools/github.md     — from github.md.template"
-      echo "  .cursor/mcp.json           — Cursor project MCP"
-      echo "  .mcp.json                  — Claude Code project MCP"
+      echo "Opt-in capabilities (pick either, both, or neither):"
+      echo "  github-source-control  branches, PRs, code review"
+      echo "  github-projects        work items, milestones, project board"
+      echo "                         (requires read:project gh scope)"
+      echo ""
+      echo "Writes (per opted-in capability):"
+      echo "  .agents/skills/github-source-control/SKILL.md"
+      echo "  .agents/skills/github-projects/SKILL.md"
+      echo "  .cursor/mcp.json   — Cursor project MCP"
+      echo "  .mcp.json          — Claude Code project MCP"
       exit 0
       ;;
   esac
@@ -278,6 +338,22 @@ main() {
 
   print_intro "$project_root"
 
+  # ── Capability selection ─────────────────────────────────────────────────
+  local install_sc="n" install_pr="n"
+  echo "Which GitHub capabilities should be installed as skills?"
+  echo ""
+  read -r -p "Install github-source-control (branches, PRs, code review)? [Y/n] " a_sc
+  [[ "${a_sc:-y}" =~ ^[Yy]|^$ ]] && install_sc="y"
+  read -r -p "Install github-projects (issues, milestones, project board)? [Y/n] " a_pr
+  [[ "${a_pr:-y}" =~ ^[Yy]|^$ ]] && install_pr="y"
+
+  if [[ "$install_sc" != "y" && "$install_pr" != "y" ]]; then
+    echo ""
+    echo "Nothing selected — exiting without changes."
+    exit 0
+  fi
+
+  # ── Account picker ───────────────────────────────────────────────────────
   local account_rows=()
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -n "$line" ]] && account_rows+=("$line")
@@ -307,8 +383,10 @@ main() {
   [[ "$GH_HOST" == "github.com" ]] || die "only github.com is supported (selected: $GH_HOST)"
   gh auth switch -u "$GH_LOGIN" -h github.com >/dev/null 2>&1
 
-  require_project_scope
+  # Project scope is only needed for github-projects.
+  [[ "$install_pr" == "y" ]] && require_project_scope
 
+  # ── Owner + repo (needed by both capabilities) ───────────────────────────
   local repo_owner=""
   local orgs=()
   while IFS= read -r line || [[ -n "$line" ]]; do
@@ -334,29 +412,51 @@ main() {
 
   local repo_pick
   repo_pick="$(prompt_repo "$repo_owner")"
+  local repo_name="${repo_pick#${repo_owner}/}"
 
-  local project_id
-  project_id="$(prompt_project_id "$repo_owner")"
+  # ── Project ID (only for github-projects) ────────────────────────────────
+  local project_id=""
+  if [[ "$install_pr" == "y" ]]; then
+    project_id="$(prompt_project_id "$repo_owner")"
+  fi
 
-  render_github_md "$repo_owner" "$repo_pick" "$project_id"
+  # ── Render skills ────────────────────────────────────────────────────────
+  if [[ "$install_sc" == "y" ]]; then
+    render_skill "$SOURCE_CONTROL_TEMPLATE" "$SOURCE_CONTROL_OUT" \
+      "$repo_owner" "$repo_name" "${project_id:-N/A}"
+  fi
+  if [[ "$install_pr" == "y" ]]; then
+    render_skill "$PROJECTS_TEMPLATE" "$PROJECTS_OUT" \
+      "$repo_owner" "$repo_name" "$project_id"
+  fi
 
+  # ── MCP merge ────────────────────────────────────────────────────────────
   local tok
   tok="$(gh auth token -h github.com 2>/dev/null)"
+
+  cursor_status="skipped"
+  claude_status="skipped"
 
   echo ""
   read -r -p "Merge GitHub MCP into $cursor_mcp? [Y/n] " a_cursor
   if [[ "${a_cursor:-y}" =~ ^[Yy]|^$ ]]; then
     merge_cursor_mcp_github "$tok" "$cursor_mcp"
+    cursor_status="merged → $cursor_mcp"
   fi
 
   echo ""
   read -r -p "Merge GitHub MCP into $claude_mcp (Claude Code project MCP)? [Y/n] " a_claude
   if [[ "${a_claude:-y}" =~ ^[Yy]|^$ ]]; then
     merge_claude_mcp_github "$tok" "$claude_mcp"
+    claude_status="merged → $claude_mcp"
   fi
 
-  echo ""
-  echo "Done. Restoring previous active GitHub CLI account: ${prior_github_login:-unknown}"
+  print_summary
+
+  if [[ -n "${prior_github_login:-}" ]]; then
+    echo ""
+    echo "Restoring previous active GitHub CLI account: $prior_github_login"
+  fi
 }
 
 main "$@"
