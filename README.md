@@ -35,6 +35,7 @@ Optional setup (run separately when you want them):
 
 - `.agents/scripts/setup-github.sh` — GitHub tool skills
 - `.agents/scripts/setup-figma.sh` — Figma tool skills
+- `.agents/scripts/setup-memory.sh` — persistent memory (mempalace) + the `memory` skill
 - In your editor: `/create-readme` to bootstrap the README overview
 
 ## Setup Tools
@@ -86,6 +87,35 @@ Both overlay on the vendored `figma-use` skill, which owns the Figma plugin-API 
 
 The Figma MCP server uses OAuth — authentication happens interactively through your editor on first use.
 
+### Memory
+
+Installs [mempalace](https://github.com/milla-jovovich/mempalace) — a project-local, semantically searchable memory palace — initialises a palace for the project, registers its MCP server for both editors, wires up auto-save hooks, and installs the `memory` skill that teaches the agent how to use it (and how it relates to Claude's own built-in memory).
+
+**Requires:** `python3` (< 3.14, for chromadb), `jq`
+
+```bash
+cd /your/project
+.agents/scripts/setup-memory.sh
+```
+
+The script walks you through ignore patterns, palace initialisation, the auto-save interval, MCP registration, and an optional first mine. It writes:
+
+- `.mempalace/` — project-local palace data
+- `.mempalace/hooks/` — save and pre-compact hook scripts
+- `.mempalaceignore` — ignore patterns for mining (node_modules, build output, binaries)
+- `.agents/skills/memory/SKILL.md` — the `memory` tool skill (run `init.sh` afterwards to copy it into your editor skill dirs)
+- `.cursor/mcp.json` and `.mcp.json` — MCP server merged in
+- `.cursor/hooks.json` and `.claude/settings.local.json` — auto-save + pre-compact hooks
+
+Re-run any time to upgrade mempalace or refresh configuration. To re-index the project after large changes:
+
+```bash
+cd /your/project
+.agents/scripts/setup-memory.sh mine
+```
+
+The `memory` skill is opt-in: it ships only once you've run this script. It covers when to recall prior context, what's worth saving (decisions, conventions, rationale, verbatim quotes), mining, and the split between project memory (mempalace) and Claude's cross-project memory.
+
 ### Doctor
 
 Diagnoses the health of all MCP servers and skill installations configured by the setup scripts.
@@ -95,4 +125,4 @@ cd /your/project
 .agents/scripts/doctor.sh
 ```
 
-Reports per-capability presence (`github-source-control`, `github-projects`, `figma-design-system`, `figma-design-file`, `figma-use`), MCP configuration, authentication, and server reachability.
+Reports per-capability presence (`github-source-control`, `github-projects`, `figma-design-system`, `figma-design-file`, `figma-use`, `memory`), MCP configuration, authentication, and server reachability. For memory it also checks the palace directory, mempalace importability, hooks, and a stdio handshake with the MCP server.

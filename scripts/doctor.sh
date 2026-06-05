@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Diagnose the health of all MCP servers configured by the Byrde Agents
-# setup scripts (GitHub, Figma) for both Cursor and Claude Code.
+# setup scripts (GitHub, Figma, Mempalace) for both Cursor and Claude Code.
 #
 # Run from the repository/project root:
 #   cd /path/to/project && /path/to/doctor.sh
@@ -235,6 +235,133 @@ check_figma() {
   esac
 }
 
+# ─── Mempalace checks ───────────────────────────────────────────────────────
+
+check_mempalace() {
+  echo ""
+  echo "Mempalace"
+  echo "---------"
+
+  local palace_path="$PROJECT_ROOT/.mempalace"
+
+  # Palace directory
+  if [[ -d "$palace_path" ]]; then
+    pass "Palace directory: $palace_path"
+  else
+    skip "Palace directory: $palace_path not found (run setup-memory.sh)"
+    return
+  fi
+
+  # Memory skill
+  if [[ -f "$AGENTS_ROOT/skills/memory/SKILL.md" ]]; then
+    pass "Skill: skills/memory/SKILL.md"
+  else
+    warn "Skill: skills/memory/SKILL.md missing — re-run setup-memory.sh to install it"
+  fi
+
+  # Ignore file
+  local ignore_file="$PROJECT_ROOT/.mempalaceignore"
+  if [[ -f "$ignore_file" ]]; then
+    pass "Ignore file: .mempalaceignore"
+  else
+    warn "Ignore file: .mempalaceignore missing — mining may index node_modules, etc."
+  fi
+
+  # Python + import
+  local py=""
+  for candidate in python3 python; do
+    if has_cmd "$candidate"; then
+      py="$(command -v "$candidate")"
+      break
+    fi
+  done
+  if [[ -z "$py" ]]; then
+    fail "Python: not found in PATH"
+    return
+  fi
+  pass "Python: $py"
+
+  if "$py" -c "import mempalace" 2>/dev/null; then
+    local ver
+    ver="$("$py" -c "import mempalace; print(mempalace.__version__)" 2>/dev/null || echo "unknown")"
+    pass "mempalace: importable (v$ver)"
+  else
+    fail "mempalace: not importable — run setup-memory.sh"
+    return
+  fi
+
+  # Cursor MCP config
+  if json_has "$CURSOR_MCP" '.mcpServers.mempalace'; then
+    pass "Cursor MCP: mcpServers.mempalace configured"
+  else
+    fail "Cursor MCP: mcpServers.mempalace missing from $CURSOR_MCP"
+  fi
+
+  # Cursor hooks
+  local cursor_hooks="$PROJECT_ROOT/.cursor/hooks.json"
+  if [[ -f "$cursor_hooks" ]]; then
+    local has_stop=false has_precompact=false
+    json_has "$cursor_hooks" '.hooks.stop' && has_stop=true
+    json_has "$cursor_hooks" '.hooks.preCompact' && has_precompact=true
+    if [[ "$has_stop" == "true" && "$has_precompact" == "true" ]]; then
+      pass "Cursor hooks: stop + preCompact configured"
+    elif [[ "$has_stop" == "true" ]]; then
+      warn "Cursor hooks: stop configured, preCompact missing"
+    elif [[ "$has_precompact" == "true" ]]; then
+      warn "Cursor hooks: preCompact configured, stop missing"
+    else
+      fail "Cursor hooks: no mempalace hooks in $cursor_hooks"
+    fi
+  else
+    fail "Cursor hooks: $cursor_hooks not found"
+  fi
+
+  # Claude Code MCP config
+  if json_has "$CLAUDE_MCP" '.mcpServers.mempalace'; then
+    pass "Claude MCP: mcpServers.mempalace configured in .mcp.json"
+  elif claude_mcp_has mempalace; then
+    pass "Claude MCP: mcpServers.mempalace registered via claude CLI"
+  else
+    fail "Claude MCP: mcpServers.mempalace missing"
+  fi
+
+  # Claude Code hooks
+  local claude_settings="$PROJECT_ROOT/.claude/settings.local.json"
+  if [[ -f "$claude_settings" ]]; then
+    local has_stop=false has_precompact=false
+    if json_has "$claude_settings" '.hooks.Stop'; then
+      has_stop=true
+    fi
+    if json_has "$claude_settings" '.hooks.PreCompact'; then
+      has_precompact=true
+    fi
+    if [[ "$has_stop" == "true" && "$has_precompact" == "true" ]]; then
+      pass "Claude hooks: Stop + PreCompact configured"
+    elif [[ "$has_stop" == "true" ]]; then
+      warn "Claude hooks: Stop configured, PreCompact missing"
+    elif [[ "$has_precompact" == "true" ]]; then
+      warn "Claude hooks: PreCompact configured, Stop missing"
+    else
+      fail "Claude hooks: not configured in $claude_settings"
+    fi
+  else
+    fail "Claude hooks: $claude_settings not found"
+  fi
+
+  # MCP server health — try spawning and sending initialize
+  local mcp_response=""
+  mcp_response="$(printf '%s\n' "$MCP_INIT_REQ" \
+    | timeout 5 "$py" -m mempalace.mcp_server --palace "$palace_path" 2>/dev/null \
+    | head -1)" || true
+  if [[ -n "$mcp_response" ]] && echo "$mcp_response" | jq -e '.result' >/dev/null 2>&1; then
+    pass "MCP server: stdio handshake succeeded"
+  elif [[ -n "$mcp_response" ]]; then
+    warn "MCP server: process responded but handshake unclear"
+  else
+    warn "MCP server: stdio handshake timed out or failed (may work fine inside the editor)"
+  fi
+}
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 main() {
@@ -248,6 +375,7 @@ main() {
       echo "Checks MCP server configuration and health for:"
       echo "  GitHub     (setup-github.sh)"
       echo "  Figma      (setup-figma.sh)"
+      echo "  Mempalace  (setup-memory.sh)"
       exit 0
       ;;
   esac
@@ -288,6 +416,7 @@ main() {
 
   check_github
   check_figma
+  check_mempalace
 
   # Summary
   echo ""
