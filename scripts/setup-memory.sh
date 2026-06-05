@@ -11,6 +11,8 @@
 #   - .mempalace/hooks/               — save and precompact hook scripts
 #   - .mempalaceignore                — ignore patterns for mining (node_modules, etc.)
 #   - .agents/skills/memory/SKILL.md  — skill for using mempalace + Claude memory
+#   - .claude/skills/memory/          — skill mirrored for Claude Code
+#   - .cursor/skills/memory/          — skill mirrored for Cursor
 #   - .cursor/mcp.json                — Cursor project MCP (mempalace server merged in)
 #   - .cursor/hooks.json              — Cursor hooks (stop + preCompact)
 #   - .mcp.json                       — Claude Code project MCP (fallback if CLI unavailable)
@@ -275,7 +277,7 @@ init_palace() {
 
   [[ "$init_rc" -eq 0 ]] || die "mempalace init failed"
   echo ""
-  echo "Palace initialised at $palace_path"
+  echo "Palace initialised at $palace_path (project indexed)"
 }
 
 # ─── Cursor MCP ──────────────────────────────────────────────────────────────
@@ -687,6 +689,22 @@ MEMORYSKILL
   echo "Wrote $skill_dir/SKILL.md"
 }
 
+# Mirror a skill from .agents/skills/ into the editor-local skill dirs, the
+# same way init.sh seeds them. Without this, Claude Code (.claude/skills/) and
+# Cursor (.cursor/skills/) never see skills that setup-memory installs.
+sync_skill_to_editors() {
+  local project_root="$1" skill="$2"
+  local src="$AGENTS_ROOT/skills/$skill"
+  [[ -d "$src" ]] || return 0
+  local dest
+  for dest in "$project_root/.claude/skills" "$project_root/.cursor/skills"; do
+    mkdir -p "$dest"
+    rm -rf "${dest:?}/$skill"
+    cp -R "$src" "$dest/$skill"
+    echo "  skills/$skill → ${dest#$project_root/}/$skill"
+  done
+}
+
 # ─── Ignore file ─────────────────────────────────────────────────────────────
 
 # Default ignore patterns — keeps dependency trees, build artefacts, and binary
@@ -1011,14 +1029,18 @@ main() {
     echo "Skipping .mempalaceignore."
   fi
 
-  # ── Step 3: Initialise the palace ─────────────────────────────────────────
+  # ── Step 3: Initialise or re-mine the palace ──────────────────────────────
+  #
+  # A fresh `mempalace init` also indexes the project (builds the rooms), so we
+  # never mine separately after a first-time init. For an already-initialised
+  # palace we skip init and just offer a re-mine to refresh the index.
 
   if [[ -d "$palace_path" && -f "$palace_path/chroma.sqlite3" ]]; then
     echo ""
     echo "Palace already initialised at $palace_path"
-    read -r -p "Re-run mempalace init? [y/N] " do_reinit
-    if [[ "${do_reinit:-n}" =~ ^[Yy] ]]; then
-      init_palace "$py" "$project_root" "$palace_path"
+    read -r -p "Re-mine this project's files into the palace now? [Y/n] " do_remine
+    if [[ "${do_remine:-y}" =~ ^[Yy] ]]; then
+      mine_project "$py" "$project_root" "$palace_path"
     fi
   else
     init_palace "$py" "$project_root" "$palace_path"
@@ -1061,14 +1083,9 @@ main() {
   echo ""
   echo "── Installing memory skill ──"
   write_memory_skill
-
-  # ── Step 7: Mine project (optional) ──────────────────────────────────────
-
-  echo ""
-  read -r -p "Mine this project's files into the palace now? [Y/n] " a_mine
-  if [[ "${a_mine:-y}" =~ ^[Yy] ]]; then
-    mine_project "$py" "$project_root" "$palace_path"
-  fi
+  # .agents/skills/ is the source of truth; mirror into the editor skill dirs
+  # so Claude Code and Cursor pick it up without re-running init.sh.
+  sync_skill_to_editors "$project_root" "memory"
 
   # ── Done ──────────────────────────────────────────────────────────────────
 
@@ -1082,6 +1099,7 @@ main() {
   echo "  Python:   $py"
   echo "  Version:  $(get_mempalace_version "$py")"
   echo "  Skill:    $AGENTS_ROOT/skills/memory/SKILL.md"
+  echo "            → .claude/skills/memory and .cursor/skills/memory"
   echo ""
   echo "  Cursor:"
   echo "    MCP:   $cursor_mcp"
@@ -1098,8 +1116,7 @@ main() {
   echo "  Next steps:"
   echo "    1. Restart Cursor and Claude Code to load the MCP server."
   echo "    2. Verify mempalace tools are available (19 MCP tools)."
-  echo "    3. Run init.sh to copy the memory skill into your editor dirs."
-  echo "    4. Mine more data:  $0 mine"
+  echo "    3. Re-mine after changes:  $0 mine   (or re-run this script)"
   echo "$bar"
 }
 

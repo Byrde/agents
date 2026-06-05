@@ -98,16 +98,16 @@ cd /your/project
 .agents/scripts/setup-memory.sh
 ```
 
-The script walks you through ignore patterns, palace initialisation, the auto-save interval, MCP registration, and an optional first mine. It writes:
+The script walks you through ignore patterns, palace initialisation (which indexes the project in one pass), the auto-save interval, MCP registration, and the `memory` skill. It writes:
 
 - `.mempalace/` — project-local palace data
 - `.mempalace/hooks/` — save and pre-compact hook scripts
 - `.mempalaceignore` — ignore patterns for mining (node_modules, build output, binaries)
-- `.agents/skills/memory/SKILL.md` — the `memory` tool skill (run `init.sh` afterwards to copy it into your editor skill dirs)
+- `.agents/skills/memory/SKILL.md` — the `memory` tool skill (also mirrored into `.claude/skills/memory/` and `.cursor/skills/memory/`)
 - `.cursor/mcp.json` and `.mcp.json` — MCP server merged in
 - `.cursor/hooks.json` and `.claude/settings.local.json` — auto-save + pre-compact hooks
 
-Re-run any time to upgrade mempalace or refresh configuration. To re-index the project after large changes:
+Re-run any time to upgrade mempalace or refresh configuration — on an already-initialised project it skips init and simply offers to re-mine. To re-index the project after large changes without the full walkthrough:
 
 ```bash
 cd /your/project
