@@ -36,6 +36,25 @@ skip() { printf '  \033[90m- %s\033[0m\n' "$*"; ((SKIP++)) || true; }
 
 has_cmd() { command -v "$1" >/dev/null 2>&1; }
 
+# Run a command with a timeout, portably. Uses GNU `timeout`/`gtimeout` when
+# available, otherwise falls back to a perl alarm wrapper (perl ships with
+# macOS). A pending alarm timer survives `exec`, and SIGALRM's default action
+# terminates the process — so the exec'd command is killed after `secs`.
+run_with_timeout() {
+  local secs="$1"
+  shift
+  if has_cmd timeout; then
+    timeout "$secs" "$@"
+  elif has_cmd gtimeout; then
+    gtimeout "$secs" "$@"
+  elif has_cmd perl; then
+    perl -e 'my $s = shift; alarm $s; exec @ARGV or exit 127' "$secs" "$@"
+  else
+    # No timeout mechanism available — run unbounded as a last resort.
+    "$@"
+  fi
+}
+
 # Check if a key exists in a JSON file. Returns 0 if present.
 json_has() {
   local file="$1" path="$2"
@@ -351,7 +370,7 @@ check_mempalace() {
   # MCP server health — try spawning and sending initialize
   local mcp_response=""
   mcp_response="$(printf '%s\n' "$MCP_INIT_REQ" \
-    | timeout 5 "$py" -m mempalace.mcp_server --palace "$palace_path" 2>/dev/null \
+    | run_with_timeout 5 "$py" -m mempalace.mcp_server --palace "$palace_path" 2>/dev/null \
     | head -1)" || true
   if [[ -n "$mcp_response" ]] && echo "$mcp_response" | jq -e '.result' >/dev/null 2>&1; then
     pass "MCP server: stdio handshake succeeded"
