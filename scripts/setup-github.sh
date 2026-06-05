@@ -172,14 +172,36 @@ prompt_repo() {
   done
 }
 
-require_project_scope() {
+gh_has_project_scope() {
   local scopes
   scopes="$(gh auth status -h github.com 2>&1 | sed -n 's/.*Token scopes: //p')"
-  if [[ "$scopes" != *"'read:project'"* && "$scopes" != *"'project'"* ]]; then
-    die "GitHub token is missing the read:project scope (current: ${scopes:-unknown}).
-       Run: gh auth refresh -h github.com -s read:project
-       Then re-run this script."
+  [[ "$scopes" == *"'read:project'"* || "$scopes" == *"'project'"* ]]
+}
+
+# Ensures the active token carries read:project (needed by github-projects).
+# If absent, offers to add it via `gh auth refresh` in place — no re-run needed.
+# Returns 0 if the scope is present (or successfully added), 1 if not (caller
+# can then drop github-projects and continue with whatever else was selected).
+ensure_project_scope() {
+  if gh_has_project_scope; then
+    return 0
   fi
+  local scopes
+  scopes="$(gh auth status -h github.com 2>&1 | sed -n 's/.*Token scopes: //p')"
+  echo "" >&2
+  echo "github-projects needs the 'read:project' gh scope, which this token lacks." >&2
+  echo "  Current scopes: ${scopes:-unknown}" >&2
+  echo "" >&2
+  local ans
+  read -r -p "Add it now via 'gh auth refresh -h github.com -s read:project'? [Y/n] " ans
+  if [[ "${ans:-y}" =~ ^[Yy]|^$ ]]; then
+    if gh auth refresh -h github.com -s read:project && gh_has_project_scope; then
+      echo "  ✓ read:project scope added." >&2
+      return 0
+    fi
+    echo "warning: read:project still not present after refresh." >&2
+  fi
+  return 1
 }
 
 prompt_project_id() {
@@ -368,7 +390,13 @@ main() {
   done
 
   local picked_display
-  picked_display="$(pick_from_menu "GitHub CLI accounts (from gh auth status):" "${display_options[@]}")"
+  if [[ ${#display_options[@]} -eq 1 ]]; then
+    picked_display="${display_options[0]}"
+    echo ""
+    echo "Using GitHub account: $picked_display"
+  else
+    picked_display="$(pick_from_menu "GitHub CLI accounts (from gh auth status):" "${display_options[@]}")"
+  fi
   local idx=0 found=-1
   for r in "${display_options[@]}"; do
     if [[ "$r" == "$picked_display" ]]; then
@@ -383,8 +411,17 @@ main() {
   [[ "$GH_HOST" == "github.com" ]] || die "only github.com is supported (selected: $GH_HOST)"
   gh auth switch -u "$GH_LOGIN" -h github.com >/dev/null 2>&1
 
-  # Project scope is only needed for github-projects.
-  [[ "$install_pr" == "y" ]] && require_project_scope
+  # Project scope is only needed for github-projects. If it's missing and the
+  # user declines to add it, drop github-projects rather than aborting the run.
+  if [[ "$install_pr" == "y" ]] && ! ensure_project_scope; then
+    echo ""
+    echo "Skipping github-projects — no read:project scope."
+    echo "  Add it later with: gh auth refresh -h github.com -s read:project"
+    install_pr="n"
+    if [[ "$install_sc" != "y" ]]; then
+      die "nothing left to install (github-source-control was not selected)."
+    fi
+  fi
 
   # ── Owner + repo (needed by both capabilities) ───────────────────────────
   local repo_owner=""

@@ -3,7 +3,7 @@ name: design
 description: Design something — a feature, a flow, a screen, a component, a
   single interaction. Adapts to scope and fidelity - small problems get small
   procedures, big problems get more conversation. Reuses the project's design
-  system before extending it. Pairs with figma-design-system, figma-feature-files,
+  system before extending it. Pairs with figma-design-system, figma-design-file,
   and figma-use when those skills are installed.
 category: practice
 ---
@@ -67,7 +67,7 @@ The five moves apply at any scope. A "design this button" session might be five 
 When Figma tool skills are installed:
 
 - **`figma-design-system`** — audit and extend the design system through its operations (read/add tokens and components, publish library).
-- **`figma-feature-files`** — create or open the feature workspace, mark finished frames ready for development.
+- **`figma-design-file`** — create a design page or open the project's design file, mark finished frames ready for development.
 - **`figma-use`** — drives the underlying plugin-API mechanics; the two skills above overlay on it.
 
 When none of those skills are installed, deliver designs as descriptions, ASCII sketches, written specs, or links to external artifacts — whatever the situation supports.

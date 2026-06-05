@@ -28,7 +28,7 @@ This skill is an **overlay** on [figma-use](../figma-use/SKILL.md), Figma's offi
 - **add design component** — add a new reusable component.
 - **publish design library** — re-publish after changes with a descriptive note.
 
-Feature files **consume** this library; they do not duplicate or detach components. Modifications happen here and propagate via library publishing.
+The design file **consumes** this library; it does not duplicate or detach components. Modifications happen here and propagate via library publishing.
 
 ## Access
 
@@ -79,4 +79,4 @@ These are defaults, not mandates. If a project doesn't need a separate Logos pag
 
 ## Composition
 
-When the `figma-feature-files` skill is installed, feature files consume this library. Changes propagate via republish — feature files never detach instances or override locally; modifications round-trip through this skill.
+When the `figma-design-file` skill is installed, the design file consumes this library. Changes propagate via republish — the design file never detaches instances or overrides locally; modifications round-trip through this skill.

@@ -1,0 +1,84 @@
+---
+name: figma-design-file
+description: Owns design-file operations in Figma for this project: create
+  design page, open design file, comment on design, mark frame ready for
+  development, archive frame. Hosts the design work — flows, wireframes,
+  visual design, whatever fidelity the work needs — as pages inside one
+  shared design file. Configured for the {{TEAM}} team, project {{PROJECT}},
+  file {{DESIGN_FILE}}. Overlays on top of figma-use, which owns the Figma
+  plugin-API mechanics — load both when executing operations.
+category: tool
+---
+
+# Figma Design File
+
+This project's design-file tool. Owns the workspace where design work happens — a single shared design file at **{{DESIGN_FILE}}** (team **{{TEAM}}** / project **{{PROJECT}}**), organised by pages.
+
+## Built on figma-use
+
+This skill is an **overlay** on [figma-use](../figma-use/SKILL.md), Figma's official skill for driving the MCP server. `figma-use` owns the plugin-API mechanics. This skill owns the project's conventions — the page model, naming, the handoff signal.
+
+**Whenever an operation here requires programmatic execution in Figma, follow `figma-use` for how to drive the API.** This skill never duplicates that material.
+
+## Owned operations
+
+- **create design page** — add a page for a screen or a feature (a set of related screens).
+- **open design file** — open the project's pinned design file.
+- **comment on design** — add Figma comments or sticky annotations.
+- **mark frame ready for development** — apply Figma's Dev Mode "Ready for development" status to approved frames, in place.
+- **archive frame** — move rejected explorations to the Archive page with a brief note.
+
+## Access
+
+All operations go through the **Figma MCP server**, driven via `figma-use`. Direct REST API calls or manual edits outside the MCP server are not permitted.
+
+### Preflight (first operation of the session)
+
+1. **Load figma-use.** Read [figma-use/SKILL.md](../figma-use/SKILL.md) before any `use_figma` call.
+2. **Server health.** Verify the Figma MCP server is reachable and authenticated.
+3. **Team / project access.** Verify the server can access team **{{TEAM}}** and project **{{PROJECT}}**.
+4. **File access.** Verify file **{{DESIGN_FILE}}** is reachable.
+
+## File organisation
+
+**One shared design file for the project** — *not* one file per feature. All design work lives in this single file, at **{{DESIGN_FILE}}**, inside project **{{PROJECT}}**, alongside the Design System file. The file is organised by **pages**, not split across files.
+
+### Pages
+
+The unit of organisation is the **page**:
+
+- **One page per screen**, or **one page per feature** (a set of related screens) — whichever fits the work. A small, self-contained screen gets its own page; a multi-screen feature or flow gets one page holding all its screens.
+- Pages are named after the screen or feature they hold — descriptive, never `Page 1`. Sequential prefixes (`01_`, `02_`) help when there's a natural order.
+- Keep one always-present **Cover** page (file name, overall status, last updated, an index of the design pages) and one **Archive** page (rejected explorations with brief notes on why).
+
+### Within a page
+
+- Use **Figma Sections** to group related frames (e.g., a flow, a set of states, side-by-side explorations) when a page holds more than a handful of frames.
+- **Frames** are the individual screens and states.
+
+## Conventions
+
+### Frame and layer naming
+
+- **Frames** are named descriptively — what they represent, not `Frame 42`. Sequential prefixes (`01_`, `02_`) help when a flow has a natural order.
+- **Layers** describe their content or role (`Header`, `CTA Button`, `Error Message`).
+- **Sections** group related frames with clear titles.
+
+### Visual production
+
+When producing high-fidelity designs:
+
+- Use components and tokens from the published design system (no detached instances, no hardcoded values).
+- Cover the interactive states relevant to the feature.
+
+When the design system needs an addition, round-trip through `figma-design-system` — don't extend ad-hoc inside the design file.
+
+### Handoff
+
+- Approved frames are marked in place with Figma's Dev Mode **"Ready for development"** status — no separate handoff page; the status *is* the signal. Developers reference the marked frames directly.
+- Layer names, component properties, and variables are clean and meaningful — Dev Mode is the developer's interface to the design.
+- Annotations (Figma comments or sticky notes) explain interaction intent, state transitions, and accessibility requirements that aren't self-evident from the visual.
+
+## Composition
+
+When the `figma-design-system` skill is installed, the design file consumes its published library. Token or component changes round-trip through `figma-design-system`, then propagate here on republish.

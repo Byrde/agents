@@ -38,9 +38,9 @@ Grouped by domain. Each tool skill claims a subset.
 - add design token
 - add design component
 - publish design library
-- create feature file
-- open feature file
-- comment on feature file
+- create design page
+- open design file
+- comment on design
 - mark frame ready for development
 - archive frame
 
