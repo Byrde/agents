@@ -1,6 +1,6 @@
 # .agents
 
-A library of self-contained, opinionated Claude Code skills for software development. Drop it into any repository as a submodule. Two kinds of skills compose freely via shared verb+noun vocabulary: **practice skills** (the *what* — develop, plan, architect, design, test, create-readme) ship with the repo; **tool skills** (the *how* — `github-source-control`, `github-projects`, `figma-design-system`, `figma-feature-files`, the vendored `figma-use`) are installed per-project by setup scripts.
+A library of self-contained, opinionated Claude Code skills for software development. Drop it into any repository as a submodule. Two kinds of skills compose freely via shared verb+noun vocabulary: **practice skills** (the *what* — develop, plan, architect, design, test, create-readme) ship with the repo; **tool skills** (the *how* — `github-source-control`, `github-projects`, `figma-design-system`, `figma-design-file`, the vendored `figma-use`) are installed per-project by setup scripts.
 
 ## Usage
 
@@ -33,7 +33,6 @@ The script runs two steps:
 
 Optional setup (run separately when you want them):
 
-- `.agents/scripts/setup-memory.sh` — mempalace memory
 - `.agents/scripts/setup-github.sh` — GitHub tool skills
 - `.agents/scripts/setup-figma.sh` — Figma tool skills
 - In your editor: `/create-readme` to bootstrap the README overview
@@ -76,13 +75,13 @@ cd /your/project
 Two opt-in capabilities — pick either, both, or neither:
 
 - **`figma-design-system`** — tokens, components, library publishing
-- **`figma-feature-files`** — per-feature workspaces (flows, wireframes, visual design)
+- **`figma-design-file`** — one shared design file, organised by pages (flows, wireframes, visual design)
 
-Both overlay on the vendored `figma-use` skill, which owns the Figma plugin-API mechanics. The script asks for your PAT, walks you through team/project selection, and (if installing `figma-design-system`) the Design System file. Re-running the script refreshes `figma-use` from upstream main. It writes:
+Both overlay on the vendored `figma-use` skill, which owns the Figma plugin-API mechanics. The script asks for your PAT, walks you through team/project selection, the Design System file (if installing `figma-design-system`), and the design file (if installing `figma-design-file`). Re-running the script refreshes `figma-use` from upstream main. It writes:
 
 - `.agents/skills/figma-use/` — vendored from upstream (always refreshed)
 - `.agents/skills/figma-design-system/SKILL.md` — per opt-in
-- `.agents/skills/figma-feature-files/SKILL.md` — per opt-in
+- `.agents/skills/figma-design-file/SKILL.md` — per opt-in
 - `.cursor/mcp.json` and `.mcp.json` — MCP server merged in
 
 The Figma MCP server uses OAuth — authentication happens interactively through your editor on first use.
@@ -96,4 +95,4 @@ cd /your/project
 .agents/scripts/doctor.sh
 ```
 
-Reports per-capability presence (`github-source-control`, `github-projects`, `figma-design-system`, `figma-feature-files`, `figma-use`), MCP configuration, authentication, and server reachability.
+Reports per-capability presence (`github-source-control`, `github-projects`, `figma-design-system`, `figma-design-file`, `figma-use`), MCP configuration, authentication, and server reachability.

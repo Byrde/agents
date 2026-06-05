@@ -3,8 +3,8 @@
 #
 # Copies rules and skills into the project's editor directories so the
 # Claude and Cursor agents can pick them up. Optional setup steps
-# (mempalace memory, GitHub tool skills, Figma tool skills) are run
-# separately as their own scripts.
+# (GitHub tool skills, Figma tool skills) are run separately as their
+# own scripts.
 #
 # Run from the repository/project root you want to initialise.
 # Writes:
@@ -68,7 +68,6 @@ print_summary() {
   echo "    ✓ Skills  → .cursor/skills/ and  .claude/skills/"
   echo ""
   echo "  Optional next steps:"
-  echo "    • .agents/scripts/setup-memory.sh   (mempalace memory)"
   echo "    • .agents/scripts/setup-github.sh   (GitHub tool skills)"
   echo "    • .agents/scripts/setup-figma.sh    (Figma tool skills)"
   echo "    • In your editor: run /create-readme to bootstrap the README"
