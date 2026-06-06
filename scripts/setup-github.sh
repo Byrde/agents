@@ -255,6 +255,24 @@ print("Wrote", dst)
 PY
 }
 
+# Mirror a skill from .agents/skills/ into the editor-local skill dirs, the
+# same way init.sh seeds them. Without this, Claude Code (.claude/skills/) and
+# Cursor (.cursor/skills/) never see skills that setup-github installs.
+# Idempotent and tolerant of either the editor dir or the skill subdir already
+# existing (mkdir -p the dest, then replace the skill subdir wholesale).
+sync_skill_to_editors() {
+  local project_root="$1" skill="$2"
+  local src="$SKILLS_DIR/$skill"
+  [[ -d "$src" ]] || return 0
+  local dest
+  for dest in "$project_root/.claude/skills" "$project_root/.cursor/skills"; do
+    mkdir -p "$dest"
+    rm -rf "${dest:?}/$skill"
+    cp -R "$src" "$dest/$skill"
+    echo "  skills/$skill → ${dest#$project_root/}/$skill"
+  done
+}
+
 merge_json_mcp_github() {
   local target_file="$1"
   local token="$2"
@@ -461,10 +479,14 @@ main() {
   if [[ "$install_sc" == "y" ]]; then
     render_skill "$SOURCE_CONTROL_TEMPLATE" "$SOURCE_CONTROL_OUT" \
       "$repo_owner" "$repo_name" "${project_id:-N/A}"
+    # .agents/skills/ is the source of truth; mirror into the editor skill dirs
+    # so Claude Code and Cursor pick it up without re-running init.sh.
+    sync_skill_to_editors "$project_root" "github-source-control"
   fi
   if [[ "$install_pr" == "y" ]]; then
     render_skill "$PROJECTS_TEMPLATE" "$PROJECTS_OUT" \
       "$repo_owner" "$repo_name" "$project_id"
+    sync_skill_to_editors "$project_root" "github-projects"
   fi
 
   # ── MCP merge ────────────────────────────────────────────────────────────

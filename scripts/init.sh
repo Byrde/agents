@@ -125,8 +125,16 @@ copy_skills() {
     die "skills directory not found at $SKILLS_DIR"
   fi
 
-  cp -R "$SKILLS_DIR" "$project_root/.cursor/skills"
-  cp -R "$SKILLS_DIR" "$project_root/.claude/skills"
+  local cursor_skills="$project_root/.cursor/skills"
+  local claude_skills="$project_root/.claude/skills"
+
+  mkdir -p "$cursor_skills" "$claude_skills"
+
+  # Copy the *contents* of skills/ into the dest dirs. Using a trailing "/."
+  # (rather than "$SKILLS_DIR") keeps this idempotent: cp -R into an existing
+  # directory would otherwise nest the source as .cursor/skills/skills/.
+  cp -R "$SKILLS_DIR/." "$cursor_skills/"
+  cp -R "$SKILLS_DIR/." "$claude_skills/"
 
   echo "  skills/ → .cursor/skills/"
   echo "  skills/ → .claude/skills/"
