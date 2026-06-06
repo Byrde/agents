@@ -64,6 +64,8 @@ These are defaults, not mandates. If a project doesn't need a separate Logos pag
 - Define meaningful **variants** via Figma component properties (size, style, state).
 - Naming is `Category / Name / Variant` (e.g., `Buttons / Primary / Default`) — but the team picks the granularity that fits.
 - All interactive components define the relevant states (Default, Hover, Active/Pressed, Focused, Disabled, Error where applicable).
+- Build at the **real rendered sizes of the implemented product**, not assumed values — and verify tints/borders are actually visible (a white-on-white border reads as none; confirm with a screenshot, not the layer list).
+- A **separate parallel component set** is a legitimate alternative to responsive variants/modes when existing components can't be cleanly retrofitted, or modes prove fragile — it isolates risk from already-approved designs. Prefer variants/variables; reach for a separate set deliberately.
 
 ### Tokens
 
@@ -71,11 +73,18 @@ These are defaults, not mandates. If a project doesn't need a separate Logos pag
 - Names are semantically meaningful (e.g., `color.surface.primary`, `spacing.large`, `text.heading.lg`). Pick a convention the team likes and apply it consistently.
 - Modes (light/dark) live as Figma Variable modes on the relevant collections, not as duplicate token sets.
 - No mandated primitives/semantics/component-specific hierarchy — use what fits. Most projects don't need three layers.
+- **Tints and overlays: store as pre-blended solid colors, not a base color at reduced opacity.** Paint-level opacity combined with a variable binding does *not* survive a library publish — instances in the consuming design file render fully opaque (an unreadable solid block). Bake the blend into a solid token (e.g., `color.tint.highlight`).
+- Bind **mode-invariant** values (colors, radii equal across modes) freely. Values that **vary by mode** (spacing, border widths, sizes) only resolve correctly where the *consuming* surface sets its mode explicitly — so bind those only when the design file's pages/frames carry the right mode (see `figma-design-file`).
+
+### Code map
+
+Keep a checked-in **Figma↔code component map** in the consuming repo (e.g., `figma-code-map.json`) — a free stand-in for Figma Code Connect (which requires a paid Dev seat). When you **add, rename, or move** a component (in Figma or in code), update its entry: the code component name + path, and the Figma component name(s)/node(s) it corresponds to. A single code component may map from more than one Figma component (e.g., different representations or variant sets of the same thing). It is a **reference, not a sync** — it never edits code; it just lets design and dev point at each other.
 
 ### Library publishing
 
 - Published as a Figma library to team **{{TEAM}}**.
 - Re-publish after any token or component change, with a descriptive update note.
+- Publishing is **separate from file version history.** Restoring a file's version does *not* revert what the library has already published — to roll back library-driven breakage, restore the design-system file **and re-publish**. Likewise, the design file renders from the **published** snapshot, not your local edits — re-publish before placing changed/new components there.
 
 ## Composition
 

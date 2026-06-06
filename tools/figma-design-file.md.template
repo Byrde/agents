@@ -70,6 +70,10 @@ When producing high-fidelity designs:
 
 - Use components and tokens from the published design system (no detached instances, no hardcoded values).
 - Cover the interactive states relevant to the feature.
+- When designs must **match a built interface**, derive sizing/spacing from the **implemented code** (the source of truth), and design only the screens that actually exist — don't invent unbuilt ones.
+- If the components use **mode-varying tokens**, set the page's explicit variable **mode** (e.g., light/dark) **before** placing instances — otherwise they fall back to the collection default and render with the wrong values for that surface.
+- **Verify each placed screen with the user**, not just your own render. A quick screenshot hides real defects (invisible borders, opacity dropped on publish, wrong variable mode); get per-screen sign-off.
+- If the repo keeps a **Figma↔code component map** (e.g., `figma-code-map.json`; see `figma-design-system`), consult it so you reuse the mapped code component instead of reinventing — and cite the mapped code component in handoff so developers know exactly what to build or extend.
 
 When the design system needs an addition, round-trip through `figma-design-system` — don't extend ad-hoc inside the design file.
 
@@ -82,3 +86,5 @@ When the design system needs an addition, round-trip through `figma-design-syste
 ## Composition
 
 When the `figma-design-system` skill is installed, the design file consumes its published library. Token or component changes round-trip through `figma-design-system`, then propagate here on republish.
+
+When assembling a screen from **new** components, a cheap loop is: preview the screen with **local instances** in the design-system file for fast review → **publish once** → place the final screen here from the published library (`importComponentByKeyAsync`), then delete the preview. This avoids a publish cycle per iteration.

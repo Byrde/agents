@@ -45,3 +45,5 @@ When a work item is referenced, read it and all its comments — that's where pr
 If a project-management tool skill is installed (e.g., `github-projects`), work-item operations (**transition**, **comment on work item**) go through that skill. If a source-control tool skill is installed (e.g., `github-source-control`), branch creation and PR operations go through that skill.
 
 If no tracker is installed, treat the work as ad-hoc — gather requirements conversationally, skip the work-item steps, and deliver code with a written summary in the conversation. If no source-control tool is installed, deliver code and tests in the conversation without a branch or PR.
+
+If the project keeps a **Figma↔code component map** (e.g., `figma-code-map.json`; maintained via `figma-design-system`), consult it before building UI to find the existing component to implement or extend, and update its entry when you add or rename a component — keep the design↔code links current.

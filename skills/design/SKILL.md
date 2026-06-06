@@ -54,6 +54,9 @@ The five moves apply at any scope. A "design this button" session might be five 
 - **Reuse before invention.** If an existing component or token fits, use it. Compose existing pieces if you can.
 - **Extend with intent.** When the scoped work genuinely needs something new, propose the addition with rationale, get user buy-in, then **add design token** / **add design component** through the design-system tool, and **publish the design library**.
 - **No detached instances, no hardcoded values.** Visual design pulls from the published library.
+- **Match the source of truth.** When aligning to an existing build, derive real sizes/spacing from the implemented code rather than assumptions, and scope to what's actually built — don't design screens that don't exist.
+- **Verify in context, with the user.** Your own rendered preview is not sign-off. Confirm each screen and component with the user — subtle defects (invisible borders, dropped opacity, the wrong variable mode) hide from a glance and from your own screenshots.
+- **Protect what already works when refactoring the system.** A working design system is a safety constraint: isolate changes so approved designs don't break (mode-aware or pre-blended tokens, a separate component set), and re-verify after publishing — a library publish propagates to every consuming file.
 
 ## When to halt
 
