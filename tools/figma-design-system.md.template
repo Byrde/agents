@@ -80,6 +80,16 @@ These are defaults, not mandates. If a project doesn't need a separate Logos pag
 
 Keep a checked-in **Figma↔code component map** in the consuming repo (e.g., `figma-code-map.json`) — a free stand-in for Figma Code Connect (which requires a paid Dev seat). When you **add, rename, or move** a component (in Figma or in code), update its entry: the code component name + path, and the Figma component name(s)/node(s) it corresponds to. A single code component may map from more than one Figma component (e.g., different representations or variant sets of the same thing). It is a **reference, not a sync** — it never edits code; it just lets design and dev point at each other.
 
+The file format is defined by the JSON Schema at `.agents/tools/figma-code-map.schema.json`. Add `"$schema": "./.agents/tools/figma-code-map.schema.json"` as the first key for editor autocomplete.
+
+**Whenever you edit the map** (add, rename, move, or remove an entry), run the linter before you're done and fix every failure:
+
+```bash
+.agents/tools/figma-code-map-lint.sh   # defaults to ./figma-code-map.json
+```
+
+It validates the file against the schema and against the project — paths exist, code names unique, node ids well-formed (`<num>:<num>`) — and **fails** (non-zero exit) on any of those. It also **warns** about sibling source files that have no entry; treat each warning as a prompt to either add the component or add a documented entry explaining why it isn't mapped. Pure `bash` + `jq`; no install. If the project has no `figma-code-map.json`, there's nothing to lint — skip it.
+
 ### Library publishing
 
 - Published as a Figma library to team **{{TEAM}}**.

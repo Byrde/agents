@@ -379,6 +379,30 @@ check_mempalace() {
   else
     warn "MCP server: stdio handshake timed out or failed (may work fine inside the editor)"
   fi
+
+  # Concurrency: mempalace's ChromaDB backend is single-writer. More than one
+  # live server on the same palace = concurrent writers = vector-index drift.
+  local srv_count
+  srv_count="$(ps aux 2>/dev/null | grep "mempalace.mcp_server" | grep -F -- "$palace_path" | grep -cv grep | tr -d ' ')"
+  if [[ "${srv_count:-0}" -gt 1 ]]; then
+    warn "Concurrency: $srv_count mempalace servers running on this palace — concurrent writers drift the index. Keep ONE editor/window open on it. (sqlite is safe; 'setup-memory.sh repair' rebuilds.)"
+  elif [[ "${srv_count:-0}" -eq 1 ]]; then
+    pass "Concurrency: single MCP server on this palace"
+  fi
+
+  # Quarantine backups = the index drifted before and self-healed. Harmless to
+  # delete; flagged so recurring drift is visible (e.g. multiple servers).
+  if ls -d "$palace_path"/*.corrupt-* "$palace_path"/*.drift-* >/dev/null 2>&1; then
+    warn "Index: quarantine backups present (past drift) — safe to delete; investigate if recurring."
+  fi
+
+  # Portability: sqlite is the committed ground truth; the index is gitignored.
+  # On a fresh checkout sqlite is present but the index isn't — rebuild it.
+  if [[ -f "$palace_path/chroma.sqlite3" ]] \
+    && ! find "$palace_path" -mindepth 1 -maxdepth 1 -type d \
+         -name '*-*-*-*-*' ! -name '*.corrupt-*' ! -name '*.drift-*' 2>/dev/null | grep -q .; then
+    warn "Index: chroma.sqlite3 present but no vector index — run 'setup-memory.sh repair' (e.g. after checkout)."
+  fi
 }
 
 # ─── Main ────────────────────────────────────────────────────────────────────

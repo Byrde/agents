@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
-# Configure mempalace memory system for both Claude Code and Cursor.
+# Configure the mempalace memory system for Claude Code or Cursor.
 #
 # Installs mempalace (if not present), initialises a project-local palace,
-# registers the MCP server for both editors, sets up auto-save hooks, and
-# installs the `memory` skill that teaches the agent how to use it.
+# registers the MCP server + auto-save hooks for the ONE editor you choose
+# (running more than one writer on a palace drifts its index), installs the
+# `memory` skill + rule, and configures git so the palace is portable.
 #
 # Run from the repository/project root you want to configure (current working directory).
 # Writes:
 #   - .mempalace/                     — project-local palace data
 #   - .mempalace/hooks/               — save and precompact hook scripts
 #   - .mempalaceignore                — ignore patterns for mining (node_modules, etc.)
+#   - .gitignore                      — commit chroma.sqlite3 (portable data);
+#                                       ignore the derived <uuid>/ vector index +
+#                                       backups (rebuilt locally via `repair`)
 #   - .agents/skills/memory/SKILL.md  — skill for using mempalace + Claude memory
-#   - .claude/skills/memory/          — skill mirrored for Claude Code
-#   - .cursor/skills/memory/          — skill mirrored for Cursor
-#   - .cursor/mcp.json                — Cursor project MCP (mempalace server merged in)
-#   - .cursor/hooks.json              — Cursor hooks (stop + preCompact)
-#   - .mcp.json                       — Claude Code project MCP (fallback if CLI unavailable)
-#   - .claude/settings.local.json     — Claude Code hooks (Stop + PreCompact)
+#   - .claude|.cursor/skills/memory/  — skill mirrored into the editor dirs
+#   - .claude/rules/memory.md         — rule: how aggressively to use memory
+#   - .cursor/rules/memory.mdc        — same rule, Cursor format
+#   - .cursor/mcp.json | .mcp.json    — project MCP (chosen editor)
+#   - .cursor/hooks.json | .claude/settings.local.json — hooks (chosen editor)
+#
+# Git portability: chroma.sqlite3 is the committed ground truth; the vector
+# index is rebuilt from it locally (`setup-memory.sh repair`) on checkout.
 #
 # Does not modify $HOME.
 #
@@ -705,6 +711,29 @@ sync_skill_to_editors() {
   done
 }
 
+# Install the memory rule — an always-on guide for HOW AGGRESSIVELY to use
+# memory (recall before acting, save what won't be obvious, verify recalls).
+# Sourced from .agents/tools/ and copied into the editor rule dirs. Opt-in:
+# installed here by setup-memory (when memory is configured), NOT by init.sh —
+# so projects without memory don't carry a rule for a system they lack.
+#   .md  → .claude/rules/   (Claude Code)
+#   .mdc → .cursor/rules/   (Cursor; has rule frontmatter)
+install_memory_rule() {
+  local project_root="$1"
+  local src_md="$AGENTS_ROOT/tools/memory.md"
+  local src_mdc="$AGENTS_ROOT/tools/memory.mdc"
+  if [[ -f "$src_md" ]]; then
+    mkdir -p "$project_root/.claude/rules"
+    cp "$src_md" "$project_root/.claude/rules/memory.md"
+    echo "  tools/memory.md  → .claude/rules/memory.md"
+  fi
+  if [[ -f "$src_mdc" ]]; then
+    mkdir -p "$project_root/.cursor/rules"
+    cp "$src_mdc" "$project_root/.cursor/rules/memory.mdc"
+    echo "  tools/memory.mdc → .cursor/rules/memory.mdc"
+  fi
+}
+
 # ─── Ignore file ─────────────────────────────────────────────────────────────
 
 # Default ignore patterns — keeps dependency trees, build artefacts, and binary
@@ -809,6 +838,98 @@ write_mempalaceignore() {
   echo "Wrote $ignore_file"
 }
 
+# ─── Palace git hygiene ───────────────────────────────────────────────────────
+
+# Configure the project's .gitignore so the palace is portable AND drift-proof:
+#   COMMIT (ground truth):  chroma.sqlite3, knowledge_graph.sqlite3, hooks/
+#   IGNORE (derived/local): the <uuid>/ HNSW vector index, quarantine backups,
+#                           rebuild archives, sqlite WAL/SHM journals
+# The vector index is machine-specific and drift-prone; it is rebuilt locally
+# from sqlite (see ensure_index). Committing it bloats git and — because its
+# dir names change on every rebuild — guarantees a stale-index mismatch on
+# checkout (the #1 silent corruption source). Idempotent: rewrites a fenced
+# managed block and untracks anything that is now ignored but still tracked.
+manage_palace_gitignore() {
+  local project_root="$1"
+  local gi="$project_root/.gitignore"
+  local start="# --- mempalace palace (managed by setup-memory) ---"
+  local end="# --- end mempalace palace ---"
+
+  [[ -f "$gi" ]] && sed -i '' "/$start/,/$end/d" "$gi"
+  sed -i '' -e :a -e '/^[[:space:]]*$/{' -e '$d' -e N -e ba -e '}' "$gi" 2>/dev/null || true
+
+  cat >>"$gi" <<EOF
+
+$start
+# Commit the DATA (ground truth): chroma.sqlite3 + knowledge_graph.sqlite3.
+# Ignore the DERIVED, machine-specific vector index and transient artefacts —
+# rebuilt locally from sqlite by 'setup-memory.sh repair'.
+.mempalace/*-*-*-*-*/
+.mempalace/*.corrupt-*
+.mempalace/*.drift-*
+.mempalace.pre-rebuild-*
+.mempalace/*.sqlite3-wal
+.mempalace/*.sqlite3-shm
+$end
+EOF
+  echo "Updated $gi (commit sqlite; ignore derived index + backups)"
+
+  # Untrack anything under .mempalace that is now ignored but still tracked —
+  # e.g. a previously-committed vector index, which is a stale-checkout landmine.
+  if git -C "$project_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    local untracked=0 f
+    while IFS= read -r f; do
+      [[ -z "$f" ]] && continue
+      case "$f" in
+        .mempalace/chroma.sqlite3 | .mempalace/knowledge_graph.sqlite3 | \
+          .mempalace/.blob_seq_ids_migrated | .mempalace/hooks/* | .mempalace/.mempalace/*)
+          : ;; # keep tracked: data + hooks + origin
+        *)
+          git -C "$project_root" rm --cached --quiet -- "$f" && untracked=$((untracked + 1)) ;;
+      esac
+    done < <(git -C "$project_root" ls-files -- .mempalace)
+    [[ "$untracked" -gt 0 ]] \
+      && echo "  Untracked $untracked stale palace index/backup file(s) from git"
+  fi
+}
+
+# ─── Vector index rebuild (portability / drift recovery) ──────────────────────
+
+# Rebuild the HNSW vector index from chroma.sqlite3 when it's missing — e.g.
+# after checking the repo out on a new machine (we commit sqlite but gitignore
+# the index), or after concurrent-writer drift quarantined it. sqlite is the
+# ground truth, so this is lossless. Idempotent: a no-op when a live index
+# already exists, unless called with "force".
+ensure_index() {
+  local py="$1" project_root="$2" palace_path="$3" force="${4:-}"
+  if [[ ! -f "$palace_path/chroma.sqlite3" ]]; then
+    [[ "$force" == "force" ]] && echo "No chroma.sqlite3 at $palace_path — nothing to rebuild."
+    return 0
+  fi
+
+  if [[ "$force" != "force" ]]; then
+    # A live index = at least one uuid-named collection dir that isn't a backup.
+    if find "$palace_path" -mindepth 1 -maxdepth 1 -type d \
+         -name '*-*-*-*-*' ! -name '*.corrupt-*' ! -name '*.drift-*' 2>/dev/null \
+         | grep -q .; then
+      return 0
+    fi
+    echo ""
+    echo "Palace has data (chroma.sqlite3) but no vector index — rebuilding from"
+    echo "sqlite (e.g. fresh checkout). Lossless; sqlite is the source of truth."
+  else
+    echo ""
+    echo "Rebuilding vector index from chroma.sqlite3 (forced) …"
+  fi
+
+  MEMPALACE_PALACE_PATH="$palace_path" \
+    "$py" -m mempalace repair --mode from-sqlite --archive-existing --yes \
+    || { echo "warning: index rebuild returned non-zero"; return 0; }
+  # The rebuilt palace's sqlite is complete; drop the archive copy it leaves behind.
+  rm -rf "${palace_path}".pre-rebuild-* 2>/dev/null || true
+  echo "Vector index rebuilt from sqlite."
+}
+
 # ─── Project mining ──────────────────────────────────────────────────────────
 
 # Build an array of find-exclude arguments from the ignore file.
@@ -837,6 +958,82 @@ build_find_excludes() {
       printf '%s\n' "$line"
     fi
   done <"$ignore_file"
+}
+
+# Map a project root to its Claude Code transcript directory.
+# Claude Code stores per-project transcripts under ~/.claude/projects/<encoded>,
+# where <encoded> is the absolute project path with every non-alphanumeric
+# character replaced by '-'. e.g. /Users/me/work/app -> -Users-me-work-app.
+claude_transcript_dir() {
+  local project_root="$1" encoded
+  encoded="$(printf '%s' "$project_root" | sed 's/[^a-zA-Z0-9]/-/g')"
+  printf '%s/.claude/projects/%s' "$HOME" "$encoded"
+}
+
+# Backfill THIS project's past Claude Code conversations into the palace.
+#
+# Distinct from mine_project (code/docs): this ingests chat history via
+# `--mode convos`, so decisions made in sessions that predate the auto-save
+# hooks are still recoverable. The hooks only capture conversations going
+# forward — this is the one-time catch-up.
+#
+# Scoped to the project's OWN transcript dir, never the bare ~/.claude/projects/
+# (that holds every project on the machine and would pollute this wing). We also
+# pin --wing to the project's basename; otherwise mempalace defaults the wing to
+# the long encoded directory name rather than the project name.
+mine_convos() {
+  local py="$1" project_root="$2" palace_path="$3"
+  local convo_dir wing
+  convo_dir="$(claude_transcript_dir "$project_root")"
+  wing="$(basename "$project_root")"
+
+  if [[ ! -d "$convo_dir" ]]; then
+    echo "No Claude Code transcripts found for this project at:"
+    echo "  $convo_dir"
+    echo "Skipping conversation backfill (nothing to mine yet)."
+    return 0
+  fi
+
+  # Claude Code keeps the actual chat logs as <session-id>.jsonl at the TOP
+  # LEVEL of the transcript dir. The subdirectories hold derived artefacts —
+  # tool-result dumps (*.txt) and subagent transcripts — which are not
+  # conversation and pollute the palace (a tool-result dump is often just a
+  # copy of a file we already mine as code). `mempalace mine` recurses a
+  # directory and offers no exclude flag, and it won't accept a single file
+  # (it scans its argument as a dir), so we stage only the top-level chat logs
+  # into a temp dir and mine that.
+  local staging n=0 f
+  staging="$(mktemp -d)"
+  for f in "$convo_dir"/*.jsonl; do
+    [[ -e "$f" ]] || continue
+    cp "$f" "$staging/"
+    n=$((n + 1))
+  done
+
+  if [[ "$n" -eq 0 ]]; then
+    rm -rf "$staging"
+    echo "No Claude Code chat logs (*.jsonl) found in $convo_dir — skipping backfill."
+    return 0
+  fi
+
+  echo ""
+  echo "Backfilling Claude Code conversation history into wing '$wing' …"
+  echo "  Source: $convo_dir"
+  echo "  Mining $n chat log(s) (tool-result dumps and subagent transcripts excluded)"
+
+  MEMPALACE_PALACE_PATH="$palace_path" \
+    "$py" -m mempalace mine "$staging" --mode convos --wing "$wing" \
+    || echo "warning: conversation mine returned non-zero (may be non-fatal)"
+  rm -rf "$staging"
+  echo "Conversation backfill complete."
+}
+
+# Run both mine modes against the project: files (projects) + Claude Code
+# transcripts (convos). The single entry point for a full refresh.
+mine_all() {
+  local py="$1" project_root="$2" palace_path="$3"
+  mine_project "$py" "$project_root" "$palace_path"
+  mine_convos "$py" "$project_root" "$palace_path"
 }
 
 mine_project() {
@@ -931,18 +1128,20 @@ main() {
       echo "$PROG_NAME · Byrde Agents v$TOOL_VERSION"
       echo ""
       echo "Usage:"
-      echo "  cd /your/project && $0          # full setup"
-      echo "  cd /your/project && $0 mine     # mine project files (setup must be done first)"
+      echo "  cd /your/project && $0                 # full setup"
+      echo "  cd /your/project && $0 mine            # mine both files + chat history (setup first)"
+      echo "  cd /your/project && $0 mine projects   # mine project files only"
+      echo "  cd /your/project && $0 mine convos     # backfill Claude Code chat history only"
+      echo "  cd /your/project && $0 repair          # rebuild vector index from chroma.sqlite3"
       echo ""
       echo "Full setup installs mempalace (if needed) and configures:"
       echo "  .mempalace/                     — project-local palace data"
       echo "  .mempalace/hooks/               — save and precompact hook scripts"
       echo "  .mempalaceignore                — ignore patterns for mining"
+      echo "  .gitignore                      — commit sqlite; ignore the derived index"
       echo "  .agents/skills/memory/SKILL.md  — skill for using memory"
-      echo "  .cursor/mcp.json                — Cursor project MCP"
-      echo "  .cursor/hooks.json              — Cursor hooks (stop + preCompact)"
-      echo "  .mcp.json                       — Claude Code project MCP (fallback)"
-      echo "  .claude/settings.local.json     — Claude Code auto-save hooks"
+      echo "  .claude|.cursor/rules/memory.*  — rule: how aggressively to use memory"
+      echo "  MCP + hooks                     — for the ONE editor you choose"
       exit 0
       ;;
     mine)
@@ -954,7 +1153,25 @@ main() {
       local palace_path="$project_root/.mempalace"
 
       require_setup "$py" "$palace_path"
-      mine_project "$py" "$project_root" "$palace_path"
+      case "${1:-all}" in
+        projects) mine_project "$py" "$project_root" "$palace_path" ;;
+        convos)   mine_convos  "$py" "$project_root" "$palace_path" ;;
+        all)      mine_all     "$py" "$project_root" "$palace_path" ;;
+        *) die "unknown mine target '${1}' (use: projects | convos | all)" ;;
+      esac
+      exit 0
+      ;;
+    repair | rebuild-index)
+      # Force-rebuild the vector index from chroma.sqlite3 (the ground truth).
+      # Use after a fresh checkout, or if search behaves oddly / drift is suspected.
+      local py
+      py="$(resolve_python)"
+      local project_root
+      project_root="$(pwd -P)"
+      local palace_path="$project_root/.mempalace"
+
+      require_setup "$py" "$palace_path"
+      ensure_index "$py" "$project_root" "$palace_path" force
       exit 0
       ;;
   esac
@@ -1029,24 +1246,64 @@ main() {
     echo "Skipping .mempalaceignore."
   fi
 
-  # ── Step 3: Initialise or re-mine the palace ──────────────────────────────
+  # Palace git hygiene: commit sqlite (the portable ground truth), ignore the
+  # derived/machine-specific vector index + backups, and untrack any stale index
+  # already committed. Always run — this is what makes the palace safe to commit.
+  echo ""
+  manage_palace_gitignore "$project_root"
+
+  # ── Step 3: Initialise the palace, then mine both sources ─────────────────
   #
-  # A fresh `mempalace init` also indexes the project (builds the rooms), so we
-  # never mine separately after a first-time init. For an already-initialised
-  # palace we skip init and just offer a re-mine to refresh the index.
+  # Two mine modes, both run here:
+  #   projects — the project's own files/docs (semantic recall of the codebase)
+  #   convos   — this project's past Claude Code transcripts (one-time catch-up;
+  #              the auto-save hooks only capture sessions going forward)
+  #
+  # A fresh `mempalace init` already indexes project files, so on first-time
+  # init we only need the convos backfill on top. For an already-initialised
+  # palace we offer a refresh that re-mines both.
 
   if [[ -d "$palace_path" && -f "$palace_path/chroma.sqlite3" ]]; then
     echo ""
     echo "Palace already initialised at $palace_path"
-    read -r -p "Re-mine this project's files into the palace now? [Y/n] " do_remine
+    read -r -p "Re-mine this project (files + conversation history) into the palace now? [Y/n] " do_remine
     if [[ "${do_remine:-y}" =~ ^[Yy] ]]; then
-      mine_project "$py" "$project_root" "$palace_path"
+      mine_all "$py" "$project_root" "$palace_path"
     fi
   else
     init_palace "$py" "$project_root" "$palace_path"
+    mine_convos "$py" "$project_root" "$palace_path"
   fi
 
-  # ── Step 4: Write hook scripts + register hooks ───────────────────────────
+  # Ensure a usable vector index exists. init/mine above normally build it; this
+  # also covers the commit-sqlite / gitignore-index portability path — on a
+  # fresh checkout sqlite is present but the index isn't, so rebuild from sqlite.
+  ensure_index "$py" "$project_root" "$palace_path"
+
+  # ── Editor selection ──────────────────────────────────────────────────────
+  #
+  # mempalace's ChromaDB backend is single-writer. Each editor connection — and
+  # each window — spawns its own server process against the SAME palace, and
+  # concurrent writers drift the vector index. Registering ONE editor avoids
+  # most of that. (Committed sqlite + 'repair' make any residual drift a
+  # lossless, one-command recovery rather than data loss.)
+
+  echo ""
+  echo "Which editor should run the mempalace MCP server for this project?"
+  echo "  Running more than one editor (or window) on the same palace can drift"
+  echo "  its index — one is recommended."
+  echo "    [1] Claude Code only (recommended)"
+  echo "    [2] Cursor only"
+  echo "    [3] Both (only if you accept the drift trade-off)"
+  read -r -p "Choice [1]: " editor_choice
+  local reg_claude=false reg_cursor=false
+  case "${editor_choice:-1}" in
+    2) reg_cursor=true ;;
+    3) reg_claude=true; reg_cursor=true ;;
+    *) reg_claude=true ;;
+  esac
+
+  # ── Step 4: Write hook scripts + register hooks (chosen editor only) ──────
 
   echo ""
   read -r -p "Write hook scripts (save + precompact)? [Y/n] " a_hooks
@@ -1065,27 +1322,29 @@ main() {
 
     echo ""
     echo "── Registering hooks ──"
-    merge_cursor_hooks "$cursor_hooks" "$save_script" "$precompact_script"
-    merge_claude_hooks "$claude_settings" "$save_script" "$precompact_script"
+    [[ "$reg_cursor" == true ]] && merge_cursor_hooks "$cursor_hooks" "$save_script" "$precompact_script"
+    [[ "$reg_claude" == true ]] && merge_claude_hooks "$claude_settings" "$save_script" "$precompact_script"
   else
     echo "Skipping hook scripts."
   fi
 
-  # ── Step 5: MCP servers (always configured — mempalace needs them) ──────
+  # ── Step 5: MCP server (chosen editor only — one writer per palace) ───────
 
   echo ""
   echo "── Configuring MCP servers ──"
-  merge_cursor_mcp_mempalace "$cursor_mcp" "$py" "$palace_path"
-  setup_claude_mcp "$py" "$palace_path" "$claude_mcp"
+  [[ "$reg_cursor" == true ]] && merge_cursor_mcp_mempalace "$cursor_mcp" "$py" "$palace_path"
+  [[ "$reg_claude" == true ]] && setup_claude_mcp "$py" "$palace_path" "$claude_mcp"
 
-  # ── Step 6: Install the memory skill ─────────────────────────────────────
+  # ── Step 6: Install the memory skill + rule ──────────────────────────────
 
   echo ""
-  echo "── Installing memory skill ──"
+  echo "── Installing memory skill + rule ──"
   write_memory_skill
   # .agents/skills/ is the source of truth; mirror into the editor skill dirs
   # so Claude Code and Cursor pick it up without re-running init.sh.
   sync_skill_to_editors "$project_root" "memory"
+  # Always-on rule for how aggressively to use memory (from .agents/tools/).
+  install_memory_rule "$project_root"
 
   # ── Done ──────────────────────────────────────────────────────────────────
 
@@ -1101,22 +1360,24 @@ main() {
   echo "  Skill:    $AGENTS_ROOT/skills/memory/SKILL.md"
   echo "            → .claude/skills/memory and .cursor/skills/memory"
   echo ""
-  echo "  Cursor:"
-  echo "    MCP:   $cursor_mcp"
-  echo "    Hooks: $cursor_hooks"
-  echo ""
-  echo "  Claude Code:"
-  if command -v claude >/dev/null 2>&1; then
-    echo "    MCP:   registered via claude CLI (project scope)"
-  else
-    echo "    MCP:   $claude_mcp"
+  echo "  Memory MCP registered in:"
+  if [[ "$reg_claude" == true ]]; then
+    if command -v claude >/dev/null 2>&1; then
+      echo "    Claude Code — MCP via claude CLI (project scope); hooks: $claude_settings"
+    else
+      echo "    Claude Code — MCP: $claude_mcp; hooks: $claude_settings"
+    fi
   fi
-  echo "    Hooks: $claude_settings"
+  [[ "$reg_cursor" == true ]] && echo "    Cursor — MCP: $cursor_mcp; hooks: $cursor_hooks"
+  echo ""
+  echo "  Git: chroma.sqlite3 is committed (portable data); the vector index is"
+  echo "       gitignored and rebuilt locally — run '$0 repair' after a checkout."
   echo ""
   echo "  Next steps:"
-  echo "    1. Restart Cursor and Claude Code to load the MCP server."
-  echo "    2. Verify mempalace tools are available (19 MCP tools)."
-  echo "    3. Re-mine after changes:  $0 mine   (or re-run this script)"
+  echo "    1. Restart your editor to load the MCP server."
+  echo "    2. Verify mempalace tools are available."
+  echo "    3. Re-mine after changes:    $0 mine     (files + chat)"
+  echo "    4. Rebuild index on checkout: $0 repair"
   echo "$bar"
 }
 

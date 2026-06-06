@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Byrde/agents/tools/figma-code-map.schema.json",
+  "title": "Figma ↔ code component map",
+  "description": "Lightweight, project-agnostic stand-in for Figma Code Connect: one responsive code component per concept, with the Figma component name(s)/node(s) it corresponds to. A reference, not a sync — it never edits code. Validate with .agents/tools/figma-code-map-lint.sh. Add `\"$schema\": \"./.agents/tools/figma-code-map.schema.json\"` to your map for editor autocomplete.",
+  "type": "object",
+  "required": ["components"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional reference to this schema for editor autocomplete/validation."
+    },
+    "_note": {
+      "type": "string",
+      "description": "Free-text maintenance note for humans and agents reading the file."
+    },
+    "figmaFiles": {
+      "type": "object",
+      "description": "Named Figma files this map references, keyed by role (e.g. designSystem, designs).",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["key"],
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Figma file key (from the file URL)."
+          },
+          "componentsPages": {
+            "type": "array",
+            "description": "Page names that hold components in this file.",
+            "items": { "type": "string" }
+          },
+          "screensPage": {
+            "type": "string",
+            "description": "Page name that holds screen designs in this file."
+          }
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "description": "One entry per code component, with the Figma component(s) it maps to.",
+      "items": {
+        "type": "object",
+        "required": ["code", "path"],
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Code component name (e.g. AppHeader)."
+          },
+          "path": {
+            "type": "string",
+            "description": "Repo-root-relative path to the component source file."
+          },
+          "figma": {
+            "type": "object",
+            "description": "Figma component name per platform/representation, keyed freely (e.g. web, mobile). Use null when there is no Figma component for that platform.",
+            "additionalProperties": { "type": ["string", "null"] }
+          },
+          "nodeIds": {
+            "type": "object",
+            "description": "Figma node id per platform/representation, keyed the same way as `figma`. Use null when absent.",
+            "additionalProperties": {
+              "type": ["string", "null"],
+              "pattern": "^[0-9]+:[0-9]+$"
+            }
+          },
+          "notes": {
+            "type": "string",
+            "description": "Free-text clarification (variants, caveats, why a sibling file is NOT the match)."
+          }
+        }
+      }
+    },
+    "figmaOnly": {
+      "type": "array",
+      "description": "Figma pieces with no 1:1 reusable code component (inline markup, composites).",
+      "items": {
+        "type": "object",
+        "required": ["figma", "code"],
+        "additionalProperties": false,
+        "properties": {
+          "figma": {
+            "type": "string",
+            "description": "Figma component/frame name (or a slash-joined list of related names)."
+          },
+          "nodeId": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9]+:[0-9]+$",
+            "description": "Figma node id, when a single one applies."
+          },
+          "code": {
+            "type": "string",
+            "description": "Where it lives in code, in prose (e.g. inline markup in a page), or why there is no component."
+          }
+        }
+      }
+    }
+  }
+}

@@ -46,4 +46,4 @@ If a project-management tool skill is installed (e.g., `github-projects`), work-
 
 If no tracker is installed, treat the work as ad-hoc — gather requirements conversationally, skip the work-item steps, and deliver code with a written summary in the conversation. If no source-control tool is installed, deliver code and tests in the conversation without a branch or PR.
 
-If the project keeps a **Figma↔code component map** (e.g., `figma-code-map.json`; maintained via `figma-design-system`), consult it before building UI to find the existing component to implement or extend, and update its entry when you add or rename a component — keep the design↔code links current.
+If the project keeps a **Figma↔code component map** (e.g., `figma-code-map.json`; maintained via `figma-design-system`), consult it before building UI to find the existing component to implement or extend, and update its entry when you add or rename a component — keep the design↔code links current. After editing the map, run `.agents/tools/figma-code-map-lint.sh` and fix any failures.

@@ -87,6 +87,15 @@ Both overlay on the vendored `figma-use` skill, which owns the Figma plugin-API 
 
 The Figma MCP server uses OAuth — authentication happens interactively through your editor on first use.
 
+**Code map.** `figma-design-system` keeps a checked-in `figma-code-map.json` — a free stand-in for Figma Code Connect linking each Figma component to its code component. Its format is defined by `tools/figma-code-map.schema.json` (reference it via `"$schema"` for editor autocomplete). Validate it any time with:
+
+```bash
+cd /your/project
+.agents/tools/figma-code-map-lint.sh        # defaults to ./figma-code-map.json
+```
+
+Pure `bash` + `jq`. Checks the file against the schema and against the project — component paths exist, code names are unique, node ids are well-formed — and warns about sibling source files that have no map entry. Exits non-zero on failure, so it drops cleanly into CI or a pre-commit hook.
+
 ### Memory
 
 Installs [mempalace](https://github.com/milla-jovovich/mempalace) — a project-local, semantically searchable memory palace — initialises a palace for the project, registers its MCP server for both editors, wires up auto-save hooks, and installs the `memory` skill that teaches the agent how to use it (and how it relates to Claude's own built-in memory).
