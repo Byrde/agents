@@ -18,8 +18,8 @@
 #   - .claude|.cursor/skills/memory/  — skill mirrored into the editor dirs
 #   - .claude/rules/memory.md         — rule: how aggressively to use memory
 #   - .cursor/rules/memory.mdc        — same rule, Cursor format
-#   - .cursor/mcp.json | .mcp.json    — project MCP (chosen editor)
-#   - .cursor/hooks.json | .claude/settings.local.json — hooks (chosen editor)
+#   - .cursor/mcp.json + .mcp.json    — project MCP (Cursor + Claude Code)
+#   - .cursor/hooks.json + .claude/settings.local.json — hooks (both editors)
 #
 # Git portability: chroma.sqlite3 is the committed ground truth; the vector
 # index is rebuilt from it locally (`setup-memory.sh repair`) on checkout.
@@ -1280,30 +1280,7 @@ main() {
   # fresh checkout sqlite is present but the index isn't, so rebuild from sqlite.
   ensure_index "$py" "$project_root" "$palace_path"
 
-  # ── Editor selection ──────────────────────────────────────────────────────
-  #
-  # mempalace's ChromaDB backend is single-writer. Each editor connection — and
-  # each window — spawns its own server process against the SAME palace, and
-  # concurrent writers drift the vector index. Registering ONE editor avoids
-  # most of that. (Committed sqlite + 'repair' make any residual drift a
-  # lossless, one-command recovery rather than data loss.)
-
-  echo ""
-  echo "Which editor should run the mempalace MCP server for this project?"
-  echo "  Running more than one editor (or window) on the same palace can drift"
-  echo "  its index — one is recommended."
-  echo "    [1] Claude Code only (recommended)"
-  echo "    [2] Cursor only"
-  echo "    [3] Both (only if you accept the drift trade-off)"
-  read -r -p "Choice [1]: " editor_choice
-  local reg_claude=false reg_cursor=false
-  case "${editor_choice:-1}" in
-    2) reg_cursor=true ;;
-    3) reg_claude=true; reg_cursor=true ;;
-    *) reg_claude=true ;;
-  esac
-
-  # ── Step 4: Write hook scripts + register hooks (chosen editor only) ──────
+  # ── Step 4: Write hook scripts + register hooks ───────────────────────────
 
   echo ""
   read -r -p "Write hook scripts (save + precompact)? [Y/n] " a_hooks
@@ -1322,18 +1299,18 @@ main() {
 
     echo ""
     echo "── Registering hooks ──"
-    [[ "$reg_cursor" == true ]] && merge_cursor_hooks "$cursor_hooks" "$save_script" "$precompact_script"
-    [[ "$reg_claude" == true ]] && merge_claude_hooks "$claude_settings" "$save_script" "$precompact_script"
+    merge_cursor_hooks "$cursor_hooks" "$save_script" "$precompact_script"
+    merge_claude_hooks "$claude_settings" "$save_script" "$precompact_script"
   else
     echo "Skipping hook scripts."
   fi
 
-  # ── Step 5: MCP server (chosen editor only — one writer per palace) ───────
+  # ── Step 5: MCP servers (always configured — mempalace needs them) ───────
 
   echo ""
   echo "── Configuring MCP servers ──"
-  [[ "$reg_cursor" == true ]] && merge_cursor_mcp_mempalace "$cursor_mcp" "$py" "$palace_path"
-  [[ "$reg_claude" == true ]] && setup_claude_mcp "$py" "$palace_path" "$claude_mcp"
+  merge_cursor_mcp_mempalace "$cursor_mcp" "$py" "$palace_path"
+  setup_claude_mcp "$py" "$palace_path" "$claude_mcp"
 
   # ── Step 6: Install the memory skill + rule ──────────────────────────────
 
@@ -1361,14 +1338,12 @@ main() {
   echo "            → .claude/skills/memory and .cursor/skills/memory"
   echo ""
   echo "  Memory MCP registered in:"
-  if [[ "$reg_claude" == true ]]; then
-    if command -v claude >/dev/null 2>&1; then
-      echo "    Claude Code — MCP via claude CLI (project scope); hooks: $claude_settings"
-    else
-      echo "    Claude Code — MCP: $claude_mcp; hooks: $claude_settings"
-    fi
+  if command -v claude >/dev/null 2>&1; then
+    echo "    Claude Code — MCP via claude CLI (project scope); hooks: $claude_settings"
+  else
+    echo "    Claude Code — MCP: $claude_mcp; hooks: $claude_settings"
   fi
-  [[ "$reg_cursor" == true ]] && echo "    Cursor — MCP: $cursor_mcp; hooks: $cursor_hooks"
+  echo "    Cursor — MCP: $cursor_mcp; hooks: $cursor_hooks"
   echo ""
   echo "  Git: chroma.sqlite3 is committed (portable data); the vector index is"
   echo "       gitignored and rebuilt locally — run '$0 repair' after a checkout."
