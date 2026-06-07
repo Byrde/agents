@@ -116,6 +116,7 @@ print_summary() {
   printf '    %-13s %s\n' "Claude Code:" "${claude_status:-skipped}"
   echo ""
   echo "  Verify with: .agents/scripts/doctor.sh"
+  echo "  Undo with:   .agents/scripts/setup-github.sh uninstall"
   echo "$bar"
 }
 
@@ -338,6 +339,74 @@ merge_claude_mcp_github() {
   echo "Restart Claude Code if it is running so MCP picks up changes to $path"
 }
 
+# ─── Uninstall ────────────────────────────────────────────────────────────────
+
+# Remove a skill from .agents/skills/ and its editor mirrors. Reverses
+# render_skill + sync_skill_to_editors.
+remove_skill() {
+  local project_root="$1" skill="$2"
+  rm -rf "$SKILLS_DIR/$skill"
+  echo "  removed skills/$skill"
+  local dest
+  for dest in "$project_root/.claude/skills/$skill" "$project_root/.cursor/skills/$skill"; do
+    rm -rf "$dest"
+    echo "  removed ${dest#$project_root/}"
+  done
+}
+
+# Strip the github MCP server from a JSON config. Reverses the merge_*_github
+# helpers (both write .mcpServers.github).
+remove_mcp_github() {
+  local path="$1"
+  [[ -f "$path" ]] || return 0
+  jq -e '.mcpServers.github' "$path" >/dev/null 2>&1 || return 0
+  local tmp
+  tmp="$(mktemp)"
+  if jq 'del(.mcpServers.github)' "$path" >"$tmp" 2>/dev/null; then
+    mv "$tmp" "$path"
+    echo "  removed mcpServers.github from $path"
+  else
+    rm -f "$tmp"
+    echo "  ⚠ jq failed on $path — left unchanged"
+  fi
+}
+
+uninstall() {
+  require_cmd jq
+
+  local project_root
+  project_root="$(pwd -P)"
+  local cursor_mcp="$project_root/.cursor/mcp.json"
+  local claude_mcp="$project_root/.mcp.json"
+
+  local bar
+  bar="$(printf '%*s' 68 '' | tr ' ' '=')"
+  echo "$bar"
+  echo "  $PROG_NAME · Uninstall  v$TOOL_VERSION"
+  echo ""
+  echo "  Removes the GitHub tool skills and the GitHub MCP server from your"
+  echo "  editor configs. Does not touch your gh CLI auth."
+  echo ""
+  printf '  %-16s %s\n' "Project Root" "$project_root"
+  echo "$bar"
+  echo ""
+
+  echo "── Removing skills ──"
+  remove_skill "$project_root" "github-source-control"
+  remove_skill "$project_root" "github-projects"
+  echo ""
+
+  echo "── Removing MCP registration ──"
+  remove_mcp_github "$cursor_mcp"
+  remove_mcp_github "$claude_mcp"
+  echo ""
+
+  echo "$bar"
+  echo "  Done. GitHub skills and MCP server removed."
+  echo "  Restart your editor so it drops the (now-removed) MCP server."
+  echo "$bar"
+}
+
 main() {
   case "${1:-}" in
     -h | --help | help)
@@ -347,7 +416,8 @@ main() {
       echo "GitHub MCP server into your editor's project-local config."
       echo ""
       echo "Usage:"
-      echo "  cd /your/project && $0"
+      echo "  cd /your/project && $0              # install"
+      echo "  cd /your/project && $0 uninstall    # remove skills + GitHub MCP"
       echo ""
       echo "Opt-in capabilities (pick either, both, or neither):"
       echo "  github-source-control  branches, PRs, code review"
@@ -359,6 +429,10 @@ main() {
       echo "  .agents/skills/github-projects/SKILL.md"
       echo "  .cursor/mcp.json   — Cursor project MCP"
       echo "  .mcp.json          — Claude Code project MCP"
+      exit 0
+      ;;
+    uninstall | remove)
+      uninstall
       exit 0
       ;;
   esac

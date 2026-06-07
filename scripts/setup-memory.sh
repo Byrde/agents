@@ -20,13 +20,17 @@
 #   - .cursor/rules/memory.mdc        — same rule, Cursor format
 #   - .cursor/mcp.json + .mcp.json    — project MCP (Cursor + Claude Code)
 #   - .cursor/hooks.json + .claude/settings.local.json — hooks (both editors)
+#   - .claude/settings.json           — autoMemoryEnabled: false (mempalace
+#                                       replaces Claude Code's native memory)
 #
 # Git portability: chroma.sqlite3 is the committed ground truth; the vector
 # index is rebuilt from it locally (`setup-memory.sh repair`) on checkout.
 #
 # Does not modify $HOME.
 #
-# Usage: cd /path/to/project && /path/to/setup-memory.sh
+# Usage:
+#   cd /path/to/project && /path/to/setup-memory.sh              # full setup
+#   cd /path/to/project && /path/to/setup-memory.sh uninstall    # tear down
 #
 # Requires: python3, jq
 # Compatible with Bash 3.2 (macOS): no mapfile/readarray.
@@ -50,6 +54,26 @@ die() {
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1 (install or add to PATH)"
+}
+
+# Toggle Claude Code's built-in auto-memory in .claude/settings.json.
+# mempalace replaces Claude's native memory, so install sets this to false;
+# uninstall sets it back to true (Claude Code's default). jq is required by
+# this script, so it is always available here.
+set_auto_memory() {
+  local project_root="$1" value="$2"  # value: true | false
+  local settings="$project_root/.claude/settings.json"
+  mkdir -p "$(dirname "$settings")"
+  local tmp
+  tmp="$(mktemp)"
+  if [[ -f "$settings" ]]; then
+    jq --argjson v "$value" '.autoMemoryEnabled = $v' "$settings" >"$tmp" \
+      || die "jq failed on $settings (invalid JSON?)"
+  else
+    jq -n --argjson v "$value" '{autoMemoryEnabled: $v}' >"$tmp"
+  fi
+  mv "$tmp" "$settings"
+  echo "autoMemoryEnabled=$value → $settings"
 }
 
 print_intro() {
@@ -1071,6 +1095,190 @@ mine_project() {
   echo "Mining complete."
 }
 
+# ─── Uninstall ────────────────────────────────────────────────────────────────
+
+# Remove the mempalace MCP server registration from both editors. Mirrors
+# setup_claude_mcp / merge_cursor_mcp_mempalace: deregister via the claude CLI
+# when present, and strip the .mcpServers.mempalace key from both JSON configs.
+remove_mcp() {
+  local project_root="$1" claude_mcp="$2" cursor_mcp="$3"
+
+  if command -v claude >/dev/null 2>&1; then
+    claude mcp remove mempalace --scope project >/dev/null 2>&1 \
+      && echo "  removed mempalace MCP via claude CLI (project scope)" || true
+  fi
+
+  local f tmp
+  for f in "$claude_mcp" "$cursor_mcp"; do
+    [[ -f "$f" ]] || continue
+    jq -e '.mcpServers.mempalace' "$f" >/dev/null 2>&1 || continue
+    tmp="$(mktemp)"
+    if jq 'del(.mcpServers.mempalace)' "$f" >"$tmp" 2>/dev/null; then
+      mv "$tmp" "$f"
+      echo "  removed mcpServers.mempalace from $f"
+    else
+      rm -f "$tmp"
+      echo "  ⚠ jq failed on $f — left unchanged"
+    fi
+  done
+}
+
+# Strip the mempalace hooks (matched by "mempal_") from both editors' hook
+# configs. Reverses merge_claude_hooks (.hooks.Stop/.PreCompact in
+# settings.local.json) and merge_cursor_hooks (.hooks.stop/.preCompact).
+remove_hooks() {
+  local claude_settings="$1" cursor_hooks="$2"
+  local tmp
+
+  if [[ -f "$claude_settings" ]]; then
+    tmp="$(mktemp)"
+    if jq '
+      if .hooks then
+        .hooks.Stop = [ (.hooks.Stop // [])[]
+          | select((.hooks // []) | all(.command | contains("mempal_") | not)) ] |
+        .hooks.PreCompact = [ (.hooks.PreCompact // [])[]
+          | select((.hooks // []) | all(.command | contains("mempal_") | not)) ] |
+        if (.hooks.Stop | length) == 0 then del(.hooks.Stop) else . end |
+        if (.hooks.PreCompact | length) == 0 then del(.hooks.PreCompact) else . end |
+        if (.hooks | length) == 0 then del(.hooks) else . end
+      else . end
+    ' "$claude_settings" >"$tmp" 2>/dev/null; then
+      mv "$tmp" "$claude_settings"
+      echo "  removed mempalace hooks from $claude_settings"
+    else
+      rm -f "$tmp"
+      echo "  ⚠ jq failed on $claude_settings — left unchanged"
+    fi
+  fi
+
+  if [[ -f "$cursor_hooks" ]]; then
+    tmp="$(mktemp)"
+    if jq '
+      if .hooks then
+        .hooks.stop = [ (.hooks.stop // [])[] | select(.command | contains("mempal_") | not) ] |
+        .hooks.preCompact = [ (.hooks.preCompact // [])[] | select(.command | contains("mempal_") | not) ] |
+        if (.hooks.stop | length) == 0 then del(.hooks.stop) else . end |
+        if (.hooks.preCompact | length) == 0 then del(.hooks.preCompact) else . end
+      else . end
+    ' "$cursor_hooks" >"$tmp" 2>/dev/null; then
+      mv "$tmp" "$cursor_hooks"
+      echo "  removed mempalace hooks from $cursor_hooks"
+    else
+      rm -f "$tmp"
+      echo "  ⚠ jq failed on $cursor_hooks — left unchanged"
+    fi
+  fi
+}
+
+# Remove the memory skill (source + editor mirrors) and the memory rule.
+# Reverses write_memory_skill / sync_skill_to_editors / install_memory_rule.
+remove_skill_and_rule() {
+  local project_root="$1"
+  rm -rf "$AGENTS_ROOT/skills/memory"
+  echo "  removed $AGENTS_ROOT/skills/memory"
+  local dest
+  for dest in "$project_root/.claude/skills/memory" "$project_root/.cursor/skills/memory"; do
+    rm -rf "$dest"
+    echo "  removed ${dest#$project_root/}"
+  done
+  rm -f "$project_root/.claude/rules/memory.md" "$project_root/.cursor/rules/memory.mdc"
+  echo "  removed .claude/rules/memory.md and .cursor/rules/memory.mdc"
+}
+
+# Remove the fenced palace block that manage_palace_gitignore wrote.
+remove_palace_gitignore() {
+  local project_root="$1"
+  local gi="$project_root/.gitignore"
+  [[ -f "$gi" ]] || return 0
+  local start="# --- mempalace palace (managed by setup-memory) ---"
+  local end="# --- end mempalace palace ---"
+  if grep -qF "$start" "$gi"; then
+    sed -i '' "/$start/,/$end/d" "$gi"
+    # Clean up trailing blank lines left behind.
+    sed -i '' -e :a -e '/^[[:space:]]*$/{' -e '$d' -e N -e ba -e '}' "$gi" 2>/dev/null || true
+    echo "  removed mempalace block from $gi"
+  fi
+}
+
+uninstall() {
+  local project_root
+  project_root="$(pwd -P)"
+  local palace_path="$project_root/.mempalace"
+  local cursor_mcp="$project_root/.cursor/mcp.json"
+  local cursor_hooks="$project_root/.cursor/hooks.json"
+  local claude_mcp="$project_root/.mcp.json"
+  local claude_settings_local="$project_root/.claude/settings.local.json"
+  local ignore_file="$project_root/.mempalaceignore"
+
+  require_cmd jq
+
+  local bar
+  bar="$(printf '%*s' 68 '' | tr ' ' '=')"
+  echo "$bar"
+  echo "  $PROG_NAME · Uninstall  v$TOOL_VERSION"
+  echo ""
+  echo "  Deregisters the mempalace MCP server and hooks, removes the memory"
+  echo "  skill + rule, drops the .gitignore block, and re-enables Claude"
+  echo "  Code's built-in auto-memory. The globally-installed mempalace"
+  echo "  package is left in place (it is shared across projects)."
+  echo ""
+  printf '  %-16s %s\n' "Project Root" "$project_root"
+  echo "$bar"
+  echo ""
+
+  echo "── Removing MCP registration ──"
+  remove_mcp "$project_root" "$claude_mcp" "$cursor_mcp"
+  echo ""
+
+  echo "── Removing hooks ──"
+  remove_hooks "$claude_settings_local" "$cursor_hooks"
+  echo ""
+
+  echo "── Removing memory skill + rule ──"
+  remove_skill_and_rule "$project_root"
+  echo ""
+
+  echo "── Restoring .gitignore ──"
+  remove_palace_gitignore "$project_root"
+  echo ""
+
+  echo "── Re-enabling Claude Code auto-memory ──"
+  set_auto_memory "$project_root" true
+  echo ""
+
+  # Ignore file is a memory artefact — safe to drop on uninstall.
+  if [[ -f "$ignore_file" ]]; then
+    rm -f "$ignore_file"
+    echo "Removed $ignore_file"
+    echo ""
+  fi
+
+  # Palace DATA is the one destructive choice: chroma.sqlite3 holds saved
+  # memories and is committed to git. Preserve by default; delete only on
+  # explicit confirmation.
+  if [[ -d "$palace_path" ]]; then
+    echo "The palace directory still holds your saved memories:"
+    echo "  $palace_path"
+    echo "  (chroma.sqlite3 is committed to git — deleting loses that history)"
+    echo ""
+    read -r -p "Delete the .mempalace palace data too? [y/N] " do_del
+    if [[ "${do_del:-n}" =~ ^[Yy] ]]; then
+      rm -rf "$palace_path"
+      echo "Removed $palace_path"
+    else
+      echo "Kept $palace_path (run 'rm -rf .mempalace' yourself to remove it later)."
+    fi
+    echo ""
+  fi
+
+  echo "$bar"
+  echo "  Done. mempalace deregistered; auto-memory re-enabled."
+  echo "  The mempalace package is still installed globally — remove it with:"
+  echo "    python3 -m pip uninstall mempalace"
+  echo "  Restart your editor so it drops the (now-removed) MCP server + hooks."
+  echo "$bar"
+}
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 # Check whether all setup artefacts are already in place.
@@ -1133,6 +1341,7 @@ main() {
       echo "  cd /your/project && $0 mine projects   # mine project files only"
       echo "  cd /your/project && $0 mine convos     # backfill Claude Code chat history only"
       echo "  cd /your/project && $0 repair          # rebuild vector index from chroma.sqlite3"
+      echo "  cd /your/project && $0 uninstall       # deregister MCP/hooks, re-enable auto-memory"
       echo ""
       echo "Full setup installs mempalace (if needed) and configures:"
       echo "  .mempalace/                     — project-local palace data"
@@ -1172,6 +1381,10 @@ main() {
 
       require_setup "$py" "$palace_path"
       ensure_index "$py" "$project_root" "$palace_path" force
+      exit 0
+      ;;
+    uninstall | remove)
+      uninstall
       exit 0
       ;;
   esac
@@ -1323,6 +1536,15 @@ main() {
   # Always-on rule for how aggressively to use memory (from .agents/tools/).
   install_memory_rule "$project_root"
 
+  # ── Step 7: Disable Claude Code's built-in auto-memory ────────────────────
+  # mempalace is now the project's memory system; running Claude Code's native
+  # auto-memory alongside it duplicates effort and splits knowledge across two
+  # stores. Turn it off here; `uninstall` turns it back on.
+
+  echo ""
+  echo "── Disabling Claude Code auto-memory (mempalace replaces it) ──"
+  set_auto_memory "$project_root" false
+
   # ── Done ──────────────────────────────────────────────────────────────────
 
   echo ""
@@ -1347,6 +1569,9 @@ main() {
   echo ""
   echo "  Git: chroma.sqlite3 is committed (portable data); the vector index is"
   echo "       gitignored and rebuilt locally — run '$0 repair' after a checkout."
+  echo ""
+  echo "  Claude Code auto-memory is now OFF (mempalace replaces it)."
+  echo "  Undo everything with: $0 uninstall"
   echo ""
   echo "  Next steps:"
   echo "    1. Restart your editor to load the MCP server."

@@ -26,10 +26,11 @@ cd /your/project
 .agents/scripts/init.sh
 ```
 
-The script runs two steps:
+The script runs three steps:
 
 1. **Rules** — copies `.agents/rules/` into `.cursor/rules/` and `.claude/rules/`
 2. **Skills** — copies `.agents/skills/` into `.cursor/skills/` and `.claude/skills/`
+3. **Auto-memory** — sets `autoMemoryEnabled: true` in `.claude/settings.json`, turning on Claude Code's built-in auto-memory (the default). `setup-memory.sh` turns this off (mempalace replaces it) and back on when uninstalled.
 
 Optional setup (run separately when you want them):
 
@@ -37,6 +38,17 @@ Optional setup (run separately when you want them):
 - `.agents/scripts/setup-figma.sh` — Figma tool skills
 - `.agents/scripts/setup-memory.sh` — persistent memory (mempalace) + the `memory` skill
 - In your editor: `/create-readme` to bootstrap the README overview
+
+**Uninstall.** Every setup script takes an `uninstall` subcommand that reverses exactly what its install wrote:
+
+```bash
+.agents/scripts/init.sh uninstall          # remove copied rules + skills, drop the auto-memory flag
+.agents/scripts/setup-github.sh uninstall   # remove GitHub skills + MCP server
+.agents/scripts/setup-figma.sh uninstall    # remove Figma skills (incl. figma-use) + MCP server
+.agents/scripts/setup-memory.sh uninstall   # deregister mempalace MCP/hooks, remove skill+rule, re-enable auto-memory
+```
+
+`setup-memory.sh uninstall` preserves your palace data by default (it prompts before deleting `.mempalace/`, whose `chroma.sqlite3` is committed) and leaves the globally-installed `mempalace` package in place.
 
 ## Setup Tools
 
@@ -115,6 +127,7 @@ The script walks you through ignore patterns, palace initialisation (which index
 - `.agents/skills/memory/SKILL.md` — the `memory` tool skill (also mirrored into `.claude/skills/memory/` and `.cursor/skills/memory/`)
 - `.cursor/mcp.json` and `.mcp.json` — MCP server merged in
 - `.cursor/hooks.json` and `.claude/settings.local.json` — auto-save + pre-compact hooks
+- `.claude/settings.json` — `autoMemoryEnabled: false` (mempalace replaces Claude Code's native auto-memory; `uninstall` restores it to `true`)
 
 Re-run any time to upgrade mempalace or refresh configuration — on an already-initialised project it skips init and simply offers to re-mine. To re-index the project after large changes without the full walkthrough:
 

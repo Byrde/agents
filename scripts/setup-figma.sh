@@ -135,6 +135,7 @@ print_summary() {
   echo ""
   echo "  Authenticate the MCP server through your editor on first use (OAuth)."
   echo "  Verify with: .agents/scripts/doctor.sh"
+  echo "  Undo with:   .agents/scripts/setup-figma.sh uninstall"
   echo "$bar"
 }
 
@@ -360,6 +361,75 @@ merge_claude_mcp_figma() {
   echo "Restart Claude Code if it is running so MCP picks up changes to $path"
 }
 
+# ─── Uninstall ────────────────────────────────────────────────────────────────
+
+# Remove a skill from .agents/skills/ and its editor mirrors. Reverses
+# install_figma_use / render_skill + sync_skill_to_editors.
+remove_skill() {
+  local project_root="$1" skill="$2"
+  rm -rf "$SKILLS_DIR/$skill"
+  echo "  removed skills/$skill"
+  local dest
+  for dest in "$project_root/.claude/skills/$skill" "$project_root/.cursor/skills/$skill"; do
+    rm -rf "$dest"
+    echo "  removed ${dest#$project_root/}"
+  done
+}
+
+# Strip the figma MCP server from a JSON config. Reverses the merge_*_figma
+# helpers (both write .mcpServers.figma).
+remove_mcp_figma() {
+  local path="$1"
+  [[ -f "$path" ]] || return 0
+  jq -e '.mcpServers.figma' "$path" >/dev/null 2>&1 || return 0
+  local tmp
+  tmp="$(mktemp)"
+  if jq 'del(.mcpServers.figma)' "$path" >"$tmp" 2>/dev/null; then
+    mv "$tmp" "$path"
+    echo "  removed mcpServers.figma from $path"
+  else
+    rm -f "$tmp"
+    echo "  ⚠ jq failed on $path — left unchanged"
+  fi
+}
+
+uninstall() {
+  require_cmd jq
+
+  local project_root
+  project_root="$(pwd -P)"
+  local cursor_mcp="$project_root/.cursor/mcp.json"
+  local claude_mcp="$project_root/.mcp.json"
+
+  local bar
+  bar="$(printf '%*s' 68 '' | tr ' ' '=')"
+  echo "$bar"
+  echo "  $PROG_NAME · Uninstall  v$TOOL_VERSION"
+  echo ""
+  echo "  Removes the Figma tool skills (including the vendored figma-use) and"
+  echo "  the Figma MCP server from your editor configs."
+  echo ""
+  printf '  %-16s %s\n' "Project Root" "$project_root"
+  echo "$bar"
+  echo ""
+
+  echo "── Removing skills ──"
+  remove_skill "$project_root" "figma-design-system"
+  remove_skill "$project_root" "figma-design-file"
+  remove_skill "$project_root" "figma-use"
+  echo ""
+
+  echo "── Removing MCP registration ──"
+  remove_mcp_figma "$cursor_mcp"
+  remove_mcp_figma "$claude_mcp"
+  echo ""
+
+  echo "$bar"
+  echo "  Done. Figma skills and MCP server removed."
+  echo "  Restart your editor so it drops the (now-removed) MCP server."
+  echo "$bar"
+}
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 main() {
@@ -371,7 +441,8 @@ main() {
       echo "Figma MCP server into your editor's project-local config."
       echo ""
       echo "Usage:"
-      echo "  cd /your/project && $0"
+      echo "  cd /your/project && $0              # install"
+      echo "  cd /your/project && $0 uninstall    # remove skills + Figma MCP"
       echo ""
       echo "Opt-in capabilities (pick either, both, or neither):"
       echo "  figma-design-system   tokens, components, library publishing"
@@ -386,6 +457,10 @@ main() {
       echo "  .agents/skills/figma-design-file/SKILL.md  — per opt-in"
       echo "  .cursor/mcp.json   — Cursor project MCP"
       echo "  .mcp.json          — Claude Code project MCP"
+      exit 0
+      ;;
+    uninstall | remove)
+      uninstall
       exit 0
       ;;
   esac
