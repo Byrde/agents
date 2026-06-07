@@ -15,6 +15,7 @@
 #   - .cursor/skills/         — agent skills copied into Cursor dir
 #   - .claude/skills/         — agent skills copied into Claude Code dir
 #   - .claude/settings.json   — autoMemoryEnabled: true (Claude Code default)
+#                               + autoMemoryDirectory: ./.claude/memory
 #
 # Does not modify $HOME.
 #
@@ -35,6 +36,11 @@ RULES_DIR="$AGENTS_ROOT/rules"
 TOOL_VERSION="0.1.0"
 PROG_NAME="$(basename "${BASH_SOURCE[0]}")"
 
+# Project-local directory for Claude Code's built-in auto-memory (the
+# autoMemoryDirectory setting). Keeps each project's memory inside its own
+# .claude/ rather than the shared global default.
+AUTO_MEMORY_DIR="./.claude/memory"
+
 # ─── Utilities ───────────────────────────────────────────────────────────────
 
 die() {
@@ -42,35 +48,40 @@ die() {
   exit 1
 }
 
-# Set Claude Code's built-in auto-memory flag in .claude/settings.json.
-# Auto-memory is ON by default; init turns it on explicitly so the project
-# state is unambiguous, and setup-memory turns it off (mempalace takes over).
+# Configure Claude Code's built-in auto-memory in .claude/settings.json:
+# the autoMemoryEnabled flag and (optionally) the autoMemoryDirectory path.
+# Auto-memory is ON by default; init turns it on explicitly — and pins the
+# directory into this project's .claude/ — so the project state is
+# unambiguous. setup-memory turns the flag off (mempalace takes over).
 # Best-effort: needs jq to merge safely. Warns and skips if jq is missing —
 # the auto-memory default still applies, it just isn't written explicitly.
 set_auto_memory() {
-  local project_root="$1" value="$2"  # value: true | false
+  local project_root="$1" value="$2" dir="${3:-}"  # value: true | false; dir: optional path
   local settings="$project_root/.claude/settings.json"
   if ! command -v jq >/dev/null 2>&1; then
-    echo "  ⚠ jq not found — skipping autoMemoryEnabled=$value"
-    echo "    (set \"autoMemoryEnabled\": $value in $settings manually if needed)"
+    echo "  ⚠ jq not found — skipping autoMemoryEnabled=$value${dir:+ / autoMemoryDirectory=$dir}"
+    echo "    (set these in $settings manually if needed)"
     return 0
   fi
   mkdir -p "$(dirname "$settings")"
-  local tmp
+  local tmp filter
   tmp="$(mktemp)"
+  # Always set the flag; set the directory only when one was supplied.
+  filter='.autoMemoryEnabled = $v'
+  [[ -n "$dir" ]] && filter="$filter | .autoMemoryDirectory = \$d"
   if [[ -f "$settings" ]]; then
-    jq --argjson v "$value" '.autoMemoryEnabled = $v' "$settings" >"$tmp" \
-      || { echo "  ⚠ jq failed on $settings — leaving autoMemoryEnabled unchanged"; rm -f "$tmp"; return 0; }
+    jq --argjson v "$value" --arg d "$dir" "$filter" "$settings" >"$tmp" \
+      || { echo "  ⚠ jq failed on $settings — leaving auto-memory settings unchanged"; rm -f "$tmp"; return 0; }
   else
-    jq -n --argjson v "$value" '{autoMemoryEnabled: $v}' >"$tmp"
+    jq -n --argjson v "$value" --arg d "$dir" "{autoMemoryEnabled: \$v}${dir:+ + {autoMemoryDirectory: \$d}}" >"$tmp"
   fi
   mv "$tmp" "$settings"
-  echo "  ✓ autoMemoryEnabled=$value → .claude/settings.json"
+  echo "  ✓ autoMemoryEnabled=$value${dir:+, autoMemoryDirectory=$dir} → .claude/settings.json"
 }
 
-# Remove the autoMemoryEnabled key from .claude/settings.json (uninstall),
-# reverting Claude Code to its built-in default. Leaves any other settings
-# intact, and removes the file only if it becomes an empty object.
+# Remove the auto-memory keys from .claude/settings.json (uninstall), reverting
+# Claude Code to its built-in defaults. Leaves any other settings intact, and
+# removes the file only if it becomes an empty object.
 del_auto_memory() {
   local project_root="$1"
   local settings="$project_root/.claude/settings.json"
@@ -78,13 +89,13 @@ del_auto_memory() {
   command -v jq >/dev/null 2>&1 || { echo "  ⚠ jq not found — leaving $settings as-is"; return 0; }
   local tmp
   tmp="$(mktemp)"
-  if jq 'del(.autoMemoryEnabled)' "$settings" >"$tmp" 2>/dev/null; then
+  if jq 'del(.autoMemoryEnabled) | del(.autoMemoryDirectory)' "$settings" >"$tmp" 2>/dev/null; then
     if [[ "$(jq -S 'keys' "$tmp")" == "[]" ]]; then
       rm -f "$tmp" "$settings"
-      echo "  ✓ removed autoMemoryEnabled (and empty .claude/settings.json)"
+      echo "  ✓ removed auto-memory settings (and empty .claude/settings.json)"
     else
       mv "$tmp" "$settings"
-      echo "  ✓ removed autoMemoryEnabled from .claude/settings.json"
+      echo "  ✓ removed autoMemoryEnabled + autoMemoryDirectory from .claude/settings.json"
     fi
   else
     rm -f "$tmp"
@@ -122,7 +133,7 @@ print_summary() {
   echo "  Installed:"
   echo "    ✓ Rules   → .cursor/rules/  and  .claude/rules/"
   echo "    ✓ Skills  → .cursor/skills/ and  .claude/skills/"
-  echo "    ✓ Claude Code auto-memory → on (.claude/settings.json)"
+  echo "    ✓ Claude Code auto-memory → on, dir $AUTO_MEMORY_DIR (.claude/settings.json)"
   echo ""
   echo "  Optional next steps:"
   echo "    • .agents/scripts/setup-github.sh   (GitHub tool skills)"
@@ -209,11 +220,12 @@ enable_auto_memory() {
 
   echo "── Step 3/3: Claude Code auto-memory ──────────────────────────────"
   echo ""
-  echo "  Turning ON Claude Code's built-in auto-memory (the default)."
-  echo "  setup-memory.sh turns this off — mempalace replaces it — and back"
-  echo "  on when uninstalled."
+  echo "  Turning ON Claude Code's built-in auto-memory (the default) and"
+  echo "  pinning its directory to $AUTO_MEMORY_DIR for this project."
+  echo "  setup-memory.sh turns the flag off — mempalace replaces it — and"
+  echo "  back on when uninstalled."
   echo ""
-  set_auto_memory "$project_root" true
+  set_auto_memory "$project_root" true "$AUTO_MEMORY_DIR"
   echo ""
 }
 
@@ -304,11 +316,12 @@ main() {
       echo "  cd /your/project && $0 uninstall    # remove what install wrote"
       echo ""
       echo "Install copies .agents/rules/ and .agents/skills/ into .cursor/ and"
-      echo ".claude/, and sets autoMemoryEnabled: true in .claude/settings.json"
-      echo "(Claude Code's built-in auto-memory; the default)."
+      echo ".claude/, and configures Claude Code's built-in auto-memory in"
+      echo ".claude/settings.json: autoMemoryEnabled: true (the default) and"
+      echo "autoMemoryDirectory: ./.claude/memory (project-local storage)."
       echo ""
-      echo "Uninstall removes those copied rules/skills and the auto-memory flag."
-      echo "It does not touch MCP/hooks config from the setup-*.sh scripts."
+      echo "Uninstall removes those copied rules/skills and the auto-memory"
+      echo "settings. It does not touch MCP/hooks config from the setup-*.sh scripts."
       exit 0
       ;;
     uninstall | remove)

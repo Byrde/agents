@@ -30,7 +30,7 @@ The script runs three steps:
 
 1. **Rules** — copies `.agents/rules/` into `.cursor/rules/` and `.claude/rules/`
 2. **Skills** — copies `.agents/skills/` into `.cursor/skills/` and `.claude/skills/`
-3. **Auto-memory** — sets `autoMemoryEnabled: true` in `.claude/settings.json`, turning on Claude Code's built-in auto-memory (the default). `setup-memory.sh` turns this off (mempalace replaces it) and back on when uninstalled.
+3. **Auto-memory** — in `.claude/settings.json`, sets `autoMemoryEnabled: true` (turning on Claude Code's built-in auto-memory, the default) and `autoMemoryDirectory: ./.claude/memory` (project-local storage). `setup-memory.sh` turns the flag off (mempalace replaces it) and back on when uninstalled.
 
 Optional setup (run separately when you want them):
 
