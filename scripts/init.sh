@@ -14,8 +14,12 @@
 #   - .claude/rules/          — global AI rules for Claude Code
 #   - .cursor/skills/         — agent skills copied into Cursor dir
 #   - .claude/skills/         — agent skills copied into Claude Code dir
-#   - .claude/settings.json   — autoMemoryEnabled: true (Claude Code default)
-#                               + autoMemoryDirectory: ./.claude/memory
+#   - .claude/settings.json       — autoMemoryEnabled: true (Claude Code default)
+#   - .claude/settings.local.json — autoMemoryDirectory: <abs>/.claude/memory
+#                                   (machine-specific; Claude Code ignores
+#                                   relative paths, so we resolve it at init time)
+#   - .gitignore                  — re-includes .claude/memory/ so the memory
+#                                   CONTENT is git-tracked and shared with the team
 #
 # Does not modify $HOME.
 #
@@ -36,10 +40,11 @@ RULES_DIR="$AGENTS_ROOT/rules"
 TOOL_VERSION="0.1.0"
 PROG_NAME="$(basename "${BASH_SOURCE[0]}")"
 
-# Project-local directory for Claude Code's built-in auto-memory (the
-# autoMemoryDirectory setting). Keeps each project's memory inside its own
-# .claude/ rather than the shared global default.
-AUTO_MEMORY_DIR="./.claude/memory"
+# Project-local directory for Claude Code's built-in auto-memory, relative to the
+# project root. The memory CONTENT lives here and is git-tracked (see
+# manage_memory_gitignore) so it is shared across the team; the absolute path is
+# written per-machine into settings.local.json (see set_auto_memory_dir_local).
+AUTO_MEMORY_DIR=".claude/memory"
 
 # ─── Utilities ───────────────────────────────────────────────────────────────
 
@@ -66,9 +71,15 @@ set_auto_memory() {
   mkdir -p "$(dirname "$settings")"
   local tmp filter
   tmp="$(mktemp)"
-  # Always set the flag; set the directory only when one was supplied.
+  # Always set the flag. Set the directory when supplied; otherwise strip any
+  # stale autoMemoryDirectory (we now pin the absolute path in settings.local.json
+  # instead — a relative path here is silently ignored by Claude Code).
   filter='.autoMemoryEnabled = $v'
-  [[ -n "$dir" ]] && filter="$filter | .autoMemoryDirectory = \$d"
+  if [[ -n "$dir" ]]; then
+    filter="$filter | .autoMemoryDirectory = \$d"
+  else
+    filter="$filter | del(.autoMemoryDirectory)"
+  fi
   if [[ -f "$settings" ]]; then
     jq --argjson v "$value" --arg d "$dir" "$filter" "$settings" >"$tmp" \
       || { echo "  ⚠ jq failed on $settings — leaving auto-memory settings unchanged"; rm -f "$tmp"; return 0; }
@@ -103,6 +114,105 @@ del_auto_memory() {
   fi
 }
 
+# Pin Claude Code's auto-memory DIRECTORY to an absolute, project-local path in
+# .claude/settings.local.json. The path MUST be absolute (or ~/-prefixed) —
+# Claude Code silently ignores relative paths and falls back to its global
+# default (the bug this replaces). We resolve it at init time and write it to the
+# LOCAL (always-gitignored, machine-specific) settings file rather than the
+# regenerated settings.json: the absolute path differs per machine/clone, while
+# the memory CONTENT under .claude/memory/ is committed and shared (see
+# manage_memory_gitignore). Local scope also wins over project scope in Claude
+# Code's settings precedence. Best-effort: needs jq.
+set_auto_memory_dir_local() {
+  local project_root="$1" abs_dir="$2"
+  local settings="$project_root/.claude/settings.local.json"
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  ⚠ jq not found — skipping autoMemoryDirectory=$abs_dir (set it in $settings manually)"
+    return 0
+  fi
+  mkdir -p "$(dirname "$settings")"
+  local tmp
+  tmp="$(mktemp)"
+  if [[ -f "$settings" ]]; then
+    jq --arg d "$abs_dir" '.autoMemoryDirectory = $d' "$settings" >"$tmp" \
+      || { echo "  ⚠ jq failed on $settings — leaving it unchanged"; rm -f "$tmp"; return 0; }
+  else
+    jq -n --arg d "$abs_dir" '{autoMemoryDirectory: $d}' >"$tmp"
+  fi
+  mv "$tmp" "$settings"
+  echo "  ✓ autoMemoryDirectory=$abs_dir → .claude/settings.local.json"
+}
+
+# Remove the autoMemoryDirectory key from .claude/settings.local.json (uninstall),
+# deleting the file if it becomes an empty object. Mirrors del_auto_memory.
+del_auto_memory_dir_local() {
+  local project_root="$1"
+  local settings="$project_root/.claude/settings.local.json"
+  [[ -f "$settings" ]] || return 0
+  command -v jq >/dev/null 2>&1 || { echo "  ⚠ jq not found — leaving $settings as-is"; return 0; }
+  local tmp
+  tmp="$(mktemp)"
+  if jq 'del(.autoMemoryDirectory)' "$settings" >"$tmp" 2>/dev/null; then
+    if [[ "$(jq -S 'keys' "$tmp")" == "[]" ]]; then
+      rm -f "$tmp" "$settings"
+      echo "  ✓ removed autoMemoryDirectory (and empty .claude/settings.local.json)"
+    else
+      mv "$tmp" "$settings"
+      echo "  ✓ removed autoMemoryDirectory from .claude/settings.local.json"
+    fi
+  else
+    rm -f "$tmp"
+    echo "  ⚠ jq failed on $settings — leaving it unchanged"
+  fi
+}
+
+# Ensure .claude/memory/ is git-TRACKED so its contents (the shared auto-memory)
+# sync across the team, while the rest of .claude/ stays ignored. Many projects
+# ignore the whole .claude/ tree (it is regenerated by this script); a blanket
+# ".claude" ignore also blocks re-including any child, so we convert it to
+# ".claude/*" and negate ".claude/memory/". No-op when .claude/memory/ is already
+# trackable (e.g. the project does not ignore .claude/ at all), so we never
+# newly-ignore a .claude/ that the project intentionally commits.
+manage_memory_gitignore() {
+  local project_root="$1"
+  local gi="$project_root/.gitignore"
+  if ! git -C "$project_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo "  (not a git repo — skipping .gitignore re-include)"
+    return 0
+  fi
+  if ! git -C "$project_root" check-ignore -q "$AUTO_MEMORY_DIR/"; then
+    echo "  ✓ $AUTO_MEMORY_DIR/ already tracked by git — no .gitignore change"
+    return 0
+  fi
+  local start="# --- byrde-agents shared memory (managed by init.sh) ---"
+  local end="# --- end byrde-agents shared memory ---"
+  touch "$gi"
+  # Drop any prior managed block so this is idempotent.
+  sed -i '' "/$start/,/$end/d" "$gi" 2>/dev/null || true
+  # Neutralise blanket .claude ignore lines (exact matches, optional leading/
+  # trailing slash) — they block re-including the memory subdir.
+  sed -i '' -E '/^[[:space:]]*\/?\.claude\/?[[:space:]]*$/d' "$gi" 2>/dev/null || true
+  # Trim trailing blank lines left behind.
+  sed -i '' -e :a -e '/^[[:space:]]*$/{' -e '$d' -e N -e ba -e '}' "$gi" 2>/dev/null || true
+  printf '\n%s\n.claude/*\n!%s/\n%s\n' "$start" "$AUTO_MEMORY_DIR" "$end" >>"$gi"
+  echo "  ✓ re-included $AUTO_MEMORY_DIR/ in .gitignore (rest of .claude/ stays ignored)"
+}
+
+# Reverse manage_memory_gitignore: drop the managed block and restore the blanket
+# .claude ignore it replaced. Only acts when our managed block is present.
+restore_memory_gitignore() {
+  local project_root="$1"
+  local gi="$project_root/.gitignore"
+  [[ -f "$gi" ]] || return 0
+  local start="# --- byrde-agents shared memory (managed by init.sh) ---"
+  local end="# --- end byrde-agents shared memory ---"
+  grep -qF "$start" "$gi" || return 0
+  sed -i '' "/$start/,/$end/d" "$gi" 2>/dev/null || true
+  sed -i '' -e :a -e '/^[[:space:]]*$/{' -e '$d' -e N -e ba -e '}' "$gi" 2>/dev/null || true
+  printf '\n.claude\n' >>"$gi"
+  echo "  ✓ restored blanket .claude ignore in .gitignore"
+}
+
 print_intro() {
   local project_root="$1"
   local bar
@@ -133,7 +243,8 @@ print_summary() {
   echo "  Installed:"
   echo "    ✓ Rules   → .cursor/rules/  and  .claude/rules/"
   echo "    ✓ Skills  → .cursor/skills/ and  .claude/skills/"
-  echo "    ✓ Claude Code auto-memory → on, dir $AUTO_MEMORY_DIR (.claude/settings.json)"
+  echo "    ✓ Claude Code auto-memory → on; dir $AUTO_MEMORY_DIR (abs path in"
+  echo "        settings.local.json), content git-tracked & shared with the team"
   echo ""
   echo "  Optional next steps:"
   echo "    • .agents/scripts/setup-github.sh   (GitHub tool skills)"
@@ -218,14 +329,20 @@ copy_skills() {
 enable_auto_memory() {
   local project_root="$1"
 
+  local abs_dir="$project_root/$AUTO_MEMORY_DIR"
+
   echo "── Step 3/3: Claude Code auto-memory ──────────────────────────────"
   echo ""
   echo "  Turning ON Claude Code's built-in auto-memory (the default) and"
-  echo "  pinning its directory to $AUTO_MEMORY_DIR for this project."
-  echo "  setup-memory.sh turns the flag off — mempalace replaces it — and"
-  echo "  back on when uninstalled."
+  echo "  pinning its directory to an absolute path in settings.local.json"
+  echo "  (machine-specific). The memory CONTENT under $AUTO_MEMORY_DIR/ is"
+  echo "  git-tracked and shared across the team. setup-memory.sh turns the"
+  echo "  flag off — mempalace replaces it — and back on when uninstalled."
   echo ""
-  set_auto_memory "$project_root" true "$AUTO_MEMORY_DIR"
+  mkdir -p "$abs_dir"
+  set_auto_memory "$project_root" true              # enabled flag → settings.json
+  set_auto_memory_dir_local "$project_root" "$abs_dir"
+  manage_memory_gitignore "$project_root"
   echo ""
 }
 
@@ -295,6 +412,8 @@ uninstall() {
   echo "── Reverting auto-memory ──────────────────────────────────────────"
   echo ""
   del_auto_memory "$project_root"
+  del_auto_memory_dir_local "$project_root"
+  restore_memory_gitignore "$project_root"
   echo ""
 
   echo "$bar"
@@ -316,9 +435,11 @@ main() {
       echo "  cd /your/project && $0 uninstall    # remove what install wrote"
       echo ""
       echo "Install copies .agents/rules/ and .agents/skills/ into .cursor/ and"
-      echo ".claude/, and configures Claude Code's built-in auto-memory in"
-      echo ".claude/settings.json: autoMemoryEnabled: true (the default) and"
-      echo "autoMemoryDirectory: ./.claude/memory (project-local storage)."
+      echo ".claude/, and configures Claude Code's built-in auto-memory:"
+      echo "autoMemoryEnabled: true in .claude/settings.json, and an absolute"
+      echo "autoMemoryDirectory (<project>/.claude/memory) in settings.local.json."
+      echo "It also re-includes .claude/memory/ in .gitignore so the memory"
+      echo "content is git-tracked and shared across the team."
       echo ""
       echo "Uninstall removes those copied rules/skills and the auto-memory"
       echo "settings. It does not touch MCP/hooks config from the setup-*.sh scripts."
