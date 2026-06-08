@@ -11,3 +11,7 @@ skills/memory/
 
 # Vendored upstream skill — fetched from figma/mcp-server-guide by setup-figma.sh.
 skills/figma-use/
+
+# Installed-tools manifest — per-checkout state written by setup-*.sh, read by
+# doctor.sh. Not submodule-tracked content.
+.manifest.local.yml

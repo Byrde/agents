@@ -39,6 +39,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=lib/manifest.sh
+. "$SCRIPT_DIR/lib/manifest.sh"
 
 TOOL_VERSION="0.1.0"
 PROG_NAME="$(basename "${BASH_SOURCE[0]}")"
@@ -1181,8 +1183,13 @@ remove_skill_and_rule() {
     rm -rf "$dest"
     echo "  removed ${dest#$project_root/}"
   done
-  rm -f "$project_root/.claude/rules/memory.md" "$project_root/.cursor/rules/memory.mdc"
-  echo "  removed .claude/rules/memory.md and .cursor/rules/memory.mdc"
+  # Clear the memory rule from both editor dirs, both extensions. Install only
+  # writes memory.md → .claude and memory.mdc → .cursor, but past setups may
+  # have cross-placed them, so remove every memory.{md,mdc} defensively.
+  rm -f "$project_root/.claude/rules/memory.md"  "$project_root/.claude/rules/memory.mdc" \
+        "$project_root/.cursor/rules/memory.md"  "$project_root/.cursor/rules/memory.mdc"
+  echo "  removed memory rule (memory.{md,mdc}) from .claude/rules/ and .cursor/rules/"
+  manifest_remove "memory"
 }
 
 # Remove the fenced palace block that manage_palace_gitignore wrote.
@@ -1533,6 +1540,7 @@ main() {
   # .agents/skills/ is the source of truth; mirror into the editor skill dirs
   # so Claude Code and Cursor pick it up without re-running init.sh.
   sync_skill_to_editors "$project_root" "memory"
+  manifest_add "memory"
   # Always-on rule for how aggressively to use memory (from .agents/tools/).
   install_memory_rule "$project_root"
 

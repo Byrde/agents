@@ -28,6 +28,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=lib/manifest.sh
+. "$SCRIPT_DIR/lib/manifest.sh"
 TOOL_DIR="$AGENTS_ROOT/tools"
 SKILLS_DIR="$AGENTS_ROOT/skills"
 DESIGN_SYSTEM_TEMPLATE="$TOOL_DIR/figma-design-system.md.template"
@@ -417,6 +419,9 @@ uninstall() {
   remove_skill "$project_root" "figma-design-system"
   remove_skill "$project_root" "figma-design-file"
   remove_skill "$project_root" "figma-use"
+  manifest_remove "figma-design-system"
+  manifest_remove "figma-design-file"
+  manifest_remove "figma-use"
   echo ""
 
   echo "── Removing MCP registration ──"
@@ -777,8 +782,15 @@ main() {
   # editor-local skill dirs. setup-figma writes new skills, so mirror the
   # ones we just installed so Claude Code and Cursor can pick them up.
   sync_skill_to_editors "$project_root" "figma-use"
-  [[ "$install_ds" == "y" ]] && sync_skill_to_editors "$project_root" "figma-design-system"
-  [[ "$install_df" == "y" ]] && sync_skill_to_editors "$project_root" "figma-design-file"
+  manifest_add "figma-use"
+  if [[ "$install_ds" == "y" ]]; then
+    sync_skill_to_editors "$project_root" "figma-design-system"
+    manifest_add "figma-design-system"
+  fi
+  if [[ "$install_df" == "y" ]]; then
+    sync_skill_to_editors "$project_root" "figma-design-file"
+    manifest_add "figma-design-file"
+  fi
 
   # ── Step 6: Merge MCP ────────────────────────────────────────────────────
 

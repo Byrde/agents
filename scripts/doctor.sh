@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
-# Diagnose the health of all MCP servers configured by the Byrde Agents
+# Diagnose the health of the MCP servers configured by the Byrde Agents
 # setup scripts (GitHub, Figma, Mempalace) for both Cursor and Claude Code.
+#
+# Only tools that are ACTUALLY set up are validated. The gitignored manifest
+# (.manifest.local.yml, written by setup-*.sh and pruned by their uninstall) is
+# the source of truth: a tool whose capability key is absent — never installed,
+# or installed and later uninstalled — is omitted from the report entirely, so
+# a leftover directory (e.g. a preserved .mempalace/ palace) never produces
+# phantom checks. A key present with its files missing surfaces as drift.
 #
 # Run from the repository/project root:
 #   cd /path/to/project && /path/to/doctor.sh
@@ -12,6 +19,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=lib/manifest.sh
+. "$SCRIPT_DIR/lib/manifest.sh"
 
 TOOL_VERSION="0.1.0"
 PROG_NAME="$(basename "${BASH_SOURCE[0]}")"
@@ -101,32 +110,39 @@ claude_mcp_has() {
 # ─── GitHub checks ───────────────────────────────────────────────────────────
 
 check_github() {
+  # Skill files (per capability)
+  local sc_skill="$AGENTS_ROOT/skills/github-source-control/SKILL.md"
+  local pr_skill="$AGENTS_ROOT/skills/github-projects/SKILL.md"
+
+  # Gate: the manifest is the source of truth for what's installed. If neither
+  # GitHub capability is recorded there, GitHub isn't set up in this checkout —
+  # omit the section entirely (uninstall removes the manifest entry).
+  manifest_has github-source-control || manifest_has github-projects || return 0
+
   echo ""
   echo "GitHub"
   echo "------"
 
-  # Skill files (per capability)
-  local sc_skill="$AGENTS_ROOT/skills/github-source-control/SKILL.md"
-  local pr_skill="$AGENTS_ROOT/skills/github-projects/SKILL.md"
-  local any=false
-
-  if [[ -f "$sc_skill" ]]; then
-    pass "Skill: skills/github-source-control/SKILL.md"
-    any=true
+  # Per capability: the manifest says it's installed, so the skill file MUST be
+  # present — a missing file is drift worth flagging, not a silent skip.
+  if manifest_has github-source-control; then
+    if [[ -f "$sc_skill" ]]; then
+      pass "Skill: skills/github-source-control/SKILL.md"
+    else
+      fail "Skill: github-source-control in manifest but SKILL.md missing — re-run setup-github.sh"
+    fi
   else
-    skip "Skill: skills/github-source-control/SKILL.md not installed"
+    skip "Skill: github-source-control not installed"
   fi
 
-  if [[ -f "$pr_skill" ]]; then
-    pass "Skill: skills/github-projects/SKILL.md"
-    any=true
+  if manifest_has github-projects; then
+    if [[ -f "$pr_skill" ]]; then
+      pass "Skill: skills/github-projects/SKILL.md"
+    else
+      fail "Skill: github-projects in manifest but SKILL.md missing — re-run setup-github.sh"
+    fi
   else
-    skip "Skill: skills/github-projects/SKILL.md not installed"
-  fi
-
-  if [[ "$any" != "true" ]]; then
-    skip "No GitHub skills installed — run setup-github.sh to install"
-    return
+    skip "Skill: github-projects not installed"
   fi
 
   # Cursor MCP config
@@ -184,32 +200,36 @@ check_github() {
 # ─── Figma checks ────────────────────────────────────────────────────────────
 
 check_figma() {
+  # Skill files (per capability)
+  local ds_skill="$AGENTS_ROOT/skills/figma-design-system/SKILL.md"
+  local df_skill="$AGENTS_ROOT/skills/figma-design-file/SKILL.md"
+
+  # Gate: the manifest is the source of truth. If neither Figma capability is
+  # recorded there, Figma isn't set up in this checkout — omit it entirely.
+  manifest_has figma-design-system || manifest_has figma-design-file || return 0
+
   echo ""
   echo "Figma"
   echo "-----"
 
-  # Skill files (per capability)
-  local ds_skill="$AGENTS_ROOT/skills/figma-design-system/SKILL.md"
-  local df_skill="$AGENTS_ROOT/skills/figma-design-file/SKILL.md"
-  local any=false
-
-  if [[ -f "$ds_skill" ]]; then
-    pass "Skill: skills/figma-design-system/SKILL.md"
-    any=true
+  if manifest_has figma-design-system; then
+    if [[ -f "$ds_skill" ]]; then
+      pass "Skill: skills/figma-design-system/SKILL.md"
+    else
+      fail "Skill: figma-design-system in manifest but SKILL.md missing — re-run setup-figma.sh"
+    fi
   else
-    skip "Skill: skills/figma-design-system/SKILL.md not installed"
+    skip "Skill: figma-design-system not installed"
   fi
 
-  if [[ -f "$df_skill" ]]; then
-    pass "Skill: skills/figma-design-file/SKILL.md"
-    any=true
+  if manifest_has figma-design-file; then
+    if [[ -f "$df_skill" ]]; then
+      pass "Skill: skills/figma-design-file/SKILL.md"
+    else
+      fail "Skill: figma-design-file in manifest but SKILL.md missing — re-run setup-figma.sh"
+    fi
   else
-    skip "Skill: skills/figma-design-file/SKILL.md not installed"
-  fi
-
-  if [[ "$any" != "true" ]]; then
-    skip "No Figma skills installed — run setup-figma.sh to install"
-    return
+    skip "Skill: figma-design-file not installed"
   fi
 
   # figma-use overlay (vendored from figma/mcp-server-guide)
@@ -257,18 +277,24 @@ check_figma() {
 # ─── Mempalace checks ───────────────────────────────────────────────────────
 
 check_mempalace() {
+  local palace_path="$PROJECT_ROOT/.mempalace"
+
+  # Gate: the manifest is the source of truth. The `memory` key is removed on
+  # `setup-memory.sh uninstall`, so an uninstalled palace disappears from the
+  # report even though uninstall deliberately PRESERVES the .mempalace/
+  # directory (it holds committed memories) — a stale dir is no longer enough
+  # to trigger phantom checks.
+  manifest_has memory || return 0
+
   echo ""
   echo "Mempalace"
   echo "---------"
-
-  local palace_path="$PROJECT_ROOT/.mempalace"
 
   # Palace directory
   if [[ -d "$palace_path" ]]; then
     pass "Palace directory: $palace_path"
   else
-    skip "Palace directory: $palace_path not found (run setup-memory.sh)"
-    return
+    warn "Palace directory: $palace_path not found (run setup-memory.sh)"
   fi
 
   # Memory skill

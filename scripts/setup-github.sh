@@ -28,6 +28,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=lib/manifest.sh
+. "$SCRIPT_DIR/lib/manifest.sh"
 TOOL_DIR="$AGENTS_ROOT/tools"
 SKILLS_DIR="$AGENTS_ROOT/skills"
 SOURCE_CONTROL_TEMPLATE="$TOOL_DIR/github-source-control.md.template"
@@ -394,6 +396,8 @@ uninstall() {
   echo "── Removing skills ──"
   remove_skill "$project_root" "github-source-control"
   remove_skill "$project_root" "github-projects"
+  manifest_remove "github-source-control"
+  manifest_remove "github-projects"
   echo ""
 
   echo "── Removing MCP registration ──"
@@ -556,11 +560,13 @@ main() {
     # .agents/skills/ is the source of truth; mirror into the editor skill dirs
     # so Claude Code and Cursor pick it up without re-running init.sh.
     sync_skill_to_editors "$project_root" "github-source-control"
+    manifest_add "github-source-control"
   fi
   if [[ "$install_pr" == "y" ]]; then
     render_skill "$PROJECTS_TEMPLATE" "$PROJECTS_OUT" \
       "$repo_owner" "$repo_name" "$project_id"
     sync_skill_to_editors "$project_root" "github-projects"
+    manifest_add "github-projects"
   fi
 
   # ── MCP merge ────────────────────────────────────────────────────────────
