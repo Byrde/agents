@@ -37,7 +37,6 @@ Optional setup (run separately when you want them):
 - `.agents/scripts/setup-github.sh` — GitHub tool skills
 - `.agents/scripts/setup-figma.sh` — Figma tool skills
 - `.agents/scripts/setup-memory.sh` — persistent memory (mempalace) + the `memory` skill
-- In your editor: `/create-readme` to bootstrap the README overview
 
 **Uninstall.** Every setup script takes an `uninstall` subcommand that reverses exactly what its install wrote:
 

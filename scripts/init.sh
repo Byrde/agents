@@ -309,7 +309,6 @@ print_summary() {
   echo "    • .agents/scripts/setup-github.sh   (GitHub tool skills)"
   echo "    • .agents/scripts/setup-figma.sh    (Figma tool skills)"
   echo "    • .agents/scripts/setup-memory.sh   (mempalace memory; turns auto-memory off)"
-  echo "    • In your editor: run /create-readme to bootstrap the README"
   echo ""
   echo "  Verify with: .agents/scripts/doctor.sh"
   echo "  Undo with:   .agents/scripts/init.sh uninstall"
