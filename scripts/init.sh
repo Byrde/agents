@@ -15,8 +15,8 @@
 #   - .cursor/skills/         — agent skills copied into Cursor dir
 #   - .claude/skills/         — agent skills copied into Claude Code dir
 #   - .claude/settings.json       — autoMemoryEnabled: true (Claude Code default)
-#                                   + permissions.defaultMode: bypassPermissions
-#                                   (whitelist ALL tool calls — no prompts)
+#                                   + permissions.defaultMode: auto
+#                                   (auto-approve tool calls with safety checks)
 #   - .claude/settings.local.json — autoMemoryDirectory: <abs>/memory
 #                                   (machine-specific; Claude Code ignores
 #                                   relative paths, so we resolve it at init time)
@@ -148,15 +148,15 @@ set_auto_memory_dir_local() {
   echo "  ✓ autoMemoryDirectory=$abs_dir → .claude/settings.local.json"
 }
 
-# Whitelist ALL tool calls in .claude/settings.json by setting the permission
-# mode to bypassPermissions — Claude Code then runs every tool (Bash, edits,
-# MCP servers, …) without prompting. One mode flag covers current and future
-# tools, so no allowlist of tool names to keep in sync. Best-effort: needs jq.
+# Auto-approve tool calls in .claude/settings.json by setting the permission
+# mode to auto — Claude Code then runs tools (Bash, edits, MCP servers, …) with
+# background safety checks instead of prompting. One mode flag covers current and
+# future tools, so no allowlist of tool names to keep in sync. Best-effort: needs jq.
 set_allow_all_tools() {
   local project_root="$1"
   local settings="$project_root/.claude/settings.json"
   if ! command -v jq >/dev/null 2>&1; then
-    echo "  ⚠ jq not found — skipping permissions.defaultMode=bypassPermissions"
+    echo "  ⚠ jq not found — skipping permissions.defaultMode=auto"
     echo "    (set it in $settings manually if needed)"
     return 0
   fi
@@ -164,13 +164,13 @@ set_allow_all_tools() {
   local tmp
   tmp="$(mktemp)"
   if [[ -f "$settings" ]]; then
-    jq '.permissions = (.permissions // {}) | .permissions.defaultMode = "bypassPermissions"' "$settings" >"$tmp" \
+    jq '.permissions = (.permissions // {}) | .permissions.defaultMode = "auto"' "$settings" >"$tmp" \
       || { echo "  ⚠ jq failed on $settings — leaving permissions unchanged"; rm -f "$tmp"; return 0; }
   else
-    jq -n '{permissions: {defaultMode: "bypassPermissions"}}' >"$tmp"
+    jq -n '{permissions: {defaultMode: "auto"}}' >"$tmp"
   fi
   mv "$tmp" "$settings"
-  echo "  ✓ permissions.defaultMode=bypassPermissions → .claude/settings.json (all tool calls allowed)"
+  echo "  ✓ permissions.defaultMode=auto → .claude/settings.json (auto-approves tool calls with safety checks)"
 }
 
 # Remove the permission mode init wrote (uninstall), reverting Claude Code to
@@ -302,8 +302,8 @@ print_summary() {
   echo "    ✓ Skills  → .cursor/skills/ and  .claude/skills/"
   echo "    ✓ Claude Code auto-memory → on; dir $AUTO_MEMORY_DIR (abs path in"
   echo "        settings.local.json), content git-tracked & shared with the team"
-  echo "    ✓ Claude Code permissions → all tool calls allowed (defaultMode:"
-  echo "        bypassPermissions in .claude/settings.json)"
+  echo "    ✓ Claude Code permissions → tool calls auto-approved (defaultMode:"
+  echo "        auto in .claude/settings.json)"
   echo ""
   echo "  Optional next steps:"
   echo "    • .agents/scripts/setup-github.sh   (GitHub tool skills)"
@@ -411,9 +411,9 @@ enable_allow_all_tools() {
 
   echo "── Step 4/4: Claude Code permissions ──────────────────────────────"
   echo ""
-  echo "  Whitelisting ALL tool calls for Claude Code in this project:"
-  echo "  permissions.defaultMode = bypassPermissions in .claude/settings.json."
-  echo "  Claude Code will run every tool without a permission prompt."
+  echo "  Auto-approving tool calls for Claude Code in this project:"
+  echo "  permissions.defaultMode = auto in .claude/settings.json."
+  echo "  Claude Code will run tools with background safety checks instead of prompting."
   echo ""
   set_allow_all_tools "$project_root"
   echo ""
@@ -518,8 +518,8 @@ main() {
       echo "autoMemoryEnabled: true in .claude/settings.json, and an absolute"
       echo "autoMemoryDirectory (<project>/memory) in settings.local.json."
       echo "It also re-includes memory/ in .gitignore (if ignored) so the memory"
-      echo "content is git-tracked and shared across the team, and whitelists ALL"
-      echo "Claude Code tool calls (permissions.defaultMode: bypassPermissions"
+      echo "content is git-tracked and shared across the team, and auto-approves"
+      echo "Claude Code tool calls (permissions.defaultMode: auto"
       echo "in .claude/settings.json)."
       echo ""
       echo "Uninstall removes those copied rules/skills, the auto-memory settings,"
