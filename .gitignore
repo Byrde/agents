@@ -1,19 +1,2 @@
-.DS_Store
-
-.cursor
-.claude
-
-# Rendered tool skills — produced per-project by setup-*.sh scripts.
-# These are user-configured artefacts, not submodule-tracked content.
-skills/github-source-control/
-skills/github-projects/
-skills/figma-design-system/
-skills/figma-design-file/
-skills/memory/
-
-# Vendored upstream skill — fetched from figma/mcp-server-guide by setup-figma.sh.
-skills/figma-use/
-
-# Installed-tools manifest — per-checkout state written by setup-*.sh, read by
-# doctor.sh. Not submodule-tracked content.
-.manifest.local.yml
+memory/
+node_modules/
