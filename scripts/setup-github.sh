@@ -83,7 +83,7 @@ print_intro() {
   echo "    • github-projects        work items, milestones, project board"
   echo ""
   printf '  %-16s %s\n' "Project Root" "$project_root"
-  printf '  %-16s %s\n' "Auth" "GitHub CLI (token via gh auth token)"
+  printf '  %-16s %s\n' "MCP Auth" "OAuth via your editor on first use"
   echo "$bar"
   echo ""
 }
@@ -117,6 +117,7 @@ print_summary() {
   printf '    %-13s %s\n' "Cursor:"      "${cursor_status:-skipped}"
   printf '    %-13s %s\n' "Claude Code:" "${claude_status:-skipped}"
   echo ""
+  echo "  Authenticate the MCP server through your editor on first use (OAuth)."
   echo "  Verify with: .agents/scripts/doctor.sh"
   echo "  Undo with:   .agents/scripts/setup-github.sh uninstall"
   echo "$bar"
@@ -276,56 +277,26 @@ sync_skill_to_editors() {
   done
 }
 
-merge_json_mcp_github() {
-  local target_file="$1"
-  local token="$2"
-  local tmp
-  tmp="$(mktemp)"
-  if [[ -f "$target_file" ]]; then
-    jq --arg tok "$token" '
-      .mcpServers = (.mcpServers // {}) |
-      .mcpServers.github = {
-        type: "http",
-        url: "https://api.githubcopilot.com/mcp/",
-        headers: { Authorization: ("Bearer " + $tok) }
-      }
-    ' "$target_file" >"$tmp" || die "jq failed on $target_file (invalid JSON?)"
-  else
-    mkdir -p "$(dirname "$target_file")"
-    jq -n --arg tok "$token" '{
-      mcpServers: {
-        github: {
-          type: "http",
-          url: "https://api.githubcopilot.com/mcp/",
-          headers: { Authorization: ("Bearer " + $tok) }
-        }
-      }
-    }' >"$tmp"
-  fi
-  mv "$tmp" "$target_file"
-  echo "Updated $target_file"
-}
-
+# Register the GitHub MCP server with its preferred auth method — OAuth via
+# the MCP client (Cursor, Claude Code) on first use. No token is written to
+# the config; the editor handles authentication interactively.
 merge_cursor_mcp_github() {
-  local token="$1"
-  local path="$2"
+  local path="$1"
   local tmp
   tmp="$(mktemp)"
   mkdir -p "$(dirname "$path")"
   if [[ -f "$path" ]]; then
-    jq --arg tok "$token" '
+    jq '
       .mcpServers = (.mcpServers // {}) |
       .mcpServers.github = {
-        url: "https://api.githubcopilot.com/mcp/",
-        headers: { Authorization: ("Bearer " + $tok) }
+        url: "https://api.githubcopilot.com/mcp/"
       }
     ' "$path" >"$tmp" || die "jq failed on $path (invalid JSON?)"
   else
-    jq -n --arg tok "$token" '{
+    jq -n '{
       mcpServers: {
         github: {
-          url: "https://api.githubcopilot.com/mcp/",
-          headers: { Authorization: ("Bearer " + $tok) }
+          url: "https://api.githubcopilot.com/mcp/"
         }
       }
     }' >"$tmp"
@@ -335,9 +306,30 @@ merge_cursor_mcp_github() {
 }
 
 merge_claude_mcp_github() {
-  local token="$1"
-  local path="$2"
-  merge_json_mcp_github "$path" "$token"
+  local path="$1"
+  local tmp
+  tmp="$(mktemp)"
+  mkdir -p "$(dirname "$path")"
+  if [[ -f "$path" ]]; then
+    jq '
+      .mcpServers = (.mcpServers // {}) |
+      .mcpServers.github = {
+        type: "http",
+        url: "https://api.githubcopilot.com/mcp/"
+      }
+    ' "$path" >"$tmp" || die "jq failed on $path (invalid JSON?)"
+  else
+    jq -n '{
+      mcpServers: {
+        github: {
+          type: "http",
+          url: "https://api.githubcopilot.com/mcp/"
+        }
+      }
+    }' >"$tmp"
+  fi
+  mv "$tmp" "$path"
+  echo "Updated $path"
   echo "Restart Claude Code if it is running so MCP picks up changes to $path"
 }
 
@@ -570,23 +562,24 @@ main() {
   fi
 
   # ── MCP merge ────────────────────────────────────────────────────────────
-  local tok
-  tok="$(gh auth token -h github.com 2>/dev/null)"
-
   cursor_status="skipped"
   claude_status="skipped"
 
   echo ""
+  echo "The GitHub MCP server uses OAuth — authentication happens interactively"
+  echo "through your MCP client (Cursor, Claude Code) on first use."
+  echo ""
+
   read -r -p "Merge GitHub MCP into $cursor_mcp? [Y/n] " a_cursor
   if [[ "${a_cursor:-y}" =~ ^[Yy]|^$ ]]; then
-    merge_cursor_mcp_github "$tok" "$cursor_mcp"
+    merge_cursor_mcp_github "$cursor_mcp"
     cursor_status="merged → $cursor_mcp"
   fi
 
   echo ""
   read -r -p "Merge GitHub MCP into $claude_mcp (Claude Code project MCP)? [Y/n] " a_claude
   if [[ "${a_claude:-y}" =~ ^[Yy]|^$ ]]; then
-    merge_claude_mcp_github "$tok" "$claude_mcp"
+    merge_claude_mcp_github "$claude_mcp"
     claude_status="merged → $claude_mcp"
   fi
 

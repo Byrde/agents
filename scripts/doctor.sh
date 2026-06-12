@@ -70,12 +70,6 @@ json_has() {
   [[ -f "$file" ]] && jq -e "$path" "$file" >/dev/null 2>&1
 }
 
-# Extract a string value from a JSON file.
-json_get() {
-  local file="$1" path="$2"
-  [[ -f "$file" ]] && jq -r "$path // empty" "$file" 2>/dev/null
-}
-
 # Send an MCP initialize request to an HTTP endpoint.
 # Returns: 0 = healthy, 1 = auth error, 2 = unreachable, 3 = unexpected
 http_mcp_check() {
@@ -176,22 +170,12 @@ check_github() {
     return
   fi
 
-  # Token validity — extract from whichever config has it
-  local token=""
-  token="$(json_get "$CURSOR_MCP" '.mcpServers.github.headers.Authorization' | sed 's/^Bearer //')"
-  [[ -z "$token" ]] && token="$(json_get "$CLAUDE_MCP" '.mcpServers.github.headers.Authorization' | sed 's/^Bearer //')"
-
-  if [[ -z "$token" ]]; then
-    warn "MCP token: could not extract from config — may need to re-run setup-github.sh"
-    return
-  fi
-
-  # HTTP health
+  # HTTP health (GitHub uses OAuth via the client — 401 is expected without a session)
   local rc=0
-  http_mcp_check "$GITHUB_MCP_URL" -H "Authorization: Bearer $token" || rc=$?
+  http_mcp_check "$GITHUB_MCP_URL" || rc=$?
   case $rc in
     0) pass "MCP server: $GITHUB_MCP_URL responding" ;;
-    1) fail "MCP server: $GITHUB_MCP_URL returned 401/403 — token expired, re-run setup-github.sh" ;;
+    1) pass "MCP server: $GITHUB_MCP_URL reachable (auth handled by editor on first use)" ;;
     2) fail "MCP server: $GITHUB_MCP_URL unreachable" ;;
     *) warn "MCP server: $GITHUB_MCP_URL returned unexpected status" ;;
   esac

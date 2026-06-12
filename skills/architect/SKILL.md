@@ -48,4 +48,4 @@ When a work item is referenced, read it through (body + comments) — that's whe
 
 ## Composition
 
-If a project-management tool skill is installed (e.g., `github-projects`) and a work item is in scope, post artifacts as comments on the work item. Otherwise everything lives in the conversation. Architectural standards from `.agents/practices/development.md` are the default unless the user explicitly overrides — those rules exist for a reason.
+If a project-management tool skill is installed (e.g., `github-projects`) and a work item is in scope, post artifacts as comments on the work item. Otherwise everything lives in the conversation. Architectural standards from the always-on `development` rule are the default unless the user explicitly overrides — those rules exist for a reason.

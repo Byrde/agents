@@ -18,7 +18,7 @@ Implement work that has clear, unambiguous requirements.
 - **Test-driven, always.** The first step is contract tests that mirror the acceptance criteria. Implement to green. Refactor within scope.
 - **Halt on ambiguity.** If you hit an edge case, spec contradiction, or technical ambiguity mid-implementation, stop and flag it. Don't power through on assumptions.
 - **Stay in scope.** No unrelated cleanup. No drive-by features. Acceptance criteria define done.
-- **Standards count.** Follow the architectural rules in `.agents/practices/development.md` — that's the one place where rigidity is the point.
+- **Standards count.** Follow the always-on `development` rule (installed into your editor's rules dir from `.agents/rules/development.md`) — that's the one place where rigidity is the point.
 
 ## Inputs
 
