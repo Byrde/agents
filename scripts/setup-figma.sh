@@ -28,10 +28,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Resolve mono- vs multi-repo layout (sets SKILLS_DIR + MANIFEST_FILE) BEFORE
+# sourcing the manifest helper, which reads MANIFEST_FILE.
+# shellcheck source=lib/layout.sh
+. "$SCRIPT_DIR/lib/layout.sh"
+resolve_layout
 # shellcheck source=lib/manifest.sh
 . "$SCRIPT_DIR/lib/manifest.sh"
-TOOL_DIR="$AGENTS_ROOT/tools"
-SKILLS_DIR="$AGENTS_ROOT/skills"
+TOOL_DIR="$AGENTS_ROOT/tools"  # templates: always the shared checkout
+# SKILLS_DIR is set by resolve_layout (per-project staging home).
 DESIGN_SYSTEM_TEMPLATE="$TOOL_DIR/figma-design-system.md.template"
 DESIGN_SYSTEM_OUT="$SKILLS_DIR/figma-design-system/SKILL.md"
 DESIGN_FILE_TEMPLATE="$TOOL_DIR/figma-design-file.md.template"
@@ -78,6 +83,7 @@ print_intro() {
   echo "  which is vendored from upstream on every run."
   echo ""
   printf '  %-16s %s\n' "Project Root" "$project_root"
+  printf '  %-16s %s\n' "Layout" "$(layout_describe)"
   printf '  %-16s %s\n' "Auth" "Figma Personal Access Token"
   echo "$bar"
   echo ""
@@ -497,6 +503,9 @@ main() {
     echo "Nothing selected — exiting without changes."
     exit 0
   fi
+
+  # In multi-repo mode, keep the per-repo .byrde/ staging out of git.
+  ignore_skills_home
 
   # figma-use is a prerequisite for the Figma overlays — always (re-)install
   # so the vendored copy reflects upstream on every setup run.

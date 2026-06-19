@@ -39,6 +39,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Resolve mono- vs multi-repo layout (sets SKILLS_DIR + MANIFEST_FILE) BEFORE
+# sourcing the manifest helper, which reads MANIFEST_FILE.
+# shellcheck source=lib/layout.sh
+. "$SCRIPT_DIR/lib/layout.sh"
+resolve_layout
 # shellcheck source=lib/manifest.sh
 . "$SCRIPT_DIR/lib/manifest.sh"
 
@@ -90,6 +95,7 @@ print_intro() {
   echo "  registers the MCP server for both Cursor and Claude Code."
   echo ""
   printf '  %-16s %s\n' "Project Root" "$project_root"
+  printf '  %-16s %s\n' "Layout" "$(layout_describe)"
   printf '  %-16s %s\n' "Python" "$(resolve_python)"
   printf '  %-16s %s\n' "Repo" "$MEMPALACE_REPO"
   echo "$bar"
@@ -613,7 +619,7 @@ merge_claude_hooks() {
 # skills, it is opt-in: only present once memory has been configured for the
 # project. init.sh copies .agents/skills/ into the editor skill directories.
 write_memory_skill() {
-  local skill_dir="$AGENTS_ROOT/skills/memory"
+  local skill_dir="$SKILLS_DIR/memory"
   mkdir -p "$skill_dir"
 
   cat >"$skill_dir/SKILL.md" <<'MEMORYSKILL'
@@ -726,7 +732,7 @@ MEMORYSKILL
 # Cursor (.cursor/skills/) never see skills that setup-memory installs.
 sync_skill_to_editors() {
   local project_root="$1" skill="$2"
-  local src="$AGENTS_ROOT/skills/$skill"
+  local src="$SKILLS_DIR/$skill"
   [[ -d "$src" ]] || return 0
   local dest
   for dest in "$project_root/.claude/skills" "$project_root/.cursor/skills"; do
@@ -1176,8 +1182,8 @@ remove_hooks() {
 # Reverses write_memory_skill / sync_skill_to_editors / install_memory_rule.
 remove_skill_and_rule() {
   local project_root="$1"
-  rm -rf "$AGENTS_ROOT/skills/memory"
-  echo "  removed $AGENTS_ROOT/skills/memory"
+  rm -rf "$SKILLS_DIR/memory"
+  echo "  removed $SKILLS_DIR/memory"
   local dest
   for dest in "$project_root/.claude/skills/memory" "$project_root/.cursor/skills/memory"; do
     rm -rf "$dest"
@@ -1302,7 +1308,7 @@ is_fully_setup() {
   [[ -x "$palace_path/hooks/mempal_save_hook.sh" ]] || return 1
   [[ -x "$palace_path/hooks/mempal_precompact_hook.sh" ]] || return 1
   # Memory skill
-  [[ -f "$AGENTS_ROOT/skills/memory/SKILL.md" ]] || return 1
+  [[ -f "$SKILLS_DIR/memory/SKILL.md" ]] || return 1
   # Ignore file
   [[ -f "$ignore_file" ]] || return 1
   # Cursor MCP entry
@@ -1422,7 +1428,7 @@ main() {
     echo ""
     echo "  Palace:         $palace_path"
     echo "  Hook scripts:   $palace_path/hooks/"
-    echo "  Memory skill:   $AGENTS_ROOT/skills/memory/SKILL.md"
+    echo "  Memory skill:   $SKILLS_DIR/memory/SKILL.md"
     echo "  Cursor MCP:     $cursor_mcp"
     echo "  Cursor hooks:   $cursor_hooks"
     echo "  Claude MCP:     configured"
@@ -1536,8 +1542,10 @@ main() {
 
   echo ""
   echo "── Installing memory skill + rule ──"
+  # In multi-repo mode, keep the per-repo .byrde/ staging out of git.
+  ignore_skills_home
   write_memory_skill
-  # .agents/skills/ is the source of truth; mirror into the editor skill dirs
+  # SKILLS_DIR is the source of truth; mirror into the editor skill dirs
   # so Claude Code and Cursor pick it up without re-running init.sh.
   sync_skill_to_editors "$project_root" "memory"
   manifest_add "memory"
@@ -1564,7 +1572,7 @@ main() {
   echo "  Palace:   $palace_path"
   echo "  Python:   $py"
   echo "  Version:  $(get_mempalace_version "$py")"
-  echo "  Skill:    $AGENTS_ROOT/skills/memory/SKILL.md"
+  echo "  Skill:    $SKILLS_DIR/memory/SKILL.md"
   echo "            → .claude/skills/memory and .cursor/skills/memory"
   echo ""
   echo "  Memory MCP registered in:"

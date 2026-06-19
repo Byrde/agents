@@ -4,7 +4,6 @@
 
 # Rendered tool skills — produced per-project by setup-*.sh scripts.
 # These are user-configured artefacts, not submodule-tracked content.
-skills/github-source-control/
 skills/github-projects/
 skills/figma-design-system/
 skills/figma-design-file/

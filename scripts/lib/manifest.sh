@@ -42,6 +42,9 @@ manifest_has() {
 # Rewrite the manifest from a newline-separated key set (internal).
 _manifest_rewrite() {
   local keys="$1" tmp
+  # The manifest may live in a per-project home (e.g. <repo>/.byrde/ in
+  # multi-repo mode) that does not exist yet — ensure its dir before writing.
+  mkdir -p "$(dirname "$MANIFEST_FILE")"
   tmp="$(mktemp)"
   {
     echo "# Byrde Agents — tool skills installed in this checkout."

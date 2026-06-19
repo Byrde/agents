@@ -19,6 +19,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Resolve mono- vs multi-repo layout (sets SKILLS_DIR + MANIFEST_FILE) BEFORE
+# sourcing the manifest helper, which reads MANIFEST_FILE.
+# shellcheck source=lib/layout.sh
+. "$SCRIPT_DIR/lib/layout.sh"
+# shellcheck source=lib/workspace.sh
+. "$SCRIPT_DIR/lib/workspace.sh"
+resolve_layout
 # shellcheck source=lib/manifest.sh
 . "$SCRIPT_DIR/lib/manifest.sh"
 
@@ -101,49 +108,79 @@ claude_mcp_has() {
   claude mcp list --scope project 2>/dev/null | grep -qi "$name"
 }
 
+# ─── Workspace checks ────────────────────────────────────────────────────────
+
+check_workspace() {
+  # Configured iff the map exists at the context root (no manifest entry — the
+  # workspace capability is a rule + a map, not a skill).
+  [[ -f "$WORKSPACE_FILE" ]] || return 0
+
+  echo ""
+  echo "Workspace"
+  echo "---------"
+
+  if jq -e . "$WORKSPACE_FILE" >/dev/null 2>&1; then
+    local mode count
+    mode="$(jq -r '.mode // "?"' "$WORKSPACE_FILE" 2>/dev/null)"
+    count="$(jq -r '.repos | length' "$WORKSPACE_FILE" 2>/dev/null)"
+    pass "Map: .workspace.agents.json (mode: $mode, $count repo(s))"
+    # Drift: a listed repo path that no longer exists on disk.
+    local missing
+    missing="$(jq -r '.repos[] | select(.path != ".") | .path' "$WORKSPACE_FILE" 2>/dev/null \
+      | while IFS= read -r p; do [[ -d "$WORKSPACE_ROOT/$p" ]] || echo "$p"; done)"
+    if [[ -n "$missing" ]]; then
+      warn "Map lists repo(s) not on disk: $(echo "$missing" | tr '\n' ' ')— re-run init.sh to refresh"
+    fi
+  else
+    fail "Map: .workspace.agents.json is not valid JSON — re-run init.sh"
+  fi
+
+  # The always-on rule should be installed in the editor rule dirs.
+  if [[ -f "$PROJECT_ROOT/.claude/rules/workspace.md" ]]; then
+    pass "Rule: .claude/rules/workspace.md"
+  else
+    warn "Rule: .claude/rules/workspace.md missing — run init.sh"
+  fi
+}
+
 # ─── GitHub checks ───────────────────────────────────────────────────────────
 
 check_github() {
-  # Skill files (per capability)
-  local sc_skill="$AGENTS_ROOT/skills/github-source-control/SKILL.md"
-  local pr_skill="$AGENTS_ROOT/skills/github-projects/SKILL.md"
+  local sc_rule="$PROJECT_ROOT/.claude/rules/github-source-control.md"
+  local pr_skill="$SKILLS_DIR/github-projects/SKILL.md"
 
-  # Gate: the manifest is the source of truth for what's installed. If neither
-  # GitHub capability is recorded there, GitHub isn't set up in this checkout —
-  # omit the section entirely (uninstall removes the manifest entry).
-  manifest_has github-source-control || manifest_has github-projects || return 0
+  # GitHub is "set up" if the always-on source-control rule is installed, the
+  # account-wide MCP is registered, or github-projects is in the manifest.
+  [[ -f "$sc_rule" ]] || json_has "$CLAUDE_MCP" '.mcpServers.github' \
+    || json_has "$CURSOR_MCP" '.mcpServers.github' || manifest_has github-projects || return 0
 
   echo ""
   echo "GitHub"
   echo "------"
 
-  # Per capability: the manifest says it's installed, so the skill file MUST be
-  # present — a missing file is drift worth flagging, not a silent skip.
-  if manifest_has github-source-control; then
-    if [[ -f "$sc_skill" ]]; then
-      pass "Skill: skills/github-source-control/SKILL.md"
-    else
-      fail "Skill: github-source-control in manifest but SKILL.md missing — re-run setup-github.sh"
-    fi
+  # Source control — an always-on rule (installed by init.sh), not a skill.
+  if [[ -f "$sc_rule" ]]; then
+    pass "Source control: .claude/rules/github-source-control.md (always-on rule)"
   else
-    skip "Skill: github-source-control not installed"
+    warn "Source control: rule .claude/rules/github-source-control.md missing — run init.sh"
   fi
 
+  # github-projects — manifest-gated skill (installed by setup-github-project.sh).
   if manifest_has github-projects; then
     if [[ -f "$pr_skill" ]]; then
       pass "Skill: skills/github-projects/SKILL.md"
     else
-      fail "Skill: github-projects in manifest but SKILL.md missing — re-run setup-github.sh"
+      fail "Skill: github-projects in manifest but SKILL.md missing — re-run setup-github-project.sh"
     fi
   else
-    skip "Skill: github-projects not installed"
+    skip "github-projects not installed (optional — setup-github-project.sh)"
   fi
 
   # Cursor MCP config
   if json_has "$CURSOR_MCP" '.mcpServers.github'; then
     pass "Cursor MCP: mcpServers.github configured"
   else
-    fail "Cursor MCP: mcpServers.github missing from $CURSOR_MCP"
+    warn "Cursor MCP: mcpServers.github missing from $CURSOR_MCP — run init.sh"
   fi
 
   # Claude Code MCP config
@@ -152,7 +189,7 @@ check_github() {
   elif claude_mcp_has github; then
     pass "Claude MCP: mcpServers.github registered via claude CLI"
   else
-    fail "Claude MCP: mcpServers.github missing"
+    warn "Claude MCP: mcpServers.github missing — run init.sh"
   fi
 
   # gh CLI
@@ -185,8 +222,8 @@ check_github() {
 
 check_figma() {
   # Skill files (per capability)
-  local ds_skill="$AGENTS_ROOT/skills/figma-design-system/SKILL.md"
-  local df_skill="$AGENTS_ROOT/skills/figma-design-file/SKILL.md"
+  local ds_skill="$SKILLS_DIR/figma-design-system/SKILL.md"
+  local df_skill="$SKILLS_DIR/figma-design-file/SKILL.md"
 
   # Gate: the manifest is the source of truth. If neither Figma capability is
   # recorded there, Figma isn't set up in this checkout — omit it entirely.
@@ -217,9 +254,9 @@ check_figma() {
   fi
 
   # figma-use overlay (vendored from figma/mcp-server-guide)
-  local figma_use="$AGENTS_ROOT/skills/figma-use/SKILL.md"
+  local figma_use="$SKILLS_DIR/figma-use/SKILL.md"
   if [[ -f "$figma_use" ]]; then
-    local upstream="$AGENTS_ROOT/skills/figma-use/.upstream"
+    local upstream="$SKILLS_DIR/figma-use/.upstream"
     if [[ -f "$upstream" ]]; then
       local sha
       sha="$(sed -n 's/^commit: //p' "$upstream" 2>/dev/null | head -1)"
@@ -282,7 +319,7 @@ check_mempalace() {
   fi
 
   # Memory skill
-  if [[ -f "$AGENTS_ROOT/skills/memory/SKILL.md" ]]; then
+  if [[ -f "$SKILLS_DIR/memory/SKILL.md" ]]; then
     pass "Skill: skills/memory/SKILL.md"
   else
     warn "Skill: skills/memory/SKILL.md missing — re-run setup-memory.sh to install it"
@@ -426,7 +463,7 @@ main() {
       echo "  cd /your/project && $0"
       echo ""
       echo "Checks MCP server configuration and health for:"
-      echo "  GitHub     (setup-github.sh)"
+      echo "  GitHub     (source-control rule + MCP via init.sh; projects via setup-github-project.sh)"
       echo "  Figma      (setup-figma.sh)"
       echo "  Mempalace  (setup-memory.sh)"
       exit 0
@@ -446,6 +483,7 @@ main() {
   echo "  $PROG_NAME · Byrde Agents  v$TOOL_VERSION"
   echo ""
   printf '  %-16s %s\n' "Project Root" "$PROJECT_ROOT"
+  printf '  %-16s %s\n' "Layout" "$(layout_describe)"
   printf '  %-16s %s\n' "Cursor MCP" "$CURSOR_MCP"
   printf '  %-16s %s\n' "Claude MCP" "$CLAUDE_MCP"
   echo "$bar"
@@ -467,6 +505,7 @@ main() {
     warn ".mcp.json not found — no Claude Code MCP servers configured"
   fi
 
+  check_workspace
   check_github
   check_figma
   check_mempalace

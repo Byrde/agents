@@ -1,0 +1,58 @@
+---
+description: Branches, pull requests, and code review against GitHub via the account-wide MCP server; target repo resolved from the workspace map
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# GitHub source control — branches, PRs, review
+
+Source-control operations against GitHub — **create branch, open pull request,
+request review, leave review comment, merge pull request** — go through the
+**GitHub MCP server**. Any practice skill that needs to branch code, ship a
+change for review, or touch a PR routes through here.
+
+The GitHub MCP server is **account-wide** — OAuth'd to you, it works across every
+repository you can access. It is *not* pinned to one repo.
+
+## Which repository
+
+This capability is not tied to a single repo. The target repo is **whichever one
+the work is in** — resolve it exactly as the workspace rule does: from
+`.workspace.agents.json` (match the repo by `name`/`path`/`remote`/`owner`), or
+the repo you're already operating inside. For a change that spans repos, treat
+each repo's PR as a separate unit of work.
+
+## Access
+
+All owned operations go through the GitHub MCP server. If it's unreachable or
+unauthenticated, **halt and report** — do not fall back to the `gh` CLI or the
+raw REST API for these operations.
+
+First operation of a session: confirm the MCP server is reachable, and that
+you've identified the correct target repo (`owner/name`) from the workspace map.
+
+## Conventions
+
+### Branch naming
+- `feature/{WORK_ITEM_NUMBER}` — features and feature-like work.
+- `bugfix/{WORK_ITEM_NUMBER}` — bug fixes.
+- `patch/{short-kebab-slug}` — small patches with no backing work item.
+
+### Pull request body
+Every PR body must include:
+- **Summary** of the change.
+- **How it satisfies the acceptance criteria** (when a work item is linked).
+- **Test evidence** — what was run, what passed, what was added.
+- **Risks and follow-ups.**
+- **Link to the backing work item** (e.g. `Fixes #123`), except for `patch/` branches.
+
+### Review and merge
+- Request review per the target repo's CODEOWNERS or stated policy.
+- Use that repo's standard merge strategy (squash, rebase, or merge commit) — don't deviate without user confirmation.
+
+## Composition
+
+When a work-item tracker is installed (e.g. `github-projects`), link pull
+requests back to work items via the work-item-number reference in the branch
+name and PR body. Notifying the tracker of PR state is the tracker's job, not
+this rule's — this ends at the PR.
