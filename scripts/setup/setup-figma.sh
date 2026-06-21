@@ -27,14 +27,14 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+AGENTS_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Resolve mono- vs multi-repo layout (sets SKILLS_DIR + MANIFEST_FILE) BEFORE
 # sourcing the manifest helper, which reads MANIFEST_FILE.
 # shellcheck source=lib/layout.sh
-. "$SCRIPT_DIR/lib/layout.sh"
+. "$SCRIPT_DIR/../lib/layout.sh"
 resolve_layout
 # shellcheck source=lib/manifest.sh
-. "$SCRIPT_DIR/lib/manifest.sh"
+. "$SCRIPT_DIR/../lib/manifest.sh"
 TOOL_DIR="$AGENTS_ROOT/tools"  # templates: always the shared checkout
 # SKILLS_DIR is set by resolve_layout (per-project staging home).
 DESIGN_SYSTEM_TEMPLATE="$TOOL_DIR/figma-design-system.md.template"

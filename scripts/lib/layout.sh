@@ -38,7 +38,7 @@
 # design, develop, test) that init.sh seeds. Keep in sync with .agents/.gitignore.
 is_tool_skill() {
   case "$1" in
-    github-projects | \
+    github-projects | google-analytics | \
       figma-design-system | figma-design-file | figma-use | memory)
       return 0 ;;
     *)

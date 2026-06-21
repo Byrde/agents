@@ -45,17 +45,17 @@ The script runs these steps:
 
 Optional setup (run separately when you want them):
 
-- `.agents/scripts/setup-github-project.sh` — pin a GitHub project board (source-control + MCP are set up by `init.sh`)
-- `.agents/scripts/setup-figma.sh` — Figma tool skills
-- `.agents/scripts/setup-memory.sh` — persistent memory (mempalace) + the `memory` skill
+- `.agents/scripts/setup/setup-github-project.sh` — pin a GitHub project board (source-control + MCP are set up by `init.sh`)
+- `.agents/scripts/setup/setup-figma.sh` — Figma tool skills
+- `.agents/scripts/setup/setup-memory.sh` — persistent memory (mempalace) + the `memory` skill
 
 **Uninstall.** Every setup script takes an `uninstall` subcommand that reverses exactly what its install wrote:
 
 ```bash
 .agents/scripts/init.sh uninstall            # remove copied rules + skills, the workspace map, drop the auto-memory flag
-.agents/scripts/setup-github-project.sh uninstall  # remove the github-projects skill
-.agents/scripts/setup-figma.sh uninstall    # remove Figma skills (incl. figma-use) + MCP server
-.agents/scripts/setup-memory.sh uninstall   # deregister mempalace MCP/hooks, remove skill+rule, re-enable auto-memory
+.agents/scripts/setup/setup-github-project.sh uninstall  # remove the github-projects skill
+.agents/scripts/setup/setup-figma.sh uninstall    # remove Figma skills (incl. figma-use) + MCP server
+.agents/scripts/setup/setup-memory.sh uninstall   # deregister mempalace MCP/hooks, remove skill+rule, re-enable auto-memory
 ```
 
 ## Setup Tools
@@ -68,7 +68,7 @@ GitHub splits into two pieces with very different shapes:
 
 Auth: GitHub's OAuth doesn't support dynamic client registration, so the MCP authenticates with a token in an `Authorization` header — GitHub's documented fallback. How the token gets there depends on the editor:
 
-- **Claude Code** — zero setup. `init.sh` configures a `headersHelper` (`.agents/scripts/gh-mcp-headers.sh`) that Claude Code runs on each connection to pull the token live from `gh auth token`. Nothing is stored on disk and there's no env var to set — just be logged in (`gh auth login`). For SAML-SSO orgs, ensure your `gh` login is authorized for the org.
+- **Claude Code** — zero setup. `init.sh` configures a `headersHelper` (`.agents/scripts/mcp/gh-mcp-headers.sh`) that Claude Code runs on each connection to pull the token live from `gh auth token`. Nothing is stored on disk and there's no env var to set — just be logged in (`gh auth login`). For SAML-SSO orgs, ensure your `gh` login is authorized for the org.
 - **Cursor** — has no `headersHelper`, so it gets a static `"Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}"` header (expanded at load time). Cursor users export that var: `export GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)"`.
 
 (The helper falls back to `$GITHUB_PERSONAL_ACCESS_TOKEN` if `gh` isn't available, so a PAT works everywhere too.)
@@ -79,8 +79,8 @@ Auth: GitHub's OAuth doesn't support dynamic client registration, so the MCP aut
 
 ```bash
 cd /your/workspace
-.agents/scripts/setup-github-project.sh            # pin a board + install the github-projects skill
-.agents/scripts/setup-github-project.sh uninstall  # remove the github-projects skill
+.agents/scripts/setup/setup-github-project.sh            # pin a board + install the github-projects skill
+.agents/scripts/setup/setup-github-project.sh uninstall  # remove the github-projects skill
 ```
 
 It walks you through your account, owner, the repo the board mainly tracks, and the board ID; writes `skills/github-projects/SKILL.md` (mirrored into `.claude/`/`.cursor/`); and ensures the GitHub MCP is registered. The MCP itself is shared with source-control and is managed by `init.sh` — `setup-github-project.sh uninstall` leaves it in place.
@@ -93,7 +93,7 @@ Configures opt-in Figma tool skills, vendors Figma's official [`figma-use`](http
 
 ```bash
 cd /your/project
-.agents/scripts/setup-figma.sh
+.agents/scripts/setup/setup-figma.sh
 ```
 
 Two opt-in capabilities — pick either, both, or neither:
@@ -127,7 +127,7 @@ Installs [mempalace](https://github.com/milla-jovovich/mempalace) — a project-
 
 ```bash
 cd /your/project
-.agents/scripts/setup-memory.sh
+.agents/scripts/setup/setup-memory.sh
 ```
 
 The script walks you through ignore patterns, palace initialisation (which indexes the project in one pass), the auto-save interval, MCP registration, and the `memory` skill. It writes:
@@ -144,7 +144,7 @@ Re-run any time to upgrade mempalace or refresh configuration — on an already-
 
 ```bash
 cd /your/project
-.agents/scripts/setup-memory.sh mine
+.agents/scripts/setup/setup-memory.sh mine
 ```
 
 The `memory` skill is opt-in: it ships only once you've run this script. It covers when to recall prior context, what's worth saving (decisions, conventions, rationale, verbatim quotes), mining, and the split between project memory (mempalace) and Claude's cross-project memory.

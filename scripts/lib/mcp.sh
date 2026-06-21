@@ -18,9 +18,10 @@
 # Requires jq. Compatible with Bash 3.2 (macOS).
 
 GITHUB_MCP_URL="https://api.githubcopilot.com/mcp/"
-# Absolute path to the headersHelper shipped alongside this lib (scripts/).
-_MCP_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-GH_MCP_HEADERS_HELPER="$_MCP_LIB_DIR/gh-mcp-headers.sh"
+# Absolute path to the headersHelper. This lib lives in scripts/lib/; the helper
+# is an executable run by the editor, so it lives in scripts/mcp/ (../mcp from here).
+_SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+GH_MCP_HEADERS_HELPER="$_SCRIPTS_DIR/mcp/gh-mcp-headers.sh"
 
 # Merge .mcpServers.github into a Claude-style config (.mcp.json). Uses
 # headersHelper so the token is fetched fresh from gh on each connection.

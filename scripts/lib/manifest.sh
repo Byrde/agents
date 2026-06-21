@@ -9,7 +9,7 @@
 # tool disappear from the doctor report even if leftover files remain on disk.
 #
 # Capability keys (per-capability granularity):
-#   github-source-control  github-projects
+#   github-source-control  github-projects     google-analytics
 #   figma-design-system    figma-design-file   figma-use
 #   memory
 #

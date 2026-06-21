@@ -19,14 +19,14 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+AGENTS_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=lib/layout.sh
-. "$SCRIPT_DIR/lib/layout.sh"
+. "$SCRIPT_DIR/../lib/layout.sh"
 resolve_layout
 # shellcheck source=lib/manifest.sh
-. "$SCRIPT_DIR/lib/manifest.sh"
+. "$SCRIPT_DIR/../lib/manifest.sh"
 # shellcheck source=lib/mcp.sh
-. "$SCRIPT_DIR/lib/mcp.sh"
+. "$SCRIPT_DIR/../lib/mcp.sh"
 TOOL_DIR="$AGENTS_ROOT/tools"
 PROJECTS_TEMPLATE="$TOOL_DIR/github-projects.md.template"
 PROJECTS_OUT="$SKILLS_DIR/github-projects/SKILL.md"
@@ -178,7 +178,8 @@ PY
 }
 
 sync_skill_to_editors() {
-  local skill="$1" src="$SKILLS_DIR/$skill"
+  local skill="$1"
+  local src="$SKILLS_DIR/$skill"
   [[ -d "$src" ]] || return 0
   local dest
   for dest in "$WORKSPACE_ROOT/.claude/skills" "$WORKSPACE_ROOT/.cursor/skills"; do

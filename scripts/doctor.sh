@@ -295,6 +295,54 @@ check_figma() {
   esac
 }
 
+# ─── Google Analytics checks ─────────────────────────────────────────────────
+
+check_google_analytics() {
+  # manifest-gated, like github-projects / figma — only report when installed.
+  manifest_has google-analytics || return 0
+
+  echo ""
+  echo "Google Analytics"
+  echo "----------------"
+
+  # Skill
+  if [[ -f "$SKILLS_DIR/google-analytics/SKILL.md" ]]; then
+    pass "Skill: skills/google-analytics/SKILL.md"
+  else
+    fail "Skill: google-analytics in manifest but SKILL.md missing — re-run setup-google-analytics.sh"
+  fi
+
+  # MCP registration (local stdio server — no health ping; just confirm config)
+  if json_has "$CLAUDE_MCP" '.mcpServers["analytics-mcp"]'; then
+    pass "Claude MCP: mcpServers[\"analytics-mcp\"] configured in .mcp.json"
+  else
+    warn "Claude MCP: mcpServers[\"analytics-mcp\"] missing — re-run setup-google-analytics.sh"
+  fi
+  if json_has "$CURSOR_MCP" '.mcpServers["analytics-mcp"]'; then
+    pass "Cursor MCP: mcpServers[\"analytics-mcp\"] configured"
+  else
+    warn "Cursor MCP: mcpServers[\"analytics-mcp\"] missing — re-run setup-google-analytics.sh"
+  fi
+
+  # Tooling + credentials
+  if has_cmd pipx; then
+    pass "pipx installed (runs analytics-mcp)"
+  else
+    fail "pipx not installed — the analytics-mcp server cannot start"
+  fi
+  if has_cmd gcloud; then
+    pass "gcloud installed"
+  else
+    warn "gcloud not installed — needed to (re)establish Application Default Credentials"
+  fi
+  if [[ -f "${GOOGLE_APPLICATION_CREDENTIALS:-}" \
+     || -f "$HOME/.config/gcloud/application_default_credentials.json" ]]; then
+    pass "Application Default Credentials present"
+  else
+    warn "Application Default Credentials missing — run: gcloud auth application-default login --scopes https://www.googleapis.com/auth/analytics.readonly,https://www.googleapis.com/auth/cloud-platform"
+  fi
+}
+
 # ─── Mempalace checks ───────────────────────────────────────────────────────
 
 check_mempalace() {
@@ -508,6 +556,7 @@ main() {
   check_workspace
   check_github
   check_figma
+  check_google_analytics
   check_mempalace
 
   # Summary
