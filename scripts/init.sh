@@ -26,11 +26,11 @@
 #                                   relative paths, so we resolve it at init time)
 #   - .gitignore                  — one "byrde-agents" fenced block ignoring the
 #                                   generated, regenerable artefacts: .claude/,
-#                                   .cursor/, .mcp.json, and .workspace.agents.json.
-#                                   Also re-includes memory/ (if the project
-#                                   ignores it) in its own block, so the memory
-#                                   CONTENT — which lives at the project root, not
-#                                   under .claude/ — stays git-tracked and shared
+#                                   .cursor/, .mcp.json, .worktrees/, and
+#                                   .workspace.agents.json. The memory CONTENT
+#                                   lives at the project root (not under .claude/),
+#                                   so nothing in the block ignores it and it
+#                                   stays git-tracked and shared
 #
 # Does not modify $HOME.
 #
@@ -65,8 +65,9 @@ TOOL_VERSION="0.1.0"
 PROG_NAME="$(basename "${BASH_SOURCE[0]}")"
 
 # Project-local directory for Claude Code's built-in auto-memory, relative to the
-# project root. The memory CONTENT lives here and is git-tracked (see
-# manage_memory_gitignore) so it is shared across the team; the absolute path is
+# project root. The memory CONTENT lives here and is git-tracked (the single
+# byrde-agents .gitignore block never ignores it) so it is shared across the
+# team; the absolute path is
 # written per-machine into settings.local.json (see set_auto_memory_dir_local).
 AUTO_MEMORY_DIR="memory"
 
@@ -146,8 +147,9 @@ del_auto_memory() {
 # default (the bug this replaces). We resolve it at init time and write it to the
 # LOCAL (always-gitignored, machine-specific) settings file rather than the
 # regenerated settings.json: the absolute path differs per machine/clone, while
-# the memory CONTENT under memory/ is committed and shared (see
-# manage_memory_gitignore). Local scope also wins over project scope in Claude
+# the memory CONTENT under memory/ is committed and shared (the single
+# byrde-agents .gitignore block never ignores it). Local scope also wins over
+# project scope in Claude
 # Code's settings precedence. Best-effort: needs jq.
 set_auto_memory_dir_local() {
   local project_root="$1" abs_dir="$2"
@@ -241,70 +243,32 @@ del_auto_memory_dir_local() {
   fi
 }
 
-# Ensure memory/ is git-TRACKED so its contents (the shared auto-memory) sync
-# across the team. The dir sits at the project root, so no parent-directory
-# ignore can block the re-include; a trailing "!memory/" negation wins over any
-# earlier pattern that ignores it. No-op when memory/ is already trackable, so
-# we never touch a .gitignore that doesn't need it.
-manage_memory_gitignore() {
-  local project_root="$1"
-  local gi="$project_root/.gitignore"
-  if ! git -C "$project_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    echo "  (not a git repo — skipping .gitignore re-include)"
-    return 0
-  fi
-  if ! git -C "$project_root" check-ignore -q "$AUTO_MEMORY_DIR/"; then
-    echo "  ✓ $AUTO_MEMORY_DIR/ already tracked by git — no .gitignore change"
-    return 0
-  fi
-  local start="# --- byrde-agents shared memory (managed by init.sh) ---"
-  local end="# --- end byrde-agents shared memory ---"
-  touch "$gi"
-  # Drop any prior managed block so this is idempotent.
-  sed -i '' "/$start/,/$end/d" "$gi" 2>/dev/null || true
-  # Trim trailing blank lines left behind.
-  sed -i '' -e :a -e '/^[[:space:]]*$/{' -e '$d' -e N -e ba -e '}' "$gi" 2>/dev/null || true
-  printf '\n%s\n!%s/\n%s\n' "$start" "$AUTO_MEMORY_DIR" "$end" >>"$gi"
-  echo "  ✓ re-included $AUTO_MEMORY_DIR/ in .gitignore"
-}
-
-# Reverse manage_memory_gitignore: drop the managed block. Older installs kept
-# the memory under .claude/ and converted a blanket ".claude" ignore into
-# ".claude/*" inside the block — restore that blanket ignore when the block we
-# remove contained it. Only acts when our managed block is present.
-restore_memory_gitignore() {
-  local project_root="$1"
-  local gi="$project_root/.gitignore"
-  [[ -f "$gi" ]] || return 0
-  local start="# --- byrde-agents shared memory (managed by init.sh) ---"
-  local end="# --- end byrde-agents shared memory ---"
-  grep -qF "$start" "$gi" || return 0
-  local had_claude_glob=0
-  sed -n "/$start/,/$end/p" "$gi" | grep -qx '\.claude/\*' && had_claude_glob=1
-  sed -i '' "/$start/,/$end/d" "$gi" 2>/dev/null || true
-  sed -i '' -e :a -e '/^[[:space:]]*$/{' -e '$d' -e N -e ba -e '}' "$gi" 2>/dev/null || true
-  if [[ "$had_claude_glob" -eq 1 ]]; then
-    printf '\n.claude\n' >>"$gi"
-    echo "  ✓ removed shared-memory block; restored blanket .claude ignore in .gitignore"
-  else
-    echo "  ✓ removed shared-memory block from .gitignore"
-  fi
-}
+# Memory re-include is folded into the single byrde-agents .gitignore block
+# (see manage_editor_gitignore). The shared memory/ dir sits at the project root,
+# so nothing in that block ignores it and its contents stay git-tracked across
+# the team; legacy standalone "shared memory" blocks are swept up by
+# _strip_byrde_gitignore.
 
 # Marker for the single managed `.gitignore` block that lists every generated
-# byrde-agents artefact (editor dirs, project MCP config, the workspace map).
-BYRDE_GI_START="# --- byrde-agents (managed by init.sh) ---"
+# byrde-agents artefact (editor dirs, project MCP config, the workspace map) plus
+# the per-branch worktree dir.
+BYRDE_GI_START="# --- byrde-agents ---"
 BYRDE_GI_END="# --- end byrde-agents ---"
 
 # Strip the managed block plus any legacy variants, so re-running is idempotent
-# and older layouts (a separate "editor dirs" block or a standalone workspace-map
+# and older layouts (the old "(managed by init.sh)" marker, a separate "editor
+# dirs" block, the standalone shared-memory block, or a standalone workspace-map
 # entry) get folded into the single block. Leaves a hand-rolled ignore alone.
 _strip_byrde_gitignore() {
   local gi="$1"
   [[ -f "$gi" ]] || return 0
   sed -i '' "/$BYRDE_GI_START/,/$BYRDE_GI_END/d" "$gi" 2>/dev/null || true
+  # Legacy: the old start marker that carried the "(managed by init.sh)" suffix.
+  sed -i '' "/# --- byrde-agents (managed by init.sh) ---/,/# --- end byrde-agents ---/d" "$gi" 2>/dev/null || true
   # Legacy: the old "editor dirs" fenced block.
   sed -i '' "/# --- byrde-agents editor dirs (managed by init.sh) ---/,/# --- end byrde-agents editor dirs ---/d" "$gi" 2>/dev/null || true
+  # Legacy: the old standalone shared-memory fenced block.
+  sed -i '' "/# --- byrde-agents shared memory (managed by init.sh) ---/,/# --- end byrde-agents shared memory ---/d" "$gi" 2>/dev/null || true
   # Legacy: the old standalone workspace-map comment + anchored entry.
   sed -i '' "/# Byrde Agents.*workspace repo map/d" "$gi" 2>/dev/null || true
   sed -i '' "\#^/\.workspace\.agents\.json\$#d" "$gi" 2>/dev/null || true
@@ -314,11 +278,12 @@ _strip_byrde_gitignore() {
 
 # Ignore every generated byrde-agents artefact in the project's .gitignore as one
 # fenced block: the editor dirs (.claude/, .cursor/), the project MCP config
-# (.mcp.json), and the workspace map (.workspace.agents.json). init.sh and the
-# setup-*.sh scripts produce these from the .agents submodule, so they're
-# regenerable — not worth committing. Upserts the file and rewrites the block, so
-# it's idempotent. The shared memory/ dir sits at the project root — NOT under
-# .claude/ — so this never blocks it (see manage_memory_gitignore).
+# (.mcp.json), the workspace map (.workspace.agents.json), and the per-branch
+# worktree dir (.worktrees/). init.sh and the setup-*.sh scripts produce these
+# from the .agents submodule, so they're regenerable — not worth committing. The
+# block re-includes .claude/memory/ ahead of the blanket ignores; the shared
+# memory/ dir sits at the project root — NOT under .claude/ — so it's never
+# blocked either way. Upserts the file and rewrites the block, so it's idempotent.
 manage_editor_gitignore() {
   local project_root="$1"
   local gi="$project_root/.gitignore"
@@ -326,9 +291,9 @@ manage_editor_gitignore() {
   map="$(basename "$WORKSPACE_FILE")"   # .workspace.agents.json
   touch "$gi"
   _strip_byrde_gitignore "$gi"
-  printf '\n%s\n.claude/\n.cursor/\n.mcp.json\n%s\n%s\n' \
+  printf '\n%s\n.claude/*\n!.claude/memory/\n.worktrees/\n.claude/\n.cursor/\n.mcp.json\n%s\n%s\n' \
     "$BYRDE_GI_START" "$map" "$BYRDE_GI_END" >>"$gi"
-  echo "  ✓ ignored .claude/, .cursor/, .mcp.json, $map in .gitignore"
+  echo "  ✓ ignored .claude/, .cursor/, .mcp.json, .worktrees/, $map in .gitignore"
 }
 
 # Reverse manage_editor_gitignore: drop the managed block (and legacy variants).
@@ -562,7 +527,6 @@ enable_auto_memory() {
   mkdir -p "$abs_dir"
   set_auto_memory "$project_root" true              # enabled flag → settings.json
   set_auto_memory_dir_local "$project_root" "$abs_dir"
-  manage_memory_gitignore "$project_root"
   echo ""
 }
 
@@ -659,7 +623,6 @@ uninstall() {
   echo ""
   del_auto_memory "$project_root"
   del_auto_memory_dir_local "$project_root"
-  restore_memory_gitignore "$project_root"
   restore_editor_gitignore "$project_root"
   # The workspace + github-source-control rules are removed by remove_rules (they
   # ship in .agents/rules/); drop the generated map and the GitHub MCP too.
