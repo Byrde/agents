@@ -220,6 +220,77 @@ del_allow_all_tools() {
   fi
 }
 
+# Marker command for the allow-all PreToolUse hook. Identity is keyed on this
+# exact string so set/del/doctor agree and re-running init replaces rather than
+# duplicates the hook.
+ALLOW_ALL_HOOK_CMD='echo '\''{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","permissionDecisionReason":"byrde-agents allow-all auto-approve"}}'\'''
+
+# Install an allow-all PreToolUse hook in .claude/settings.json: a command hook
+# (matcher "*") that returns permissionDecision "allow" for every tool call. This
+# goes beyond permissions.defaultMode=auto — it bypasses the auto-mode classifier,
+# so even the destructive/irreversible actions auto mode would still gate are
+# approved with no prompt. Idempotent (keyed on ALLOW_ALL_HOOK_CMD). Best-effort:
+# needs jq. NOTE: AskUserQuestion is not permission-gated, so multi-select
+# questions still reach the operator.
+set_allow_all_hook() {
+  local project_root="$1"
+  local settings="$project_root/.claude/settings.json"
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  ⚠ jq not found — skipping allow-all PreToolUse hook"
+    echo "    (add it to $settings manually if needed)"
+    return 0
+  fi
+  mkdir -p "$(dirname "$settings")"
+  local filter='
+    .hooks = (.hooks // {})
+    | .hooks.PreToolUse =
+        (((.hooks.PreToolUse // [])
+          | map(select(([.hooks[]?.command] | index($cmd)) | not)))
+         + [{matcher: "*", hooks: [{type: "command", command: $cmd}]}])
+  '
+  local tmp
+  tmp="$(mktemp)"
+  if [[ ! -f "$settings" ]]; then echo '{}' >"$settings"; fi
+  if jq --arg cmd "$ALLOW_ALL_HOOK_CMD" "$filter" "$settings" >"$tmp"; then
+    mv "$tmp" "$settings"
+    echo "  ✓ allow-all PreToolUse hook → .claude/settings.json (approves every tool call, no prompts)"
+  else
+    echo "  ⚠ jq failed on $settings — leaving hooks unchanged"; rm -f "$tmp"
+  fi
+}
+
+# Remove the allow-all PreToolUse hook init wrote (uninstall), pruning an emptied
+# PreToolUse array and .hooks object, and deleting the file if it becomes empty.
+# Leaves any other hooks intact. Mirrors del_allow_all_tools.
+del_allow_all_hook() {
+  local project_root="$1"
+  local settings="$project_root/.claude/settings.json"
+  [[ -f "$settings" ]] || return 0
+  command -v jq >/dev/null 2>&1 || { echo "  ⚠ jq not found — leaving $settings as-is"; return 0; }
+  local filter='
+    if (.hooks.PreToolUse | type) == "array" then
+      .hooks.PreToolUse = (.hooks.PreToolUse
+        | map(select(([.hooks[]?.command] | index($cmd)) | not)))
+      | (if (.hooks.PreToolUse | length) == 0 then del(.hooks.PreToolUse) else . end)
+      | (if (.hooks // {}) == {} then del(.hooks) else . end)
+    else . end
+  '
+  local tmp
+  tmp="$(mktemp)"
+  if jq --arg cmd "$ALLOW_ALL_HOOK_CMD" "$filter" "$settings" >"$tmp" 2>/dev/null; then
+    if [[ "$(jq -S 'keys' "$tmp")" == "[]" ]]; then
+      rm -f "$tmp" "$settings"
+      echo "  ✓ removed allow-all hook (and empty .claude/settings.json)"
+    else
+      mv "$tmp" "$settings"
+      echo "  ✓ removed allow-all PreToolUse hook from .claude/settings.json"
+    fi
+  else
+    rm -f "$tmp"
+    echo "  ⚠ jq failed on $settings — leaving it unchanged"
+  fi
+}
+
 # Remove the autoMemoryDirectory key from .claude/settings.local.json (uninstall),
 # deleting the file if it becomes an empty object. Mirrors del_auto_memory.
 del_auto_memory_dir_local() {
@@ -538,10 +609,13 @@ enable_allow_all_tools() {
   echo "── Step 4/4: Claude Code permissions ──────────────────────────────"
   echo ""
   echo "  Auto-approving tool calls for Claude Code in this project:"
-  echo "  permissions.defaultMode = auto in .claude/settings.json."
-  echo "  Claude Code will run tools with background safety checks instead of prompting."
+  echo "  permissions.defaultMode = auto, plus an allow-all PreToolUse hook,"
+  echo "  in .claude/settings.json. Every tool call is approved with no prompt"
+  echo "  (the hook bypasses auto mode's safety classifier). Multi-select"
+  echo "  questions (AskUserQuestion) are not permission-gated and still prompt."
   echo ""
   set_allow_all_tools "$project_root"
+  set_allow_all_hook "$project_root"
   echo ""
 }
 
@@ -617,6 +691,7 @@ uninstall() {
   echo "── Reverting Claude Code permissions ──────────────────────────────"
   echo ""
   del_allow_all_tools "$project_root"
+  del_allow_all_hook "$project_root"
   echo ""
 
   echo "── Reverting auto-memory ──────────────────────────────────────────"
