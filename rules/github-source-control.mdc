@@ -38,6 +38,29 @@ you've identified the correct target repo (`owner/name`) from the workspace map.
 - `bugfix/{WORK_ITEM_NUMBER}` — bug fixes.
 - `patch/{short-kebab-slug}` — small patches with no backing work item.
 
+### Worktrees — isolate each branch in its own working directory
+When kicking off work, create the branch in a **dedicated git worktree** rather
+than switching the main checkout. Each worktree has its own working tree, index,
+and `HEAD` backed by the shared `.git`, so parallel efforts — including parallel
+agents — never clobber each other's files or build state.
+
+- **Default for `feature/`/`bugfix/` work.** A trivial `patch/`-class change or a
+  one-line fix may stay in the main checkout; the worktree earns its keep once
+  work runs in parallel or spans more than a quick edit.
+- **Location.** One worktree per branch under a gitignored `.worktrees/` dir at
+  the repo root: `.worktrees/<branch>` (e.g. `.worktrees/feature/42`). Ensure
+  `.worktrees/` is in `.gitignore`.
+- **Create.** `git worktree add -b <branch> .worktrees/<branch>` for a new branch,
+  or `git worktree add .worktrees/<branch> <branch>` for an existing one. The
+  local branch is created with the worktree and published on first push; the
+  pull request, review, and merge still route through the GitHub MCP server.
+- **Cost is real.** Untracked files, `node_modules`, and build artifacts are
+  **not** shared from the main checkout — install dependencies in the new
+  worktree before building, and remember that environment-shared services (e.g.
+  the single local QA stack) are contended, not duplicated.
+- **Clean up after merge.** Once the PR merges, `git worktree remove
+  .worktrees/<branch>` and delete the branch. Don't leave stale worktrees behind.
+
 ### Pull request body
 Every PR body must include:
 - **Summary** of the change.

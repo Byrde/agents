@@ -30,7 +30,7 @@ When a work item is referenced, read it and all its comments — that's where pr
 ## Procedure
 
 1. **Align on the work.** Confirm what's being built. If a work item is referenced, read it through and verify it isn't already implemented. List assumptions and ambiguities; resolve them with the user. Reflect back what will be built and what the tests will cover — confirm before coding.
-2. **Set up.** If the change ships through code review, **create a branch** following the project's conventions. If a work item is in play, **transition the work item** to its in-progress state.
+2. **Set up.** If the change ships through code review, **create a branch in a dedicated worktree** (`.worktrees/<branch>`) following the project's conventions — isolating the work so parallel efforts don't collide. Trivial `patch/`-class fixes may stay in the main checkout. Install dependencies in the new worktree before building, and tear it down once the PR merges (see the `github-source-control` rule for worktree mechanics). If a work item is in play, **transition the work item** to its in-progress state.
 3. **Implement.** Write contract tests that encode the acceptance criteria. Implement to green. Refactor within scope. Follow the architectural standards. If you hit ambiguity mid-flight, stop and flag it on the work item or in the conversation — don't guess.
 4. **Ship.** **Open the pull request** with a body covering summary, how the change satisfies acceptance criteria, test evidence, risks and follow-ups, and a link to the work item if one exists. If a work item is in play, **transition the work item** to its post-PR state and **comment on the work item** with what was done, the PR link, and anything a reviewer or tester should know.
 
