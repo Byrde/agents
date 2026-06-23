@@ -10,8 +10,8 @@
 #
 # Capability keys (per-capability granularity):
 #   github-source-control  github-projects     google-analytics
-#   figma-design-system    figma-design-file   figma-use
-#   memory
+#   jira                   figma-design-system figma-design-file
+#   figma-use              memory
 #
 # Format — deliberately simple so it parses with grep/sed (no yq, Bash 3.2 ok):
 #

@@ -34,6 +34,7 @@ PROG_NAME="$(basename "${BASH_SOURCE[0]}")"
 
 GITHUB_MCP_URL="https://api.githubcopilot.com/mcp/"
 FIGMA_MCP_URL="https://mcp.figma.com/mcp"
+JIRA_MCP_URL="https://mcp.atlassian.com/v1/sse"
 MCP_INIT_REQ='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"doctor","version":"0.1.0"}}}'
 
 # ─── Counters ────────────────────────────────────────────────────────────────
@@ -343,6 +344,49 @@ check_google_analytics() {
   fi
 }
 
+# ─── Jira checks ─────────────────────────────────────────────────────────────
+
+check_jira() {
+  # manifest-gated, like github-projects / figma / google-analytics — only
+  # report when installed.
+  manifest_has jira || return 0
+
+  echo ""
+  echo "Jira"
+  echo "----"
+
+  # Skill
+  if [[ -f "$SKILLS_DIR/jira/SKILL.md" ]]; then
+    pass "Skill: skills/jira/SKILL.md"
+  else
+    fail "Skill: jira in manifest but SKILL.md missing — re-run setup-jira.sh"
+  fi
+
+  # MCP registration (remote OAuth server — config-only, health pinged below)
+  if json_has "$CLAUDE_MCP" '.mcpServers.atlassian'; then
+    pass "Claude MCP: mcpServers.atlassian configured in .mcp.json"
+  elif claude_mcp_has atlassian; then
+    pass "Claude MCP: mcpServers.atlassian registered via claude CLI"
+  else
+    warn "Claude MCP: mcpServers.atlassian missing — re-run setup-jira.sh"
+  fi
+  if json_has "$CURSOR_MCP" '.mcpServers.atlassian'; then
+    pass "Cursor MCP: mcpServers.atlassian configured"
+  else
+    warn "Cursor MCP: mcpServers.atlassian missing — re-run setup-jira.sh"
+  fi
+
+  # HTTP health (Atlassian uses OAuth via the client — 401 is expected without a session)
+  local rc=0
+  http_mcp_check "$JIRA_MCP_URL" || rc=$?
+  case $rc in
+    0) pass "MCP server: $JIRA_MCP_URL responding" ;;
+    1) pass "MCP server: $JIRA_MCP_URL reachable (auth handled by editor on first use)" ;;
+    2) fail "MCP server: $JIRA_MCP_URL unreachable" ;;
+    *) warn "MCP server: $JIRA_MCP_URL returned unexpected status" ;;
+  esac
+}
+
 # ─── Mempalace checks ───────────────────────────────────────────────────────
 
 check_mempalace() {
@@ -557,6 +601,7 @@ main() {
   check_github
   check_figma
   check_google_analytics
+  check_jira
   check_mempalace
 
   # Summary

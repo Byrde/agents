@@ -5,6 +5,8 @@
 # Rendered tool skills — produced per-project by setup-*.sh scripts.
 # These are user-configured artefacts, not submodule-tracked content.
 skills/github-projects/
+skills/jira/
+skills/google-analytics/
 skills/figma-design-system/
 skills/figma-design-file/
 skills/memory/
@@ -15,3 +17,12 @@ skills/figma-use/
 # Installed-tools manifest — per-checkout state written by setup-*.sh, read by
 # doctor.sh. Not submodule-tracked content.
 .manifest.local.yml
+# --- byrde-agents ---
+.claude/*
+!.claude/memory/
+.worktrees/
+.claude/
+.cursor/
+.mcp.json
+.workspace.agents.json
+# --- end byrde-agents ---

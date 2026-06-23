@@ -1,0 +1,97 @@
+---
+name: jira
+description: Owns work-item and project-board operations against Jira for this
+  project: create work item, transition work item, comment on work item, set
+  work item field (priority, story points, type, status), link work item (to
+  epic, parent, dependency), place work item on board, create milestone (epic).
+  Consulted by any practice skill that needs to create, query, transition, or
+  annotate a work item. Configured for Jira site {{SITE}}, project {{PROJECT_KEY}}.
+category: tool
+---
+
+# Jira
+
+This project's project-management tool. Owns work items (Jira issues), epics, and board/sprint state on **{{SITE}}**, project **{{PROJECT_KEY}}**.
+
+## Owned operations
+
+- **create work item** — create a Jira issue with summary, description, and issue type.
+- **transition work item** — move the issue through its workflow (e.g. To Do → In Progress → Done).
+- **comment on work item** — add a comment to the issue.
+- **set work item field** — Priority, Story Points, issue type, status, or any other project field.
+- **link work item** — link the issue to an epic (parent), or to another issue (blocks / relates to / depends on).
+- **place work item on board** — ensure the issue appears on project {{PROJECT_KEY}}'s board (by project + status; issues in the project show on its board automatically).
+- **create milestone** — create an Epic (epics represent milestones).
+
+Any practice skill that mentions one of these operations routes through this skill.
+
+## Access
+
+All operations go through the **Atlassian MCP server** (Atlassian's official Remote MCP at `https://mcp.atlassian.com/v1/sse`). Do not call the Jira REST API directly.
+
+Authentication is **OAuth 2.1 handled by the editor** — Atlassian's MCP supports dynamic client registration, so the editor runs the consent flow on first use and stores nothing sensitive in the repo. No API token or secret lives in `.mcp.json`. Access follows the authenticated Atlassian account's existing Jira permissions.
+
+### Preflight (first operation of the session)
+
+1. **Server health.** Verify the Atlassian MCP server is connected and authenticated. If it isn't, the operator needs to (re-)run `.agents/scripts/setup/setup-jira.sh` or complete the editor's OAuth flow — halt and say so rather than guessing.
+2. **Cloud ID.** Resolve the cloud ID for **{{SITE}}** via `getAccessibleAtlassianResources` (it returns each accessible site's `id` and `url`). Match on the `{{SITE}}` URL and reuse that cloud ID for every subsequent call this session. Halt if {{SITE}} is not in the accessible list.
+3. **Project.** Confirm project **{{PROJECT_KEY}}** is visible via `getVisibleJiraProjects` (filter by key). Halt if not.
+
+## Conventions
+
+### Work item titles
+
+The issue **summary** is a plain-English description of the work. **Do not** use conventional commit format (`feat(scope): ...`) — that's for commit messages and PR titles.
+
+### Work item types
+
+Use the project's native Jira issue types. Resolve the available types and their required fields with `getJiraProjectIssueTypesMetadata` / `getJiraIssueTypeMetaWithFields` before creating — projects differ. Typical mapping:
+
+- `Story` — new capabilities or improvements.
+- `Bug` — defects and regressions.
+- `Epic` — a milestone grouping subordinate stories and bugs.
+
+Do not encode the type in a label.
+
+### Work item fields
+
+Set the project's structured fields — do not put these in the description:
+
+- **Story Points** — the project's estimation field.
+- **Priority** — the project's Priority field (e.g. Highest, High, Medium, Low, Lowest).
+
+Field IDs vary per project; resolve them with `getJiraIssueTypeMetaWithFields` once per session before setting.
+
+### Board
+
+Every work item lives in project **{{PROJECT_KEY}}**, so it appears on that project's board automatically by its status. The complete creation sequence:
+
+#### 1. Create the issue
+
+Create the Jira issue in project `{{PROJECT_KEY}}` with summary, description, and issue type via `createJiraIssue`.
+
+#### 2. Set estimation + priority
+
+Set Story Points and Priority via `editJiraIssue`, using the field IDs resolved from `getJiraIssueTypeMetaWithFields`.
+
+#### 3. Link to its epic (if part of a milestone)
+
+Set the parent/epic link via `editJiraIssue` (parent field) or `createIssueLink`, depending on how the project models the epic relationship.
+
+A work item that has no estimate and no priority set is considered incomplete.
+
+### Work item lifecycle
+
+Transitions are workflow-driven — resolve the valid transitions for an issue with `getTransitionsForJiraIssue` (transition names and IDs differ per workflow), then apply with `transitionJiraIssue`.
+
+- Move to **In Progress** when active implementation starts.
+- Move to the post-PR status (often **In Review** or **Ready to Test** — resolve the actual status with `getTransitionsForJiraIssue`) when implementation is complete and a PR is open. The same status survives QA approval.
+- **Do not manually move to Done.** PR-merge automation moves the issue to Done when the PR is merged. Manual transitions before merge bypass that gate.
+
+### Milestones (epics)
+
+Epics represent milestones. All subordinate story and bug work items are linked to their parent epic (parent field or epic link, per the project's configuration).
+
+## Composition
+
+When a source-control tool is installed (e.g., `github-source-control`), pull requests link back to work items by referencing the Jira issue key (e.g. `{{PROJECT_KEY}}-123`) in branch names and PR bodies. This skill owns the work-item side of that link — creating the issue, transitioning it, commenting on it — but does **not** own PRs.

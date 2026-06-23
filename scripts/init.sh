@@ -413,6 +413,7 @@ print_summary() {
   echo ""
   echo "  Optional next steps:"
   echo "    • .agents/scripts/setup/setup-github-project.sh  (pin a GitHub project board)"
+  echo "    • .agents/scripts/setup/setup-jira.sh            (pin a Jira site + project)"
   echo "    • .agents/scripts/setup/setup-figma.sh           (Figma tool skills)"
   echo "    • .agents/scripts/setup/setup-memory.sh          (mempalace memory; turns auto-memory off)"
   echo "    (GitHub source-control + MCP were just set up automatically.)"
