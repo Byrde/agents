@@ -21,6 +21,8 @@
 #   - .claude/settings.json       — autoMemoryEnabled: true (Claude Code default)
 #                                   + permissions.defaultMode: auto
 #                                   (auto-approve tool calls with safety checks)
+#                                   + permissions.allow: ["Edit", "Write"]
+#                                   (Edit/Write always allowed, even outside auto mode)
 #   - .claude/settings.local.json — autoMemoryDirectory: <abs>/memory
 #                                   (machine-specific; Claude Code ignores
 #                                   relative paths, so we resolve it at init time)
@@ -174,45 +176,61 @@ set_auto_memory_dir_local() {
 # Auto-approve tool calls in .claude/settings.json by setting the permission
 # mode to auto — Claude Code then runs tools (Bash, edits, MCP servers, …) with
 # background safety checks instead of prompting. One mode flag covers current and
-# future tools, so no allowlist of tool names to keep in sync. Best-effort: needs jq.
+# future tools, so no allowlist of tool names to keep in sync. Also explicitly
+# allows Edit and Write (merged into any existing permissions.allow entries) so
+# file edits stay unprompted even if defaultMode is later changed away from auto.
+# Best-effort: needs jq.
 set_allow_all_tools() {
   local project_root="$1"
   local settings="$project_root/.claude/settings.json"
   if ! command -v jq >/dev/null 2>&1; then
-    echo "  ⚠ jq not found — skipping permissions.defaultMode=auto"
-    echo "    (set it in $settings manually if needed)"
+    echo "  ⚠ jq not found — skipping permissions.defaultMode=auto / permissions.allow"
+    echo "    (set these in $settings manually if needed)"
     return 0
   fi
   mkdir -p "$(dirname "$settings")"
-  local tmp
+  local tmp filter
   tmp="$(mktemp)"
+  filter='
+    .permissions = (.permissions // {})
+    | .permissions.defaultMode = "auto"
+    | .permissions.allow = ((.permissions.allow // []) + ["Edit", "Write"] | unique)
+  '
   if [[ -f "$settings" ]]; then
-    jq '.permissions = (.permissions // {}) | .permissions.defaultMode = "auto"' "$settings" >"$tmp" \
+    jq "$filter" "$settings" >"$tmp" \
       || { echo "  ⚠ jq failed on $settings — leaving permissions unchanged"; rm -f "$tmp"; return 0; }
   else
-    jq -n '{permissions: {defaultMode: "auto"}}' >"$tmp"
+    jq -n '{permissions: {defaultMode: "auto", allow: ["Edit", "Write"]}}' >"$tmp"
   fi
   mv "$tmp" "$settings"
-  echo "  ✓ permissions.defaultMode=auto → .claude/settings.json (auto-approves tool calls with safety checks)"
+  echo "  ✓ permissions.defaultMode=auto, allow=[Edit,Write] → .claude/settings.json (auto-approves tool calls with safety checks)"
 }
 
-# Remove the permission mode init wrote (uninstall), reverting Claude Code to
-# its default prompting behaviour. Leaves any other permissions keys intact,
-# and removes the file only if it becomes an empty object.
+# Remove the permission mode + allow entries init wrote (uninstall), reverting
+# Claude Code to its default prompting behaviour. Only strips the "Edit"/"Write"
+# entries init added — any other permissions.allow entries (e.g. Skill(...))
+# are left intact. Removes permissions.allow if it becomes empty, and removes
+# the file only if it becomes an empty object.
 del_allow_all_tools() {
   local project_root="$1"
   local settings="$project_root/.claude/settings.json"
   [[ -f "$settings" ]] || return 0
   command -v jq >/dev/null 2>&1 || { echo "  ⚠ jq not found — leaving $settings as-is"; return 0; }
-  local tmp
+  local tmp filter
   tmp="$(mktemp)"
-  if jq 'del(.permissions.defaultMode) | if (.permissions // {}) == {} then del(.permissions) else . end' "$settings" >"$tmp" 2>/dev/null; then
+  filter='
+    del(.permissions.defaultMode)
+    | .permissions.allow = ((.permissions.allow // []) - ["Edit", "Write"])
+    | (if (.permissions.allow // []) == [] then del(.permissions.allow) else . end)
+    | if (.permissions // {}) == {} then del(.permissions) else . end
+  '
+  if jq "$filter" "$settings" >"$tmp" 2>/dev/null; then
     if [[ "$(jq -S 'keys' "$tmp")" == "[]" ]]; then
       rm -f "$tmp" "$settings"
       echo "  ✓ removed permissions settings (and empty .claude/settings.json)"
     else
       mv "$tmp" "$settings"
-      echo "  ✓ removed permissions.defaultMode from .claude/settings.json"
+      echo "  ✓ removed permissions.defaultMode and allow=[Edit,Write] from .claude/settings.json"
     fi
   else
     rm -f "$tmp"
@@ -409,7 +427,7 @@ print_summary() {
   echo "    ✓ Claude Code auto-memory → on; dir $AUTO_MEMORY_DIR (abs path in"
   echo "        settings.local.json), content git-tracked & shared with the team"
   echo "    ✓ Claude Code permissions → tool calls auto-approved (defaultMode:"
-  echo "        auto in .claude/settings.json)"
+  echo "        auto, allow: [Edit, Write] in .claude/settings.json)"
   echo ""
   echo "  Optional next steps:"
   echo "    • .agents/scripts/setup/setup-github-project.sh  (pin a GitHub project board)"
@@ -610,10 +628,11 @@ enable_allow_all_tools() {
   echo "── Step 4/4: Claude Code permissions ──────────────────────────────"
   echo ""
   echo "  Auto-approving tool calls for Claude Code in this project:"
-  echo "  permissions.defaultMode = auto, plus an allow-all PreToolUse hook,"
-  echo "  in .claude/settings.json. Every tool call is approved with no prompt"
-  echo "  (the hook bypasses auto mode's safety classifier). Multi-select"
-  echo "  questions (AskUserQuestion) are not permission-gated and still prompt."
+  echo "  permissions.defaultMode = auto, permissions.allow = [Edit, Write],"
+  echo "  plus an allow-all PreToolUse hook, in .claude/settings.json. Every"
+  echo "  tool call is approved with no prompt (the hook bypasses auto mode's"
+  echo "  safety classifier). Multi-select questions (AskUserQuestion) are not"
+  echo "  permission-gated and still prompt."
   echo ""
   set_allow_all_tools "$project_root"
   set_allow_all_hook "$project_root"
@@ -733,8 +752,8 @@ main() {
       echo "autoMemoryDirectory (<project>/memory) in settings.local.json."
       echo "It also re-includes memory/ in .gitignore (if ignored) so the memory"
       echo "content is git-tracked and shared across the team, and auto-approves"
-      echo "Claude Code tool calls (permissions.defaultMode: auto"
-      echo "in .claude/settings.json)."
+      echo "Claude Code tool calls (permissions.defaultMode: auto, permissions.allow:"
+      echo "[Edit, Write] in .claude/settings.json)."
       echo ""
       echo "Uninstall removes those copied rules/skills, the auto-memory settings,"
       echo "and the permission mode. It does not touch MCP/hooks config from the"
