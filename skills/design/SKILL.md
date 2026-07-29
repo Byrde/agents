@@ -1,78 +1,45 @@
 ---
 name: design
-description: Design something — a feature, a flow, a screen, a component, a
-  single interaction. Adapts to scope and fidelity - small problems get small
-  procedures, big problems get more conversation. Reuses the project's design
-  system before extending it. Pairs with figma-design-system, figma-design-file,
-  and figma-use when those skills are installed.
+description: Design a feature, flow, screen, or component. Frame the problem,
+  sketch a couple of options, pick one, and write down what a developer needs to
+  build it. Reuses existing components before adding new ones.
 category: practice
 ---
 
 # Design
 
-Help a user design something — at whatever scope and fidelity the work in front of you calls for.
+Design something — at whatever scope the work calls for. Most sessions are short: a bit of framing, a sketch, a decision.
 
 ## Mindset
 
-- **Friction is a failure of empathy.** Every interaction is a conversation between a human and a machine; design so the machine acts as a gracious, anticipating host.
-- **The medium serves the message.** Wireframes, mocks, sketches, prototypes, written specs — pick the fidelity that gets the right feedback for *this* decision. Don't moralise about which comes first.
-- **Diverge before converging.** Refuse to settle on the first good idea. Generate multiple credible options, then pick.
-- **Unhappy paths are explicit.** Empty, loading, error, recovery — they're part of the design, not afterthoughts.
-- **All interactive states are explicit.** Default, hover, active/pressed, disabled, focused, error (where applicable) — when the design involves interactive elements, name every state.
-- **DRY by default.** Reuse what's in the design system before adding to it. Extending the system is sometimes the right call — but it's a decision, not a reflex.
-- **Annotate intent.** *Why* a layout is structured this way, accessibility expectations (focus order, semantics, announcements), interaction notes. Capture what isn't self-evident from the visual.
+- **Reuse first.** Compose what already exists. A new component is a decision, not a reflex.
+- **Sketch more than one option** before settling — but two is usually enough.
+- **Unhappy paths are part of the design.** Empty, loading, error. Same for interactive states (hover, disabled, focus) where they apply.
+- **Write down the why.** Layout intent, accessibility expectations, interaction notes — whatever isn't obvious from looking at it.
 
-## Inputs
+## Procedure
 
-Elicit what's needed for the scope at hand. A small task ("design this button") needs less than a big one ("design the onboarding flow").
+1. **Frame.** Say back what's being designed, who it's for, and what constrains it. Get that confirmed before designing. If a work item is referenced, read it and its comments.
+2. **Sketch options.** A couple of credible directions at the cheapest fidelity that answers the question at hand — ASCII layout, written spec, or visuals when the decision is genuinely visual. Walk the trade-offs with the user.
+3. **Decide and hand off.** Name what was chosen, what was rejected, and what's deferred. Deliver whatever a developer needs to build it. If a work item is in play, **comment on the work item** with the summary; otherwise deliver it in the conversation.
 
-- **What is being designed** — feature, flow, screen, component, single decision. Bound the scope explicitly.
-- **Audience and problem** — who this is for, what they're trying to do, what's in the way.
-- **Constraints** — platform, accessibility expectations, brand/product limits, performance, technical limits.
-- **Context** — existing flows, prior decisions, related screens or components. If a work item is referenced, read it and its comments.
-- **Design system baseline** — what reusable components, typography, colors, icons, logos already exist in the project's design system. If a `figma-design-system` skill is installed, **read design tokens** and **read design components** to audit. If none exists yet, establishing a modest baseline is part of the work.
+Scale to the work: "design this button" is three sentences, "design the onboarding flow" is three rounds of conversation.
 
-## Procedure (five moves, scaled to the work)
+## Reusable components
 
-1. **Understand.** Frame the problem in your own words and reflect it back. Audience, job to be done, success criteria, constraints. Get the framing confirmed before designing.
-2. **Explore.** Generate options. For flows: alternative paths and entry points. For components: alternative shapes, layouts, interaction models. Push past the first viable idea. Walk the options with the user — explain trade-offs, gather feedback.
-3. **Decide.** Converge on a direction. Name explicitly what's been chosen, what's been rejected (and why), and what's been deferred for a future pass. No silent commitments.
-4. **Make it concrete.** Produce the artifact that lets a developer build the decision. Pick fidelity by what the decision needs:
-   - **Low/mid-fidelity (wireframes, sketches, ASCII layouts):** when the conversation is about structure, hierarchy, flow, or behavior — pixels would be a distraction.
-   - **High-fidelity (visual design):** when the conversation is about visual treatment, brand expression, or final-look decisions. Use the project's design system — no detached instances, no hardcoded values. Design all relevant states.
-   - **Written spec or annotated reference:** when the situation doesn't need new visuals (e.g., a small variation of an existing component).
-   - **Prototype:** when interaction timing, transitions, or feel is the point of the decision.
+The payoff of a component library is that the second use is nearly free.
 
-   Whatever the fidelity, annotate the *why* — layout intent, accessibility, interaction notes, friction deliberately removed.
-5. **Hand off.** Make sure the receiver has what they need. Summarise the decisions made, key trade-offs, the location of the artifact, screen-to-criteria mapping (if there's a work item), and any open items flagged for implementation. If a work item is in play, **comment on the work item** with the summary. Otherwise deliver it in the conversation.
-
-The five moves apply at any scope. A "design this button" session might be five sentences. A "design the onboarding flow" session might be five conversation rounds. The shape is the same.
-
-## Working with the design system
-
-- **Audit first.** Before designing, see what's already in the design system — components, typography, colors, spacing, icons, logos.
-- **Reuse before invention.** If an existing component or token fits, use it. Compose existing pieces if you can.
-- **Extend with intent.** When the scoped work genuinely needs something new, propose the addition with rationale, get user buy-in, then **add design token** / **add design component** through the design-system tool, and **publish the design library**.
-- **No detached instances, no hardcoded values.** Visual design pulls from the published library.
-- **Match the source of truth.** When aligning to an existing build, derive real sizes/spacing from the implemented code rather than assumptions, and scope to what's actually built — don't design screens that don't exist.
-- **Verify in context, with the user.** Your own rendered preview is not sign-off. Confirm each screen and component with the user — subtle defects (invisible borders, dropped opacity, the wrong variable mode) hide from a glance and from your own screenshots.
-- **Protect what already works when refactoring the system.** A working design system is a safety constraint: isolate changes so approved designs don't break (mode-aware or pre-blended tokens, a separate component set), and re-verify after publishing — a library publish propagates to every consuming file.
+- **Audit before designing.** See what exists — components, spacing, colors, type. **Read design tokens** and **read design component** when a design system is available.
+- **Reuse or compose** before inventing. No detached instances, no hardcoded values.
+- **Extend deliberately.** When something genuinely new is needed, propose it with a rationale, get buy-in, then **add design token** / **add design component** and **publish the design library** so the next feature inherits it.
+- **Name the states and variants** of anything added — that's what makes it a component rather than a one-off.
+- **Derive from the build.** When aligning to existing code, take real sizes and spacing from the implementation, not from assumptions.
 
 ## When to halt
 
-- The problem framing is fuzzy — go back to understanding; don't design against guesses.
-- The scope keeps expanding mid-session — name what's in scope, name what's been deferred, finish the current scope first.
-- A decision needs a stakeholder who isn't in the conversation — surface it as an open item, don't fake it.
-- The design system would need a controversial extension — pause, surface the trade-off explicitly, get a deliberate decision.
+- Framing is fuzzy, or scope keeps growing — stop, name what's in and what's deferred, finish that first.
+- A decision needs someone who isn't in the conversation, or the design system needs a controversial extension — surface it as an open item, don't decide it silently.
 
 ## Composition
 
-When Figma tool skills are installed:
-
-- **`figma-design-system`** — audit and extend the design system through its operations (read/add tokens and components, publish library).
-- **`figma-design-file`** — create a design page or open the project's design file, mark finished frames ready for development.
-- **`figma-use`** — drives the underlying plugin-API mechanics; the two skills above overlay on it.
-
-When none of those skills are installed, deliver designs as descriptions, ASCII sketches, written specs, or links to external artifacts — whatever the situation supports.
-
-When a project-management tool skill is installed (e.g., `github-projects`) and a work item is in scope, design decisions and handoff summaries are surfaced as a **comment on the work item**.
+Where a design-system or design-file tool is installed, the operations above route to it. Where none is, deliver designs as sketches, written specs, or links to external artifacts — whatever the situation supports.

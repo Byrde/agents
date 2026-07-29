@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
-# Configure the Figma tool skills: render per-capability templates into
-# .agents/skills/ and merge the Figma MCP server into project-local configs.
+# Configure the Figma tool skill: render the template into .agents/skills/ and
+# merge the Figma MCP server into project-local configs.
 #
-# Two opt-in capabilities:
-#   - figma-design-system   → tokens, components, library publishing
-#   - figma-design-file     → one shared design file, organised by pages
-# Pick either, both, or neither.
+# One skill, one file: `figma` owns components, tokens, and the design work —
+# all in a single Figma file. It overlays on figma-use (Figma's official
+# plugin-API skill), vendored from upstream on every run.
 #
 # Run from the repository/project root you want to configure (current working
 # directory).
 #
-# Writes (per opted-in capability):
-#   - .agents/skills/figma-design-system/SKILL.md
-#   - .agents/skills/figma-design-file/SKILL.md
+# Writes:
+#   - .agents/skills/figma/SKILL.md
+#   - .agents/skills/figma-use/       — vendored from upstream
 #   - .cursor/mcp.json   — Cursor project MCP (Figma server merged in)
 #   - .mcp.json          — Claude Code project MCP (Figma server merged in)
 #
@@ -37,13 +36,15 @@ resolve_layout
 . "$SCRIPT_DIR/../lib/manifest.sh"
 TOOL_DIR="$AGENTS_ROOT/tools"  # templates: always the shared checkout
 # SKILLS_DIR is set by resolve_layout (per-project staging home).
-DESIGN_SYSTEM_TEMPLATE="$TOOL_DIR/figma-design-system.md.template"
-DESIGN_SYSTEM_OUT="$SKILLS_DIR/figma-design-system/SKILL.md"
-DESIGN_FILE_TEMPLATE="$TOOL_DIR/figma-design-file.md.template"
-DESIGN_FILE_OUT="$SKILLS_DIR/figma-design-file/SKILL.md"
+FIGMA_TEMPLATE="$TOOL_DIR/figma.md.template"
+FIGMA_OUT="$SKILLS_DIR/figma/SKILL.md"
+
+# Skill names retired when figma-design-system + figma-design-file merged into
+# `figma`. Kept here so uninstall (and a re-run) cleans up older installs.
+LEGACY_SKILLS="figma-design-system figma-design-file"
 
 # Upstream figma-use skill — vendored from Figma's official MCP guide.
-# Our skills overlay on top of this; it owns the plugin-API mechanics.
+# Our skill overlays on top of this; it owns the plugin-API mechanics.
 FIGMA_USE_REPO="https://github.com/figma/mcp-server-guide.git"
 FIGMA_USE_SUBPATH="skills/figma-use"
 FIGMA_USE_OUT="$SKILLS_DIR/figma-use"
@@ -51,7 +52,7 @@ FIGMA_USE_OUT="$SKILLS_DIR/figma-use"
 FIGMA_API="https://api.figma.com"
 FIGMA_MCP_URL="https://mcp.figma.com/mcp"
 
-TOOL_VERSION="0.1.0"
+TOOL_VERSION="0.2.0"
 PROG_NAME="$(basename "${BASH_SOURCE[0]}")"
 
 # ─── Utilities ───────────────────────────────────────────────────────────────
@@ -72,15 +73,12 @@ print_intro() {
   echo "$bar"
   echo "  $PROG_NAME · Byrde Agents  v$TOOL_VERSION"
   echo ""
-  echo "  Install Figma tool skills into .agents/skills/ and wire up the"
+  echo "  Install the Figma tool skill into .agents/skills/ and wire up the"
   echo "  Figma MCP server in your editor's project config."
   echo ""
-  echo "  Two opt-in capabilities — install either, both, or neither:"
-  echo "    • figma-design-system   tokens, components, library publishing"
-  echo "    • figma-design-file     one shared design file, organised by pages"
-  echo ""
-  echo "  Both overlay on figma-use (Figma's official plugin-API skill),"
-  echo "  which is vendored from upstream on every run."
+  echo "  One skill, one file: components, tokens, and design work all live"
+  echo "  in a single Figma file. The skill overlays on figma-use (Figma's"
+  echo "  official plugin-API skill), vendored from upstream on every run."
   echo ""
   printf '  %-16s %s\n' "Project Root" "$project_root"
   printf '  %-16s %s\n' "Layout" "$(layout_describe)"
@@ -99,51 +97,27 @@ print_summary() {
   echo ""
   printf '  %-16s %s\n' "Team" "${team_name:-$team_id}"
   printf '  %-16s %s\n' "Project" "$selected_project_name"
-  if [[ "$install_ds" == "y" ]]; then
-    printf '  %-16s %s\n' "Design System" "$ds_file_name"
-  fi
-  if [[ "$install_df" == "y" ]]; then
-    printf '  %-16s %s\n' "Design File" "$design_file_name"
-  fi
+  printf '  %-16s %s\n' "Figma file" "$figma_file_name"
   echo ""
   echo "  Skills:"
-  printf '    %s figma-use              %s\n' "✓" "${figma_use_status:-skipped} → $FIGMA_USE_OUT"
-  if [[ "$install_ds" == "y" ]]; then
-    echo "    ✓ figma-design-system    → $DESIGN_SYSTEM_OUT"
-  else
-    echo "    - figma-design-system    (declined)"
-  fi
-  if [[ "$install_df" == "y" ]]; then
-    echo "    ✓ figma-design-file      → $DESIGN_FILE_OUT"
-  else
-    echo "    - figma-design-file      (declined)"
-  fi
+  printf '    %s figma-use    %s\n' "✓" "${figma_use_status:-skipped} → $FIGMA_USE_OUT"
+  printf '    %s figma        → %s\n' "✓" "$FIGMA_OUT"
   echo ""
   echo "  MCP server:"
   printf '    %-13s %s\n' "Cursor:"      "${cursor_status:-skipped}"
   printf '    %-13s %s\n' "Claude Code:" "${claude_status:-skipped}"
-  if [[ "$install_ds" == "y" && "$ds_file_url" == *"pending"* ]]; then
+  if [[ "$figma_file_url" == *"pending"* ]]; then
     echo ""
-    echo "  ⚠  Follow-up — Design System file is pending:"
-    echo "     1. Create '$ds_file_name' in Figma inside '$selected_project_name'."
-    echo "     2. Add the suggested pages: Cover, Components, Typography,"
-    echo "        Colors, Spacing, Icons. (Logos optional. Flat structure —"
-    echo "        no atomic hierarchy.)"
-    echo "     3. Publish it as a team library."
-    echo "     4. Re-run this script to update the file reference."
-  fi
-  if [[ "$install_df" == "y" && "$design_file_url" == *"pending"* ]]; then
-    echo ""
-    echo "  ⚠  Follow-up — Design file is pending:"
-    echo "     1. Create '$design_file_name' in Figma inside '$selected_project_name'."
-    echo "     2. Add a Cover page and an Archive page; add design pages"
-    echo "        (one per screen, or one per feature) as work begins."
+    echo "  ⚠  Follow-up — the Figma file is pending:"
+    echo "     1. Create '$figma_file_name' in Figma inside '$selected_project_name'."
+    echo "     2. Add a 'Components' page for the reusable pieces. Design pages"
+    echo "        get added as work begins — nothing else is required up front."
     echo "     3. Re-run this script to update the file reference."
   fi
   echo ""
   echo "  Authenticate the MCP server through your editor on first use (OAuth)."
   echo "  Verify with: .agents/scripts/doctor.sh"
-  echo "  Undo with:   .agents/scripts/setup-figma.sh uninstall"
+  echo "  Undo with:   .agents/scripts/setup/setup-figma.sh uninstall"
   echo "$bar"
 }
 
@@ -192,11 +166,6 @@ verify_token() {
   handle="$(echo "$me" | jq -r '.handle // empty')"
   [[ -n "$handle" ]] || return 1
   echo "$handle"
-}
-
-list_projects() {
-  local team_id="$1"
-  figma_get "/v1/teams/$team_id/projects" | jq -r '.projects[] | "\(.id)\t\(.name)"'
 }
 
 list_files() {
@@ -271,14 +240,12 @@ EOF
 }
 
 render_skill() {
-  # Renders any Figma skill template. Both file placeholders are substituted;
-  # each template uses only the one it references, so the other is harmless.
-  local template="$1" out="$2" team="$3" project="$4" ds_file="$5" design_file="${6:-}"
+  local template="$1" out="$2" team="$3" project="$4" figma_file="$5"
   [[ -f "$template" ]] || die "missing template: $template"
   mkdir -p "$(dirname "$out")"
   RENDER_TEMPLATE="$template" RENDER_OUT="$out" \
     RENDER_TEAM="$team" RENDER_PROJECT="$project" \
-    RENDER_DS_FILE="$ds_file" RENDER_DESIGN_FILE="$design_file" \
+    RENDER_FIGMA_FILE="$figma_file" \
     python3 <<'PY'
 from pathlib import Path
 import os
@@ -288,8 +255,7 @@ text = src.read_text()
 out = (
     text.replace("{{TEAM}}", os.environ["RENDER_TEAM"])
     .replace("{{PROJECT}}", os.environ["RENDER_PROJECT"])
-    .replace("{{DESIGN_SYSTEM_FILE}}", os.environ["RENDER_DS_FILE"])
-    .replace("{{DESIGN_FILE}}", os.environ["RENDER_DESIGN_FILE"])
+    .replace("{{FIGMA_FILE}}", os.environ["RENDER_FIGMA_FILE"])
 )
 dst.write_text(out)
 print("Wrote", dst)
@@ -375,12 +341,28 @@ merge_claude_mcp_figma() {
 # install_figma_use / render_skill + sync_skill_to_editors.
 remove_skill() {
   local project_root="$1" skill="$2"
-  rm -rf "$SKILLS_DIR/$skill"
-  echo "  removed skills/$skill"
+  local found="n"
+  [[ -n "$skill" ]] || return 0
+  [[ -d "$SKILLS_DIR/$skill" ]] && found="y"
+  rm -rf "${SKILLS_DIR:?}/$skill"
   local dest
   for dest in "$project_root/.claude/skills/$skill" "$project_root/.cursor/skills/$skill"; do
+    [[ -d "$dest" ]] && found="y"
     rm -rf "$dest"
-    echo "  removed ${dest#$project_root/}"
+  done
+  [[ "$found" == "y" ]] && echo "  removed $skill"
+  return 0
+}
+
+# Drop the retired figma-design-system / figma-design-file skills from an
+# earlier install, so a re-run doesn't leave two stale skills claiming the
+# same operations as `figma`.
+remove_legacy_skills() {
+  local project_root="$1"
+  local skill
+  for skill in $LEGACY_SKILLS; do
+    remove_skill "$project_root" "$skill"
+    manifest_remove "$skill"
   done
 }
 
@@ -414,7 +396,7 @@ uninstall() {
   echo "$bar"
   echo "  $PROG_NAME · Uninstall  v$TOOL_VERSION"
   echo ""
-  echo "  Removes the Figma tool skills (including the vendored figma-use) and"
+  echo "  Removes the Figma tool skill (including the vendored figma-use) and"
   echo "  the Figma MCP server from your editor configs."
   echo ""
   printf '  %-16s %s\n' "Project Root" "$project_root"
@@ -422,12 +404,11 @@ uninstall() {
   echo ""
 
   echo "── Removing skills ──"
-  remove_skill "$project_root" "figma-design-system"
-  remove_skill "$project_root" "figma-design-file"
+  remove_skill "$project_root" "figma"
   remove_skill "$project_root" "figma-use"
-  manifest_remove "figma-design-system"
-  manifest_remove "figma-design-file"
+  manifest_remove "figma"
   manifest_remove "figma-use"
+  remove_legacy_skills "$project_root"
   echo ""
 
   echo "── Removing MCP registration ──"
@@ -436,7 +417,7 @@ uninstall() {
   echo ""
 
   echo "$bar"
-  echo "  Done. Figma skills and MCP server removed."
+  echo "  Done. Figma skill and MCP server removed."
   echo "  Restart your editor so it drops the (now-removed) MCP server."
   echo "$bar"
 }
@@ -448,24 +429,20 @@ main() {
     -h | --help | help)
       echo "$PROG_NAME · Byrde Agents v$TOOL_VERSION"
       echo ""
-      echo "Installs Figma tool skills into .agents/skills/ and merges the"
+      echo "Installs the Figma tool skill into .agents/skills/ and merges the"
       echo "Figma MCP server into your editor's project-local config."
       echo ""
       echo "Usage:"
       echo "  cd /your/project && $0              # install"
       echo "  cd /your/project && $0 uninstall    # remove skills + Figma MCP"
       echo ""
-      echo "Opt-in capabilities (pick either, both, or neither):"
-      echo "  figma-design-system   tokens, components, library publishing"
-      echo "  figma-design-file     one shared design file, organised by pages"
-      echo ""
-      echo "Both overlay on figma-use, vendored from upstream on every run:"
+      echo "One skill, one Figma file — components, tokens, and design work."
+      echo "It overlays on figma-use, vendored from upstream on every run:"
       echo "  https://github.com/figma/mcp-server-guide/tree/main/skills/figma-use"
       echo ""
       echo "Writes:"
-      echo "  .agents/skills/figma-use/                — always (refreshed each run)"
-      echo "  .agents/skills/figma-design-system/SKILL.md  — per opt-in"
-      echo "  .agents/skills/figma-design-file/SKILL.md  — per opt-in"
+      echo "  .agents/skills/figma-use/     — always (refreshed each run)"
+      echo "  .agents/skills/figma/SKILL.md"
       echo "  .cursor/mcp.json   — Cursor project MCP"
       echo "  .mcp.json          — Claude Code project MCP"
       exit 0
@@ -485,34 +462,20 @@ main() {
   project_root="$(pwd -P)"
   local cursor_mcp="$project_root/.cursor/mcp.json"
   local claude_mcp="$project_root/.mcp.json"
+  local figma_use_status="skipped"
 
   print_intro "$project_root"
-
-  # ── Step 0: Capability selection ─────────────────────────────────────────
-  local install_ds="n" install_df="n"
-  local figma_use_status="skipped"
-  echo "Which Figma capabilities should be installed as skills?"
-  echo ""
-  read -r -p "Install figma-design-system (tokens, components, library)? [Y/n] " a_ds
-  [[ "${a_ds:-y}" =~ ^[Yy]|^$ ]] && install_ds="y"
-  read -r -p "Install figma-design-file (one shared design file, organised by pages)? [Y/n] " a_df
-  [[ "${a_df:-y}" =~ ^[Yy]|^$ ]] && install_df="y"
-
-  if [[ "$install_ds" != "y" && "$install_df" != "y" ]]; then
-    echo ""
-    echo "Nothing selected — exiting without changes."
-    exit 0
-  fi
 
   # In multi-repo mode, keep the per-repo .byrde/ staging out of git.
   ignore_skills_home
 
-  # figma-use is a prerequisite for the Figma overlays — always (re-)install
-  # so the vendored copy reflects upstream on every setup run.
+  # figma-use is a prerequisite for the overlay — always (re-)install so the
+  # vendored copy reflects upstream on every setup run.
   install_figma_use
 
   # ── Step 1: Authenticate ──────────────────────────────────────────────────
 
+  echo ""
   echo "A Figma Personal Access Token is required."
   echo "Generate one at: https://www.figma.com/developers/api#access-tokens"
   echo "Required scopes: file_content:read, projects:read"
@@ -583,14 +546,11 @@ main() {
 
   echo "Selected project: $selected_project_name (ID: $selected_project_id)"
 
-  # ── Step 4: Select or identify Design System file (only if installing it) ─
+  # ── Step 4: Select the project's Figma file ───────────────────────────────
+  # One file holds components, tokens, and design work. Pages inside it are the
+  # team's business — nothing is validated or required here.
 
-  local ds_file_key="" ds_file_name="" ds_file_url=""
-
-  if [[ "$install_ds" != "y" ]]; then
-    ds_file_name="N/A"
-    ds_file_url="N/A (figma-design-system not installed)"
-  else
+  local figma_file_key="" figma_file_name="" figma_file_url=""
 
   echo ""
   echo "Listing files in project '$selected_project_name' …"
@@ -606,11 +566,11 @@ main() {
   if [[ ${#file_names[@]} -eq 0 ]]; then
     echo ""
     echo "No files found in this project."
-    echo "You will need to create a Design System file in Figma and re-run this script."
+    echo "You will need to create the design file in Figma and re-run this script."
     echo ""
-    read -r -p "Enter the name for your future Design System file: " ds_file_name || true
-    [[ -n "$ds_file_name" ]] || ds_file_name="Design System"
-    ds_file_url="(pending — create the file in Figma, then re-run setup)"
+    read -r -p "Enter the name for your future Figma file: " figma_file_name || true
+    [[ -n "$figma_file_name" ]] || figma_file_name="Design"
+    figma_file_url="(pending — create the file in Figma, then re-run setup)"
   else
     local -a file_display=()
     for fn in "${file_names[@]}"; do
@@ -618,7 +578,8 @@ main() {
     done
 
     echo ""
-    echo "Select the file that is (or will be) your Design System library."
+    echo "Select the file that is (or will be) this project's design file —"
+    echo "one file holding the reusable components and the design work."
     echo "If it doesn't exist yet, choose 'Create new …' and set it up in Figma."
     file_display+=("[Create new — I'll set it up in Figma]")
 
@@ -626,165 +587,53 @@ main() {
     selected_file_display="$(pick_from_menu "Files in '$selected_project_name':" "${file_display[@]}")"
 
     if [[ "$selected_file_display" == "[Create new — I'll set it up in Figma]" ]]; then
-      read -r -p "Enter the name for your Design System file: " ds_file_name || true
-      [[ -n "$ds_file_name" ]] || ds_file_name="Design System"
-      ds_file_url="(pending — create the file in Figma, then re-run setup)"
+      read -r -p "Enter the name for your Figma file: " figma_file_name || true
+      [[ -n "$figma_file_name" ]] || figma_file_name="Design"
+      figma_file_url="(pending — create the file in Figma, then re-run setup)"
     else
-      ds_file_name="$selected_file_display"
+      figma_file_name="$selected_file_display"
       local fidx=0
       for fn in "${file_names[@]}"; do
-        if [[ "$fn" == "$ds_file_name" ]]; then
-          ds_file_key="${file_keys[$fidx]}"
+        if [[ "$fn" == "$figma_file_name" ]]; then
+          figma_file_key="${file_keys[$fidx]}"
           break
         fi
         ((fidx++)) || true
       done
-      ds_file_url="https://www.figma.com/design/$ds_file_key"
+      figma_file_url="https://www.figma.com/design/$figma_file_key"
 
-      # Validate page structure
-      echo ""
-      echo "Checking Design System file structure …"
+      # Informational only — the file's page structure is not prescribed.
       local -a existing_pages=()
       while IFS= read -r pg || [[ -n "$pg" ]]; do
         [[ -n "$pg" ]] && existing_pages+=("$pg")
-      done < <(get_file_pages "$ds_file_key")
-
-      local -a required_pages=("Cover" "Components" "Typography" "Colors" "Spacing" "Icons")
-      local -a missing_pages=()
-      for rp in "${required_pages[@]}"; do
-        local found=false
-        for ep in "${existing_pages[@]}"; do
-          if [[ "$ep" == "$rp" ]]; then
-            found=true
-            break
-          fi
-        done
-        if [[ "$found" == "false" ]]; then
-          missing_pages+=("$rp")
-        fi
-      done
-
-      if [[ ${#missing_pages[@]} -eq 0 ]]; then
-        echo "  ✓ All required pages present: ${required_pages[*]}"
-      else
-        echo "  ⚠ Missing pages: ${missing_pages[*]}"
-        echo "  The following pages need to be created in the Design System file:"
-        for mp in "${missing_pages[@]}"; do
-          echo "    - $mp"
-        done
-        echo ""
-        echo "  You can create these pages manually in Figma, or have an agent"
-        echo "  create them via the MCP server in your first design session."
-      fi
+      done < <(get_file_pages "$figma_file_key")
 
       if [[ ${#existing_pages[@]} -gt 0 ]]; then
         echo ""
-        echo "  Current pages in '$ds_file_name':"
+        echo "  Current pages in '$figma_file_name':"
         for ep in "${existing_pages[@]}"; do
           echo "    • $ep"
         done
-      fi
-    fi
-  fi
-
-  fi # end: install_ds gate
-
-  # ── Step 4b: Select or identify the Design file (only if installing it) ───
-  # The design file is one shared file for the project, organised by pages —
-  # pinned here the same way the Design System file is. No required-page
-  # validation: pages (one per screen, or one per feature) are added as work
-  # begins; only a Cover and an Archive page are expected up front.
-
-  local design_file_key="" design_file_name="" design_file_url=""
-
-  if [[ "$install_df" != "y" ]]; then
-    design_file_name="N/A"
-    design_file_url="N/A (figma-design-file not installed)"
-  else
-
-  echo ""
-  echo "Listing files in project '$selected_project_name' …"
-
-  local df_file_keys=()
-  local df_file_names=()
-  while IFS=$'\t' read -r fkey fname || [[ -n "$fkey" ]]; do
-    [[ -n "$fkey" ]] || continue
-    df_file_keys+=("$fkey")
-    df_file_names+=("$fname")
-  done < <(list_files "$selected_project_id")
-
-  if [[ ${#df_file_names[@]} -eq 0 ]]; then
-    echo ""
-    echo "No files found in this project."
-    echo "You will need to create a design file in Figma and re-run this script."
-    echo ""
-    read -r -p "Enter the name for your future design file: " design_file_name || true
-    [[ -n "$design_file_name" ]] || design_file_name="Designs"
-    design_file_url="(pending — create the file in Figma, then re-run setup)"
-  else
-    local -a df_file_display=()
-    for fn in "${df_file_names[@]}"; do
-      df_file_display+=("$fn")
-    done
-
-    echo ""
-    echo "Select the file that is (or will be) your shared design file —"
-    echo "where design work lives, organised by pages (one per screen, or"
-    echo "one per feature). This is distinct from the Design System library."
-    echo "If it doesn't exist yet, choose 'Create new …' and set it up in Figma."
-    df_file_display+=("[Create new — I'll set it up in Figma]")
-
-    local df_selected_display
-    df_selected_display="$(pick_from_menu "Files in '$selected_project_name':" "${df_file_display[@]}")"
-
-    if [[ "$df_selected_display" == "[Create new — I'll set it up in Figma]" ]]; then
-      read -r -p "Enter the name for your design file: " design_file_name || true
-      [[ -n "$design_file_name" ]] || design_file_name="Designs"
-      design_file_url="(pending — create the file in Figma, then re-run setup)"
-    else
-      design_file_name="$df_selected_display"
-      local dfidx=0
-      for fn in "${df_file_names[@]}"; do
-        if [[ "$fn" == "$design_file_name" ]]; then
-          design_file_key="${df_file_keys[$dfidx]}"
-          break
-        fi
-        ((dfidx++)) || true
-      done
-      design_file_url="https://www.figma.com/design/$design_file_key"
-
-      # Show current pages (informational — no required-page validation)
-      local -a df_existing_pages=()
-      while IFS= read -r pg || [[ -n "$pg" ]]; do
-        [[ -n "$pg" ]] && df_existing_pages+=("$pg")
-      done < <(get_file_pages "$design_file_key")
-
-      if [[ ${#df_existing_pages[@]} -gt 0 ]]; then
-        echo ""
-        echo "  Current pages in '$design_file_name':"
-        for ep in "${df_existing_pages[@]}"; do
-          echo "    • $ep"
+        local has_components="n"
+        for ep in "${existing_pages[@]}"; do
+          [[ "$ep" == "Components" ]] && has_components="y"
         done
+        if [[ "$has_components" == "n" ]]; then
+          echo ""
+          echo "  Note: no 'Components' page yet — add one for the reusable"
+          echo "  pieces, or have an agent create it in your first session."
+        fi
       fi
     fi
   fi
 
-  fi # end: install_df gate
-
-  # ── Step 5: Render skills ─────────────────────────────────────────────────
+  # ── Step 5: Render the skill ──────────────────────────────────────────────
 
   local team_field="${team_name:-$team_id} (ID: $team_id)"
-  local ds_field="$ds_file_name — $ds_file_url"
-  local design_field="$design_file_name — $design_file_url"
+  local figma_field="$figma_file_name — $figma_file_url"
 
-  if [[ "$install_ds" == "y" ]]; then
-    render_skill "$DESIGN_SYSTEM_TEMPLATE" "$DESIGN_SYSTEM_OUT" \
-      "$team_field" "$selected_project_name" "$ds_field"
-  fi
-  if [[ "$install_df" == "y" ]]; then
-    render_skill "$DESIGN_FILE_TEMPLATE" "$DESIGN_FILE_OUT" \
-      "$team_field" "$selected_project_name" "$ds_field" "$design_field"
-  fi
+  render_skill "$FIGMA_TEMPLATE" "$FIGMA_OUT" \
+    "$team_field" "$selected_project_name" "$figma_field"
 
   # ── Step 5b: Sync skills into editor dirs ────────────────────────────────
   # .agents/skills/ is the source of truth; init.sh mirrors it into the
@@ -792,14 +641,11 @@ main() {
   # ones we just installed so Claude Code and Cursor can pick them up.
   sync_skill_to_editors "$project_root" "figma-use"
   manifest_add "figma-use"
-  if [[ "$install_ds" == "y" ]]; then
-    sync_skill_to_editors "$project_root" "figma-design-system"
-    manifest_add "figma-design-system"
-  fi
-  if [[ "$install_df" == "y" ]]; then
-    sync_skill_to_editors "$project_root" "figma-design-file"
-    manifest_add "figma-design-file"
-  fi
+  sync_skill_to_editors "$project_root" "figma"
+  manifest_add "figma"
+
+  # Clear out figma-design-system / figma-design-file from an earlier install.
+  remove_legacy_skills "$project_root"
 
   # ── Step 6: Merge MCP ────────────────────────────────────────────────────
 

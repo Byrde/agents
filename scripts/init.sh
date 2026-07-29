@@ -4,7 +4,7 @@
 # Copies rules and skills into the project's editor directories so the
 # Claude and Cursor agents can pick them up, and turns ON Claude Code's
 # built-in auto-memory (the default). Optional setup steps (GitHub tool
-# skills, Figma tool skills, mempalace memory) are run separately as their
+# skills, the Figma tool skill, mempalace memory) are run separately as their
 # own scripts. setup-memory.sh turns auto-memory OFF — mempalace replaces
 # Claude's native memory — and turns it back ON when uninstalled.
 #
@@ -432,7 +432,7 @@ print_summary() {
   echo "  Optional next steps:"
   echo "    • .agents/scripts/setup/setup-github-project.sh  (pin a GitHub project board)"
   echo "    • .agents/scripts/setup/setup-jira.sh            (pin a Jira site + project)"
-  echo "    • .agents/scripts/setup/setup-figma.sh           (Figma tool skills)"
+  echo "    • .agents/scripts/setup/setup-figma.sh           (Figma tool skill)"
   echo "    • .agents/scripts/setup/setup-memory.sh          (mempalace memory; turns auto-memory off)"
   echo "    (GitHub source-control + MCP were just set up automatically.)"
   echo ""

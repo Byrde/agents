@@ -39,7 +39,7 @@
 is_tool_skill() {
   case "$1" in
     github-projects | google-analytics | jira | \
-      figma-design-system | figma-design-file | figma-use | memory)
+      figma | figma-use | memory)
       return 0 ;;
     *)
       return 1 ;;

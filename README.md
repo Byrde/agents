@@ -1,6 +1,6 @@
 # .agents
 
-A library of self-contained, opinionated Claude Code skills for software development. Drop it into any repository as a submodule. Two kinds of skills compose freely via shared verb+noun vocabulary: **practice skills** (the *what* — develop, plan, architect, design, test, create-readme) ship with the repo; **tool skills** (the *how* — `github-projects`, `figma-design-system`, `figma-design-file`, the vendored `figma-use`) are installed per-project by setup scripts. Some capabilities are always-on **rules** instead of opt-in skills — notably `workspace` (multi-repo routing) and `github-source-control` (branches/PRs/review) — installed automatically by `init.sh`.
+A library of self-contained, opinionated Claude Code skills for software development. Drop it into any repository as a submodule. Two kinds of skills compose freely via shared verb+noun vocabulary: **practice skills** (the *what* — develop, plan, architect, design, test, create-readme) ship with the repo; **tool skills** (the *how* — `github-projects`, `figma`, the vendored `figma-use`) are installed per-project by setup scripts. Some capabilities are always-on **rules** instead of opt-in skills — notably `workspace` (multi-repo routing) and `github-source-control` (branches/PRs/review) — installed automatically by `init.sh`.
 
 ## Usage
 
@@ -46,7 +46,7 @@ The script runs these steps:
 Optional setup (run separately when you want them):
 
 - `.agents/scripts/setup/setup-github-project.sh` — pin a GitHub project board (source-control + MCP are set up by `init.sh`)
-- `.agents/scripts/setup/setup-figma.sh` — Figma tool skills
+- `.agents/scripts/setup/setup-figma.sh` — the Figma tool skill
 - `.agents/scripts/setup/setup-memory.sh` — persistent memory (mempalace) + the `memory` skill
 
 **Uninstall.** Every setup script takes an `uninstall` subcommand that reverses exactly what its install wrote:
@@ -87,7 +87,7 @@ It walks you through your account, owner, the repo the board mainly tracks, and 
 
 ### Figma
 
-Configures opt-in Figma tool skills, vendors Figma's official [`figma-use`](https://github.com/figma/mcp-server-guide/tree/main/skills/figma-use) skill into `skills/figma-use/`, and merges the Figma MCP server into your editor's project config.
+Configures the opt-in `figma` tool skill, vendors Figma's official [`figma-use`](https://github.com/figma/mcp-server-guide/tree/main/skills/figma-use) skill into `skills/figma-use/`, and merges the Figma MCP server into your editor's project config.
 
 **Requires:** `curl`, `git`, `jq`, `python3`, a [Figma Personal Access Token](https://www.figma.com/developers/api#access-tokens) with `file_content:read` and `projects:read` scopes
 
@@ -96,21 +96,17 @@ cd /your/project
 .agents/scripts/setup/setup-figma.sh
 ```
 
-Two opt-in capabilities — pick either, both, or neither:
+**One skill, one file.** `figma` owns the whole design surface: the reusable components and tokens live on a `Components` page, design work lives on whatever other pages the work needs. No separate design-system library file, no prescribed page taxonomy, no Cover/Archive ceremony — components are used locally in the same file, and publishing is only needed when something outside that file consumes them.
 
-- **`figma-design-system`** — tokens, components, library publishing
-- **`figma-design-file`** — one shared design file, organised by pages (flows, wireframes, visual design)
-
-Both overlay on the vendored `figma-use` skill, which owns the Figma plugin-API mechanics. The script asks for your PAT, walks you through team/project selection, the Design System file (if installing `figma-design-system`), and the design file (if installing `figma-design-file`). Re-running the script refreshes `figma-use` from upstream main. It writes:
+It overlays on the vendored `figma-use` skill, which owns the Figma plugin-API mechanics. The script asks for your PAT and walks you through team, project, and file selection. Re-running it refreshes `figma-use` from upstream main and clears out the retired `figma-design-system` / `figma-design-file` skills if an older install left them behind. It writes:
 
 - `.agents/skills/figma-use/` — vendored from upstream (always refreshed)
-- `.agents/skills/figma-design-system/SKILL.md` — per opt-in
-- `.agents/skills/figma-design-file/SKILL.md` — per opt-in
+- `.agents/skills/figma/SKILL.md`
 - `.cursor/mcp.json` and `.mcp.json` — MCP server merged in
 
 The Figma MCP server uses OAuth — authentication happens interactively through your editor on first use.
 
-**Code map.** `figma-design-system` keeps a checked-in `figma-code-map.json` — a free stand-in for Figma Code Connect linking each Figma component to its code component. Its format is defined by `tools/figma-code-map.schema.json` (reference it via `"$schema"` for editor autocomplete). Validate it any time with:
+**Code map.** `figma` keeps a checked-in `figma-code-map.json` — a free stand-in for Figma Code Connect linking each Figma component to its code component. Its format is defined by `tools/figma-code-map.schema.json` (reference it via `"$schema"` for editor autocomplete). Validate it any time with:
 
 ```bash
 cd /your/project
@@ -158,4 +154,4 @@ cd /your/project
 .agents/scripts/doctor.sh
 ```
 
-Reports per-capability presence (`github-projects`, `figma-design-system`, `figma-design-file`, `figma-use`, `memory`), MCP configuration, authentication, and server reachability. For memory it also checks the palace directory, mempalace importability, hooks, and a stdio handshake with the MCP server.
+Reports per-capability presence (`github-projects`, `figma`, `figma-use`, `memory`), MCP configuration, authentication, and server reachability. For memory it also checks the palace directory, mempalace importability, hooks, and a stdio handshake with the MCP server.

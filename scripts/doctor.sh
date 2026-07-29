@@ -222,37 +222,37 @@ check_github() {
 # ─── Figma checks ────────────────────────────────────────────────────────────
 
 check_figma() {
-  # Skill files (per capability)
-  local ds_skill="$SKILLS_DIR/figma-design-system/SKILL.md"
-  local df_skill="$SKILLS_DIR/figma-design-file/SKILL.md"
+  local figma_skill="$SKILLS_DIR/figma/SKILL.md"
 
-  # Gate: the manifest is the source of truth. If neither Figma capability is
-  # recorded there, Figma isn't set up in this checkout — omit it entirely.
-  manifest_has figma-design-system || manifest_has figma-design-file || return 0
+  # Gate: the manifest is the source of truth. If Figma isn't recorded there,
+  # it isn't set up in this checkout — omit the section entirely. The retired
+  # figma-design-system / figma-design-file names still gate it so a stale
+  # install gets reported rather than silently skipped.
+  manifest_has figma || manifest_has figma-design-system \
+    || manifest_has figma-design-file || return 0
 
   echo ""
   echo "Figma"
   echo "-----"
 
-  if manifest_has figma-design-system; then
-    if [[ -f "$ds_skill" ]]; then
-      pass "Skill: skills/figma-design-system/SKILL.md"
+  if manifest_has figma; then
+    if [[ -f "$figma_skill" ]]; then
+      pass "Skill: skills/figma/SKILL.md"
     else
-      fail "Skill: figma-design-system in manifest but SKILL.md missing — re-run setup-figma.sh"
+      fail "Skill: figma in manifest but SKILL.md missing — re-run setup-figma.sh"
     fi
   else
-    skip "Skill: figma-design-system not installed"
+    fail "Skill: figma not installed — re-run setup-figma.sh"
   fi
 
-  if manifest_has figma-design-file; then
-    if [[ -f "$df_skill" ]]; then
-      pass "Skill: skills/figma-design-file/SKILL.md"
-    else
-      fail "Skill: figma-design-file in manifest but SKILL.md missing — re-run setup-figma.sh"
+  # figma-design-system + figma-design-file merged into `figma`. Flag leftovers
+  # from an older install: two skills claiming the same operations misroutes.
+  local legacy
+  for legacy in figma-design-system figma-design-file; do
+    if manifest_has "$legacy" || [[ -f "$SKILLS_DIR/$legacy/SKILL.md" ]]; then
+      fail "Skill: $legacy is retired (merged into figma) — re-run setup-figma.sh to clean it up"
     fi
-  else
-    skip "Skill: figma-design-file not installed"
-  fi
+  done
 
   # figma-use overlay (vendored from figma/mcp-server-guide)
   local figma_use="$SKILLS_DIR/figma-use/SKILL.md"

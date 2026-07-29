@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Lint a project's Figma↔code component map (figma-code-map.json) — the free
-# stand-in for Figma Code Connect maintained via figma-design-system.
+# stand-in for Figma Code Connect maintained via the figma skill.
 #
 # Project-agnostic: ships in the .agents toolkit and runs against whatever map
 # the consuming repo keeps. Pure bash + jq (no Node, no python). Bash 3.2-safe.

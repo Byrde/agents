@@ -1,0 +1,86 @@
+---
+name: figma
+description: Owns Figma operations for this project: read design tokens, read
+  design component, add design token, add design component, publish design
+  library, open design file, comment on design, mark frame ready for
+  development. Consulted whenever design work needs the project's reusable
+  components or a place to put a screen. Configured for the {{TEAM}} team,
+  project {{PROJECT}}, file {{FIGMA_FILE}}. Overlays on top of figma-use, which
+  owns the Figma plugin-API mechanics — load both when executing operations.
+category: tool
+---
+
+# Figma
+
+This project's Figma tool. **One file — {{FIGMA_FILE}}** (team **{{TEAM}}**, project **{{PROJECT}}**) — holds both the reusable components and the design work.
+
+## Built on figma-use
+
+This skill is an **overlay** on [figma-use](../figma-use/SKILL.md), Figma's official skill for driving the MCP server. `figma-use` owns the plugin-API mechanics — the `use_figma` tool, page loading, font loading, query/set helpers, error recovery. This skill owns only the project's conventions.
+
+**Whenever an operation here requires programmatic execution in Figma, follow `figma-use` for how to drive the API.** This skill never duplicates that material.
+
+## Owned operations
+
+- **read design tokens** — query Figma Variables for colors, typography, spacing.
+- **read design component** — query components and their variants.
+- **add design token** — add a variable.
+- **add design component** — add a reusable component.
+- **publish design library** — publish the file as a library (only needed when something outside it consumes the components).
+- **open design file** — open the project's file.
+- **comment on design** — Figma comments or sticky annotations.
+- **mark frame ready for development** — apply Dev Mode's "Ready for development" status to approved frames.
+
+## Access
+
+All operations go through the **Figma MCP server**, driven via `figma-use`. No direct REST calls.
+
+**Preflight (first operation of a session):** read [figma-use/SKILL.md](../figma-use/SKILL.md), verify the MCP server is reachable and authenticated, and verify file **{{FIGMA_FILE}}** is accessible.
+
+## Structure
+
+Two kinds of content in one file. That's the whole model.
+
+- **A `Components` page** — everything used in more than one place, plus the variables they're built from. This *is* the design system. No separate library file, no page per category, no atomic hierarchy.
+- **Design pages** — add one when a feature needs somewhere to live, named after that feature. Frames are the screens and states, named for what they are. No required pages, no sections, no numbering scheme.
+
+Components are used **locally, in the same file** — no import/publish round-trip for internal work. Reach for **publish design library** only when another Figma file needs to consume them; then re-publish after each change, with a note.
+
+## Components
+
+- Built from variables — no hardcoded colors, sizes, or typography.
+- Use **auto layout** so they respond to content.
+- Add **variants** for the axes that genuinely vary (size, style, state). Interactive components define the states they actually have.
+- Build at the **real rendered sizes of the implemented product**, not assumed values — and confirm tints and borders are actually visible in a screenshot, not just present in the layer list.
+
+## Tokens
+
+- Figma **Variables**, named semantically (`color.surface.primary`, `spacing.large`). One flat layer unless there's a concrete reason for more.
+- Light/dark are **Variable modes**, not duplicate token sets.
+- **Store tints and overlays as pre-blended solid colors**, not a base color at reduced opacity — paint-level opacity on a variable binding does not survive a library publish, and instances render fully opaque.
+- Values that **vary by mode** only resolve correctly where the consuming page or frame sets its mode explicitly. Set the mode before placing instances.
+
+## Code map
+
+A checked-in `figma-code-map.json` in the consuming repo links each Figma component to the code component that implements it — a free stand-in for Figma Code Connect (which needs a paid Dev seat). It is a **reference, not a sync**: it never edits code or Figma, it just lets design and dev point at each other. Worth keeping current.
+
+**Format** — defined by the JSON Schema at `.agents/tools/figma-code-map.schema.json`. Make `"$schema": "./.agents/tools/figma-code-map.schema.json"` the first key for editor autocomplete. Each entry carries the code component's name and path plus the Figma component name(s) and node id(s) (`<num>:<num>`) it corresponds to. One code component may map from several Figma components — different variant sets or representations of the same thing.
+
+**When to update it** — whenever you **add, rename, move, or remove** a component, on either side. Adding a component in Figma without adding its entry is the common way the map goes stale.
+
+**How to use it** — before building something new, check the map: if a Figma component already maps to code, reuse or extend that code component instead of reinventing it. Cite the mapped code component in handoff so developers know exactly what to touch.
+
+**Validate after every edit** — run the linter and fix every failure:
+
+```bash
+.agents/tools/figma-code-map-lint.sh   # defaults to ./figma-code-map.json
+```
+
+It validates against the schema and against the project — paths exist, code names are unique, node ids well-formed — and **fails** (non-zero exit) on any of those. It also **warns** about sibling source files with no entry; treat each warning as a prompt to either map the component or add a documented entry saying why it isn't mapped. Pure `bash` + `jq`. If the project has no `figma-code-map.json`, there's nothing to lint.
+
+## Handoff
+
+- **Mark frame ready for development** in place — the Dev Mode status *is* the signal. No separate handoff page.
+- Keep layer names, component properties, and variables meaningful; Dev Mode is the developer's interface to the design.
+- Annotate interaction intent, state transitions, and accessibility requirements that aren't self-evident from the visual.
+- **Verify each screen with the user**, not just your own render — subtle defects (invisible borders, dropped opacity, wrong variable mode) hide from a screenshot.

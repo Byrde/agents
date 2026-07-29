@@ -19,7 +19,6 @@ skills to lean on:
 
 - **github-source-control** — branches, pull requests, code review
 - **github-projects** — work items, milestones, the project board
-- **figma-design-system** — design tokens, components, library publishing
-- **figma-design-file** — the shared design file, organised by pages
-- **figma-use** — the Figma plugin-API mechanics the other Figma skills build on
+- **figma** — the project's Figma file: reusable components, tokens, design work
+- **figma-use** — the Figma plugin-API mechanics the `figma` skill builds on
 - **memory** — persistent project memory (recall before work, save decisions)

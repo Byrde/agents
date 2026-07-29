@@ -7,8 +7,7 @@
 skills/github-projects/
 skills/jira/
 skills/google-analytics/
-skills/figma-design-system/
-skills/figma-design-file/
+skills/figma/
 skills/memory/
 
 # Vendored upstream skill — fetched from figma/mcp-server-guide by setup-figma.sh.
