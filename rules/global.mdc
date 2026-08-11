@@ -36,6 +36,37 @@ Unlike a typical skill (a narrow *how* for one tool), these are broad
 methodologies describing *how we work*. That's a deliberate stretch of the
 convention, and it's fine — treat them as the project's playbook.
 
+## Re-grounding
+
+You are probably reading this again because a hook re-injected it. That means the
+session has run long. **Drift is the expected failure at this point, not an unlikely
+one.**
+
+Drift does not announce itself. You keep shipping. Tests pass. Nothing errors. And the
+method you started with has quietly been replaced by a pattern you invented two slices
+ago, because repeating the last thing is cheaper than re-reading the instruction.
+
+**Rules are re-injected. Skills are not.** So a practice skill loaded at the start of a
+slice has faded by the time its later steps apply — the steps about work items,
+reviews and boards are exactly the ones that fade.
+
+Check four things every time you read this.
+
+1. **Which practice applies right now?** If a unit of work began since you last
+   invoked a practice skill, invoke it again. Never carry the previous slice's
+   procedure forward from memory.
+2. **What is installed?** Read the available skill list. Never answer this from
+   memory, and never infer a tool is absent because nobody mentioned it.
+3. **What have you skipped?** Name it out loud. A memory, a board update, a review
+   request, a work item. An unnamed omission becomes a habit.
+4. **Whose process is this?** Point to the rule or skill that told you to work this
+   way. If you cannot, you invented it. Return to the documented one.
+
+The baselines drift the same way. Architectural standards, the writing standard, the
+branch and pull request conventions — each was agreed once and each erodes as context
+fills. Treat a long session as the condition under which you re-read them, not the
+excuse for not having.
+
 Depending on the project, **tool skills** may also be installed for the practice
 skills to lean on:
 

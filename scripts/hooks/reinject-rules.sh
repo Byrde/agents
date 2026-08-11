@@ -38,8 +38,13 @@ if [ "$n" -ne 1 ] && [ $((n % every)) -ne 0 ]; then exit 0; fi
 
 printf '<project-rules-reinjected message="%s">\n' "$n"
 printf 'These rules are binding and were last shown %s messages ago. Re-read them.\n\n' "$every"
-for f in "$rules_dir"/*.md; do
+# global.md leads: it carries the re-grounding checks, and the first thing read
+# after a long stretch should be the one that asks what drifted.
+seen=""
+for f in "$rules_dir/global.md" "$rules_dir"/*.md; do
   [ -f "$f" ] || continue
+  case " $seen " in *" $f "*) continue ;; esac
+  seen="${seen:-} $f"
   printf '\n===== %s =====\n' "$(basename "$f")"
   cat "$f"
 done
