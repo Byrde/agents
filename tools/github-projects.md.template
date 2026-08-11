@@ -27,7 +27,7 @@ Issue operations and milestone operations go through the **GitHub MCP server**. 
 ### Preflight (first operation of the session)
 
 1. **Server health.** Verify the GitHub MCP server is reachable and authenticated.
-2. **Context.** Verify the server is pointed at `{{ACCOUNT}}/{{REPOSITORY}}`. Switch if possible; halt if not.
+2. **Context.** Verify the server is pointed at `{{ACCOUNT}}/{{REPOSITORY}}`. Switch if possible. Halt if not.
 3. **Board.** Verify project board `{{PROJECT_ID}}` is accessible under `{{ACCOUNT}}` via `gh project view {{PROJECT_ID}} --owner {{ACCOUNT}}`. Halt if not.
 
 ## Conventions

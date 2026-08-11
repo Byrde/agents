@@ -20,7 +20,7 @@ This project's project-management tool. Owns work items (Jira issues), epics, an
 - **comment on work item** — add a comment to the issue.
 - **set work item field** — Priority, Story Points, issue type, status, or any other project field.
 - **link work item** — link the issue to an epic (parent), or to another issue (blocks / relates to / depends on).
-- **place work item on board** — ensure the issue appears on project {{PROJECT_KEY}}'s board (by project + status; issues in the project show on its board automatically).
+- **place work item on board** — ensure the issue appears on project {{PROJECT_KEY}}'s board (by project and status — issues in the project show on its board automatically).
 - **create milestone** — create an Epic (epics represent milestones).
 
 Any practice skill that mentions one of these operations routes through this skill.
@@ -60,7 +60,7 @@ Set the project's structured fields — do not put these in the description:
 - **Story Points** — the project's estimation field.
 - **Priority** — the project's Priority field (e.g. Highest, High, Medium, Low, Lowest).
 
-Field IDs vary per project; resolve them with `getJiraIssueTypeMetaWithFields` once per session before setting.
+Field IDs vary per project. Resolve them with `getJiraIssueTypeMetaWithFields` once per session before setting.
 
 ### Board
 

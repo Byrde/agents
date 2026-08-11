@@ -61,7 +61,7 @@ When you are not sure which level applies, use strict.
   `Let's dive into`, `At the end of the day`.
 - Use American spelling. Keep it consistent in the document.
 - Keep technical names and technical verbs as they are. `deserialize` is a
-  technical verb; do not replace it with a vague word.
+  technical verb. Do not replace it with a vague word.
 
 ### Verbs
 

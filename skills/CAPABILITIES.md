@@ -7,7 +7,7 @@ This is the shared vocabulary that makes implicit composition between skills wor
 - **Practice skills** describe procedures in operations from the taxonomy below. They never name a specific tool or product.
 - **Tool skills** list the operations they own in their `description` frontmatter. The description is what Claude routes on.
 - **One operation, one owner per project.** If two installed tool skills would claim the same verb + noun pair, one of them is mis-scoped — split it or rename.
-- **Verb + noun, not noun alone.** "Comment" is ambiguous; "comment on work item" and "leave review comment" route to different owners.
+- **Verb + noun, not noun alone.** "Comment" is ambiguous. "Comment on work item" and "leave review comment" route to different owners.
 
 ## Operation taxonomy
 

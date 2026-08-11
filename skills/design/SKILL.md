@@ -19,7 +19,7 @@ Design something — at whatever scope the work calls for. Most sessions are sho
 
 1. **Frame.** Say back what's being designed, who it's for, and what constrains it. Get that confirmed before designing. If a work item is referenced, read it and its comments.
 2. **Sketch options.** A couple of credible directions at the cheapest fidelity that answers the question at hand — ASCII layout, written spec, or visuals when the decision is genuinely visual. Walk the trade-offs with the user.
-3. **Decide and hand off.** Name what was chosen, what was rejected, and what's deferred. Deliver whatever a developer needs to build it. If a work item is in play, **comment on the work item** with the summary; otherwise deliver it in the conversation.
+3. **Decide and hand off.** Name what was chosen, what was rejected, and what's deferred. Deliver whatever a developer needs to build it. If a work item is in play, **comment on the work item** with the summary. Otherwise deliver it in the conversation.
 
 Scale to the work: "design this button" is three sentences, "design the onboarding flow" is three rounds of conversation.
 

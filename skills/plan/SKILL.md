@@ -11,7 +11,7 @@ Turn a raw request into a set of tracked work items the team can actually pick u
 ## Mindset
 
 - **Understand intent before slicing.** Size, risk, and dependencies inform the bucket — don't classify on instinct.
-- **Right-sized granularity.** Don't decompose a one-line fix into three issues; don't pack an epic into a single ticket. Match the slices to the work.
+- **Right-sized granularity.** Don't decompose a one-line fix into three issues. Don't pack an epic into a single ticket. Match the slices to the work.
 - **Explicit dependencies beat implicit ones.** If item A blocks item B, say so on the work items.
 - **Architectural surface gets flagged early.** When a slice has structural implications — integration points, data modeling, build-vs-buy — surface them on the work item so they don't ambush implementation.
 - **Make ambiguity visible.** Call out edge cases between buckets ("this might be a small epic or a large feature") and decide *with* the user, not for them.
@@ -34,10 +34,10 @@ Elicit only what the scope at hand needs. Keep it conversational.
    - **Bugfix** — corrective work with a reproducible failure, expected-vs-actual, and scope limited to the fix.
 
    If the request straddles buckets, decide explicitly with the user and record the call on the work item.
-3. **Decompose.** Break the work into items at the granularity that matches the bucket. Don't over-fragment; don't under-spec.
+3. **Decompose.** Break the work into items at the granularity that matches the bucket. Don't over-fragment. Don't under-specify.
 4. **Spec each item.** Every work item should include:
    - Acceptance criteria — the conditions that make it done.
-   - Size (XS/S/M/L/XL) and priority — set via the project's structured fields when a tracker is installed; in conversation otherwise.
+   - Size (XS/S/M/L/XL) and priority — set via the project's structured fields when a tracker is installed. Set them in conversation otherwise.
    - Dependencies — link blockers and prerequisites explicitly.
 5. **Flag architectural surface.** For items with meaningful structural implications, attach a short architectural note — key decisions, constraints, recommended approach, open questions. Skip cosmetic or copy-only items. Mermaid diagrams only when a picture earns its keep.
 6. **Present the breakdown.** Walk through the plan with the user. Iterate until they confirm.

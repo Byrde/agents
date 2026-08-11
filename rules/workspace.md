@@ -15,10 +15,10 @@ acting on any task that touches code, know WHERE the change belongs.
 ```
 
 - `path` is relative to the context root — that's where the repo lives.
-- `purpose` is the strongest routing signal when present; then `name`/`path`,
+- `purpose` is the strongest routing signal when present, then `name`/`path`,
   `stack` (e.g. a Scala change → a scala repo), and any endpoint/service/file
   names. A GitHub `owner/name` or URL maps directly via `remote`.
-- `mode: mono` → a single repo (everything goes there); `mode: multi` → several.
+- `mode: mono` → a single repo, so everything goes there. `mode: multi` → several.
 
 If the file is absent, treat this as a single-repo context. If it looks stale (a
 repo it lists is gone, or a repo on disk isn't listed), say so and suggest

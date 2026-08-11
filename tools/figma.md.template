@@ -44,7 +44,7 @@ Two kinds of content in one file. That's the whole model.
 - **A `Components` page** — everything used in more than one place, plus the variables they're built from. This *is* the design system. No separate library file, no page per category, no atomic hierarchy.
 - **Design pages** — add one when a feature needs somewhere to live, named after that feature. Frames are the screens and states, named for what they are. No required pages, no sections, no numbering scheme.
 
-Components are used **locally, in the same file** — no import/publish round-trip for internal work. Reach for **publish design library** only when another Figma file needs to consume them; then re-publish after each change, with a note.
+Components are used **locally, in the same file** — no import/publish round-trip for internal work. Reach for **publish design library** only when another Figma file needs to consume them. Re-publish after each change, with a note.
 
 ## Components
 
@@ -76,11 +76,11 @@ A checked-in `figma-code-map.json` in the consuming repo links each Figma compon
 .agents/tools/figma-code-map-lint.sh   # defaults to ./figma-code-map.json
 ```
 
-It validates against the schema and against the project — paths exist, code names are unique, node ids well-formed — and **fails** (non-zero exit) on any of those. It also **warns** about sibling source files with no entry; treat each warning as a prompt to either map the component or add a documented entry saying why it isn't mapped. Pure `bash` + `jq`. If the project has no `figma-code-map.json`, there's nothing to lint.
+It validates against the schema and against the project — paths exist, code names are unique, node ids well-formed — and **fails** (non-zero exit) on any of those. It also **warns** about sibling source files with no entry. Treat each warning as a prompt to either map the component or add a documented entry saying why it isn't mapped. Pure `bash` + `jq`. If the project has no `figma-code-map.json`, there's nothing to lint.
 
 ## Handoff
 
 - **Mark frame ready for development** in place — the Dev Mode status *is* the signal. No separate handoff page.
-- Keep layer names, component properties, and variables meaningful; Dev Mode is the developer's interface to the design.
+- Keep layer names, component properties, and variables meaningful. Dev Mode is the developer's interface to the design.
 - Annotate interaction intent, state transitions, and accessibility requirements that aren't self-evident from the visual.
 - **Verify each screen with the user**, not just your own render — subtle defects (invisible borders, dropped opacity, wrong variable mode) hide from a screenshot.

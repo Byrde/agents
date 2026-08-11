@@ -1,6 +1,6 @@
 # .agents
 
-A library of self-contained, opinionated Claude Code skills for software development. Drop it into any repository as a submodule. Two kinds of skills compose freely via shared verb+noun vocabulary: **practice skills** (the *what* — develop, plan, architect, design, test, create-readme) ship with the repo; **tool skills** (the *how* — `github-projects`, `figma`, the vendored `figma-use`) are installed per-project by setup scripts. Some capabilities are always-on **rules** instead of opt-in skills — notably `workspace` (multi-repo routing) and `github-source-control` (branches/PRs/review) — installed automatically by `init.sh`.
+A library of self-contained, opinionated Claude Code skills for software development. Drop it into any repository as a submodule. Two kinds of skills compose freely via shared verb+noun vocabulary: **practice skills** (the *what* — develop, plan, architect, design, test, create-readme) ship with the repo. **Tool skills** (the *how* — `github-projects`, `figma`, the vendored `figma-use`) are installed per-project by setup scripts. Some capabilities are always-on **rules** instead of opt-in skills — notably `workspace` (multi-repo routing) and `github-source-control` (branches/PRs/review) — installed automatically by `init.sh`.
 
 ## Usage
 
@@ -40,8 +40,8 @@ The script runs these steps:
 
 1. **Rules** — copies `.agents/rules/` into `.cursor/rules/` and `.claude/rules/` (includes the always-on [workspace rule](#workspace))
 2. **Skills** — copies `.agents/skills/` into `.cursor/skills/` and `.claude/skills/`
-3. **Workspace map** — generates `.workspace.agents.json` at the project root, auto-detecting mono vs multi-repo (see [Workspace](#workspace)); gitignored
-4. **Auto-memory** — sets `autoMemoryEnabled: true` in `.claude/settings.json` (turning on Claude Code's built-in auto-memory, the default) and pins `autoMemoryDirectory` to the absolute path of `./memory` in `.claude/settings.local.json` (project-local storage; the content is git-tracked and shared with the team). `setup-memory.sh` turns the flag off (mempalace replaces it) and back on when uninstalled.
+3. **Workspace map** — generates `.workspace.agents.json` at the project root, auto-detecting mono vs multi-repo (see [Workspace](#workspace)). Gitignored
+4. **Auto-memory** — sets `autoMemoryEnabled: true` in `.claude/settings.json` (turning on Claude Code's built-in auto-memory, the default) and pins `autoMemoryDirectory` to the absolute path of `./memory` in `.claude/settings.local.json` (project-local storage, git-tracked and shared with the team). `setup-memory.sh` turns the flag off (mempalace replaces it) and back on when uninstalled.
 
 Optional setup (run separately when you want them):
 
@@ -83,7 +83,7 @@ cd /your/workspace
 .agents/scripts/setup/setup-github-project.sh uninstall  # remove the github-projects skill
 ```
 
-It walks you through your account, owner, the repo the board mainly tracks, and the board ID; writes `skills/github-projects/SKILL.md` (mirrored into `.claude/`/`.cursor/`); and ensures the GitHub MCP is registered. The MCP itself is shared with source-control and is managed by `init.sh` — `setup-github-project.sh uninstall` leaves it in place.
+It walks you through your account, owner, the repo the board mainly tracks, and the board ID. It then writes `skills/github-projects/SKILL.md`, mirrored into `.claude/` and `.cursor/`. It also ensures the GitHub MCP is registered. The MCP itself is shared with source-control and is managed by `init.sh` — `setup-github-project.sh uninstall` leaves it in place.
 
 ### Figma
 
@@ -134,7 +134,7 @@ The script walks you through ignore patterns, palace initialisation (which index
 - `.agents/skills/memory/SKILL.md` — the `memory` tool skill (also mirrored into `.claude/skills/memory/` and `.cursor/skills/memory/`)
 - `.cursor/mcp.json` and `.mcp.json` — MCP server merged in
 - `.cursor/hooks.json` and `.claude/settings.local.json` — auto-save + pre-compact hooks
-- `.claude/settings.json` — `autoMemoryEnabled: false` (mempalace replaces Claude Code's native auto-memory; `uninstall` restores it to `true`)
+- `.claude/settings.json` — `autoMemoryEnabled: false` (mempalace replaces Claude Code's native auto-memory. `uninstall` restores it to `true`)
 
 Re-run any time to upgrade mempalace or refresh configuration — on an already-initialised project it skips init and simply offers to re-mine. To re-index the project after large changes without the full walkthrough:
 
