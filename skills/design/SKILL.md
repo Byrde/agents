@@ -1,8 +1,6 @@
 ---
 name: design
-description: Design a feature, flow, screen, or component. Frame the problem,
-  sketch a couple of options, pick one, and write down what a developer needs to
-  build it. Reuses existing components before adding new ones.
+description: "**MUST be invoked** before you build or change a screen, flow or component. NEVER design in code. Skipping it means options go unconsidered and an existing component gets duplicated instead of reused. Design a feature, flow, screen or component: frame the problem, sketch a couple of options, pick one, and write down what a developer needs to build it."
 category: practice
 ---
 

@@ -1,9 +1,6 @@
 ---
 name: architect
-description: Design or refine system architecture — boundaries between services
-  and data stores, build-vs-buy calls, integration patterns, scaling and failure
-  story. Best for macro decisions, not everyday feature work. Produces Mermaid
-  diagrams when a picture earns its keep, plain prose otherwise.
+description: "**MUST be invoked** before you change a module boundary, add a dependency, or decide build-vs-buy. NEVER make a structural call inline because the code change looks small. Skipping it buries a decision nobody can find later. Design or refine system architecture — boundaries between services and data stores, integration patterns, scaling and failure story. Best for macro decisions, not everyday feature work. Produces Mermaid diagrams when a picture earns its keep, plain prose otherwise."
 category: practice
 ---
 

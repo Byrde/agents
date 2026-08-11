@@ -1,9 +1,6 @@
 ---
 name: test
-description: Adversarially validate an implementation against its acceptance
-  criteria. Reads the spec, exercises the build, attacks the seams where it's
-  likely to break, and rejects defects with a precise report. Works against
-  tracked work items or ad-hoc.
+description: "**MUST be invoked** before you claim an implementation meets its acceptance criteria. NEVER assert that work is validated from a passing test run alone. Skipping it means the seams go unattacked and a defect ships looking green. Adversarially validate an implementation against its acceptance criteria: read the spec, exercise the build, attack where it is likely to break, and reject defects with a precise report. Works against tracked work items or ad-hoc."
 category: practice
 ---
 

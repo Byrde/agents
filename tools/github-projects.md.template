@@ -1,11 +1,6 @@
 ---
 name: github-projects
-description: Owns work-item and project-board operations against GitHub for
-  this project: create work item, transition work item, comment on work item,
-  set work item field (priority, size, type), link work item to milestone,
-  place work item on board, create milestone. Consulted by any practice skill
-  that needs to create, query, transition, or annotate a work item. Configured
-  for {{ACCOUNT}}/{{REPOSITORY}} project board {{PROJECT_ID}}.
+description: "**MUST be consulted** by any practice skill that creates, queries, transitions or annotates a work item. NEVER write an issue, set a field, or touch the board through a raw API call without loading this first. Skipping it means milestones, board status and the work-item/PR link go unset. Owns work-item and project-board operations against GitHub for this project: create work item, transition work item, comment on work item, set work item field (priority, size, type), link work item to milestone, place work item on board, create milestone. Configured for {{ACCOUNT}}/{{REPO}} project board {{PROJECT_ID}}."
 category: tool
 ---
 

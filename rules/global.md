@@ -1,8 +1,30 @@
 # Working in this project
 
 This repo ships **practice skills** — `plan`, `architect`, `design`, `develop`,
-`test` — the team's methods for doing software work. Lean on them for non-trivial
-work; skip them when plain work will do.
+`test` — the team's methods for doing software work.
+
+**You MUST invoke the matching practice skill before you start.** The trigger is
+mechanical. Do not decide whether the work "needs" a method.
+
+| Invoke | Before you |
+|---|---|
+| `plan` | create, split, restructure or re-scope a work item |
+| `architect` | change a module boundary, add a dependency, or decide build-vs-buy |
+| `design` | build or change a screen, flow or component |
+| `develop` | make the first edit of any change that will open a pull request |
+| `test` | validate an implementation against its acceptance criteria |
+
+**Invoke once per unit of work, not once per session.** A skill's procedure ends when
+it ships. It does not carry into the next slice. Repeating the previous slice from
+working memory is faster than re-invoking, and that is the failure, not a shortcut.
+
+**The only exemption** is a single-file edit that opens no pull request. Say when you
+take it.
+
+**What skipping costs.** Each practice skill consults the tool skills that own the
+surfaces around it — the tracker, source control, the design file. Skip the practice
+skill and none of those are consulted. Work items go untracked, boards go unset,
+reviews go unrequested, and nobody notices until someone asks.
 
 Unlike a typical skill (a narrow *how* for one tool), these are broad
 methodologies describing *how we work*. That's a deliberate stretch of the

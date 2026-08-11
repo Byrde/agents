@@ -1,10 +1,6 @@
 ---
 name: develop
-description: Implement a feature or fix from clear requirements using TDD.
-  Reads and updates work items when a tracker is installed; opens pull requests
-  when source control is installed; otherwise delivers code and tests in the
-  conversation. Writes contract tests first, implements to green, refactors
-  within scope, halts on ambiguity.
+description: "**MUST be invoked** before the first edit of any change that will open a pull request. NEVER start implementing and decide later that the work was too small to need it. Skipping it means no contract tests, no work-item transition, and no review request, because this skill is what consults the tracker and source control. Invoke once per slice, not once per session — its procedure ends at Ship and does not carry forward. Implement a feature or fix from clear requirements using TDD: contract tests first, implement to green, refactor within scope, halt on ambiguity."
 category: practice
 ---
 
