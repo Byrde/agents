@@ -32,7 +32,7 @@ When a work item is referenced, read the body and all comments — that's where 
 3. **Validate against standards.** Check folder structure, dependency rules, separation of concerns, testing strategy per the `development` rule. Deviations are defects.
 4. **Attack the seams.** Hostile inputs, error states, latency, concurrency, edge cases the spec didn't enumerate. Look where shortcuts hide.
 5. **Report.**
-   - **Defects found:** reject the work. Each defect gets: a blunt statement of what's broken, foolproof reproduction steps, expected-vs-actual, and any environmental context. **Comment on the work item** with the rejection and **transition the work item** back to its in-progress state — or if no tracker is installed, deliver the report in the conversation.
+   - **Defects found:** reject the work. Each defect gets a blunt statement of what is broken, foolproof reproduction steps, expected against actual, and any environmental context. **Comment on the work item** with the rejection. **Transition the work item** back to its in-progress state. If no tracker is installed, deliver the report in the conversation.
    - **Passed:** **comment on the work item** confirming approval and leave the work item in its post-PR state. Don't move it to "Done" manually. Merge automation closes the loop. If no tracker is installed, confirm approval in the conversation.
 
 ## When to halt
@@ -43,7 +43,9 @@ When a work item is referenced, read the body and all comments — that's where 
 
 ## Composition
 
-**Check what is installed. Never assume a tool skill is absent.**
+**Check what is installed. Never assume a tool skill is absent.** A tool skill is inert
+until you invoke it. A rule is already in context. See `global.md` → Tool skills for
+which is which.
 
 - **`github-projects`** — invoke it before you post a defect report, record an approval,
   or transition rejected work back.

@@ -13,8 +13,8 @@ Turn a raw request into a set of tracked work items the team can actually pick u
 - **Understand intent before slicing.** Size, risk, and dependencies inform the bucket — don't classify on instinct.
 - **Right-sized granularity.** Don't decompose a one-line fix into three issues. Don't pack an epic into a single ticket. Match the slices to the work.
 - **Explicit dependencies beat implicit ones.** If item A blocks item B, say so on the work items.
-- **Architectural surface gets flagged early.** When a slice has structural implications — integration points, data modeling, build-vs-buy — surface them on the work item so they don't ambush implementation.
-- **Make ambiguity visible.** Call out edge cases between buckets ("this might be a small epic or a large feature") and decide *with* the user, not for them.
+- **Architectural surface gets flagged early.** When a slice has structural implications, surface them on the work item. Integration points, data modeling and build-vs-buy calls ambush implementation otherwise.
+- **Make ambiguity visible.** Name an edge case between buckets, such as "a small epic or a large feature". Decide it *with* the user, never for them.
 
 ## Inputs
 
@@ -50,7 +50,9 @@ Elicit only what the scope at hand needs. Keep it conversational.
 
 ## Composition
 
-**Check what is installed. Never assume a tool skill is absent.**
+**Check what is installed. Never assume a tool skill is absent.** A tool skill is inert
+until you invoke it. A rule is already in context. See `global.md` → Tool skills for
+which is which.
 
 - **`github-projects`** — invoke it before you create a work item, set a field, or place
   anything on a board. It carries conventions you will otherwise get wrong: milestones

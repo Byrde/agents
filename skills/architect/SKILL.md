@@ -45,7 +45,9 @@ When a work item is referenced, read it through (body + comments) — that's whe
 
 ## Composition
 
-**Check what is installed. Never assume a tool skill is absent.**
+**Check what is installed. Never assume a tool skill is absent.** A tool skill is inert
+until you invoke it. A rule is already in context. See `global.md` → Tool skills for
+which is which.
 
 - **`github-projects`** — invoke it before you post an artifact as a comment on a work
   item.
