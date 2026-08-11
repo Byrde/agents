@@ -287,7 +287,7 @@ REINJECT_HOOK_CMD='"$CLAUDE_PROJECT_DIR"/.agents/scripts/hooks/reinject-rules.sh
 # most recent tool result as a session grows and compliance decays silently. This
 # gives them the same recurring-interrupt mechanism that actually works.
 #
-# Cadence: BYRDE_RULES_REINJECT_EVERY (default 15, 0 disables).
+# Cadence: BYRDE_RULES_REINJECT_EVERY (default 10, 0 disables).
 set_rules_reinject_hook() {
   local project_root="$1"
   local settings="$project_root/.claude/settings.json"
@@ -308,7 +308,7 @@ set_rules_reinject_hook() {
   if [[ ! -f "$settings" ]]; then echo '{}' >"$settings"; fi
   if jq --arg cmd "$REINJECT_HOOK_CMD" "$filter" "$settings" >"$tmp"; then
     mv "$tmp" "$settings"
-    echo "  ✓ rules re-injected every ${BYRDE_RULES_REINJECT_EVERY:-15} messages → .claude/settings.json"
+    echo "  ✓ rules re-injected every ${BYRDE_RULES_REINJECT_EVERY:-10} messages → .claude/settings.json"
   else
     echo "  ⚠ jq failed on $settings — leaving hooks unchanged"; rm -f "$tmp"
   fi

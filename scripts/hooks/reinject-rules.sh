@@ -8,11 +8,11 @@
 # This runs on UserPromptSubmit and prints the rules back into context every Nth
 # message. stdout from this event is added as context, so printing IS the injection.
 #
-# Cadence: BYRDE_RULES_REINJECT_EVERY (default 15). Set 0 to disable.
+# Cadence: BYRDE_RULES_REINJECT_EVERY (default 10). Set 0 to disable.
 # State: one counter file per session under the project's .claude/ directory.
 set -uo pipefail
 
-every="${BYRDE_RULES_REINJECT_EVERY:-15}"
+every="${BYRDE_RULES_REINJECT_EVERY:-10}"
 [ "$every" = "0" ] && exit 0
 
 payload="$(cat 2>/dev/null || true)"
