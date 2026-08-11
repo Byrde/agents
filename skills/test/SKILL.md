@@ -43,6 +43,24 @@ When a work item is referenced, read the body and all comments — that's where 
 
 ## Composition
 
-If a project-management tool skill is installed (e.g., `github-projects`), defect reports and approvals are posted as **comments on the work item**, and rejected work has its status **transitioned** back. If no tracker is installed, deliver the same report in the conversation.
+**Check what is installed before you start.** Read the available skill list. Never
+assume a tool skill is absent, and never infer it from the fact that nobody mentioned
+it.
 
-If a source-control tool skill is installed and the change has a PR, leaving review comments belongs to that skill — this skill's outputs are validation results on the work item, not code-review comments on the PR.
+Two mechanisms, and they are not the same:
+
+- A **tool skill** must be invoked. It is inert until you load it.
+- A **rule** is already in context when installed. Follow it. There is nothing to
+  invoke.
+
+What this skill routes to:
+
+- **`github-projects`** (tool skill) — if available, you MUST invoke it before you
+  post a defect report, record an approval, or transition rejected work back.
+- **The `github-source-control` rule** — always on when installed. Review comments on
+  a pull request belong to it. This skill's output is a validation result on the work
+  item, not a code review.
+
+Only when no tracker is available: deliver the same report in the conversation, and
+say so.
+

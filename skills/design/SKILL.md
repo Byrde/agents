@@ -40,4 +40,24 @@ The payoff of a component library is that the second use is nearly free.
 
 ## Composition
 
-Where a design-system or design-file tool is installed, the operations above route to it. Where none is, deliver designs as sketches, written specs, or links to external artifacts — whatever the situation supports.
+**Check what is installed before you start.** Read the available skill list. Never
+assume a tool skill is absent, and never infer it from the fact that nobody mentioned
+it.
+
+Two mechanisms, and they are not the same:
+
+- A **tool skill** must be invoked. It is inert until you load it.
+- A **rule** is already in context when installed. Follow it. There is nothing to
+  invoke.
+
+What this skill routes to:
+
+- **The Figma tool skill** — if available, you MUST invoke it before you create or
+  edit anything in the design file. Never operate the design file through a raw API
+  call.
+- **`github-projects`** (tool skill) — if available and a work item is in scope, you
+  MUST invoke it before posting the spec as a comment.
+
+Only when no design tooling is available: deliver sketches, a written spec, or links,
+and say which.
+

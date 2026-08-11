@@ -50,6 +50,23 @@ Elicit only what the scope at hand needs. Keep it conversational.
 
 ## Composition
 
-If a project-management tool skill is installed (e.g., `github-projects`), every work item is **created**, placed on the board, and has its fields **set** through that skill. Architectural notes are posted as comments on the work item.
+**Check what is installed before you start.** Read the available skill list. Never
+assume a tool skill is absent, and never infer it from the fact that nobody mentioned
+it.
 
-If no tracker is installed, deliver the breakdown directly in the conversation as a structured list — the user picks where to track it.
+Two mechanisms, and they are not the same:
+
+- A **tool skill** must be invoked. It is inert until you load it.
+- A **rule** is already in context when installed. Follow it. There is nothing to
+  invoke.
+
+What this skill routes to:
+
+- **`github-projects`** (tool skill) — if available, you MUST invoke it before you
+  create a work item, set a field, or place anything on a board. It also carries the
+  conventions you will otherwise get wrong: milestones are epics, and PR-merge
+  automation owns the transition to Done.
+
+Only when no tracker is available: deliver the breakdown in the conversation as a
+structured list, and say that is what you are doing.
+

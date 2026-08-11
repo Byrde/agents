@@ -38,8 +38,30 @@ When a work item is referenced, read it and all its comments — that's where pr
 
 ## Composition
 
-If a project-management tool skill is installed (e.g., `github-projects`), work-item operations (**transition**, **comment on work item**) go through that skill. If a source-control tool skill is installed (e.g., `github-source-control`), branch creation and PR operations go through that skill.
+**Check what is installed before you start.** Read the available skill list. Never
+assume a tool skill is absent, and never infer it from the fact that nobody mentioned
+it.
 
-If no tracker is installed, treat the work as ad-hoc — gather requirements conversationally, skip the work-item steps, and deliver code with a written summary in the conversation. If no source-control tool is installed, deliver code and tests in the conversation without a branch or PR.
+Two mechanisms, and they are not the same:
 
-If the project keeps a **Figma↔code component map** (e.g., `figma-code-map.json`; maintained via the Figma tool skill), consult it before building UI to find the existing component to implement or extend, and update its entry when you add or rename a component — keep the design↔code links current. After editing the map, run `.agents/tools/figma-code-map-lint.sh` and fix any failures.
+- A **tool skill** must be invoked. It is inert until you load it.
+- A **rule** is already in context when installed. Follow it. There is nothing to
+  invoke.
+
+What this skill routes to:
+
+- **`github-projects`** (tool skill) — if available, you MUST invoke it before you
+  transition a work item or comment on one.
+- **The `github-source-control` rule** — always on when installed, so it is already in
+  context. It governs branches, worktrees, pull request bodies and review requests.
+  Follow it. There is nothing to invoke, and nothing about it is optional because the
+  change felt small.
+- **The Figma↔code component map** (e.g. `figma-code-map.json`) — if the project keeps
+  one, consult it before building UI. Find the component to extend rather than adding
+  a second one. Update its entry when you add or rename a component, then run
+  `.agents/tools/figma-code-map-lint.sh` and fix any failure.
+
+Only when no tracker is available: gather requirements conversationally and deliver
+code with a written summary. Only when no source control is available: deliver code
+and tests in the conversation. Say which case applies.
+
