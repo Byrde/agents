@@ -45,23 +45,13 @@ When a work item is referenced, read it through (body + comments) — that's whe
 
 ## Composition
 
-**Check what is installed before you start.** Read the available skill list. Never
-assume a tool skill is absent, and never infer it from the fact that nobody mentioned
-it.
+**Check what is installed. Never assume a tool skill is absent.**
 
-Two mechanisms, and they are not the same:
+- **`github-projects`** — invoke it before you post an artifact as a comment on a work
+  item.
 
-- A **tool skill** must be invoked. It is inert until you load it.
-- A **rule** is already in context when installed. Follow it. There is nothing to
-  invoke.
-
-What this skill routes to:
-
-- **`github-projects`** (tool skill) — if available and a work item is in scope, you
-  MUST invoke it before posting an artifact as a comment.
-
-The `development` rule is always on. Its architectural standards are the default.
-Override them only when the user says so explicitly.
+The `development` rule is always on, and its architectural standards are the default.
+Override them only when the user says so.
 
 Only when no tracker is available: keep the artifacts in the conversation, and say so.
 

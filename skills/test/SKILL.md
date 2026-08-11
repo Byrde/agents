@@ -43,24 +43,13 @@ When a work item is referenced, read the body and all comments — that's where 
 
 ## Composition
 
-**Check what is installed before you start.** Read the available skill list. Never
-assume a tool skill is absent, and never infer it from the fact that nobody mentioned
-it.
+**Check what is installed. Never assume a tool skill is absent.**
 
-Two mechanisms, and they are not the same:
+- **`github-projects`** — invoke it before you post a defect report, record an approval,
+  or transition rejected work back.
+- **The `github-source-control` rule** owns review comments on a pull request. This
+  skill's output is a validation result on the work item, not a code review.
 
-- A **tool skill** must be invoked. It is inert until you load it.
-- A **rule** is already in context when installed. Follow it. There is nothing to
-  invoke.
-
-What this skill routes to:
-
-- **`github-projects`** (tool skill) — if available, you MUST invoke it before you
-  post a defect report, record an approval, or transition rejected work back.
-- **The `github-source-control` rule** — always on when installed. Review comments on
-  a pull request belong to it. This skill's output is a validation result on the work
-  item, not a code review.
-
-Only when no tracker is available: deliver the same report in the conversation, and
-say so.
+Only when no tracker is available: deliver the same report in the conversation, and say
+so.
 

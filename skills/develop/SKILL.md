@@ -38,30 +38,17 @@ When a work item is referenced, read it and all its comments — that's where pr
 
 ## Composition
 
-**Check what is installed before you start.** Read the available skill list. Never
-assume a tool skill is absent, and never infer it from the fact that nobody mentioned
-it.
+**Check what is installed. Never assume a tool skill is absent.**
 
-Two mechanisms, and they are not the same:
-
-- A **tool skill** must be invoked. It is inert until you load it.
-- A **rule** is already in context when installed. Follow it. There is nothing to
-  invoke.
-
-What this skill routes to:
-
-- **`github-projects`** (tool skill) — if available, you MUST invoke it before you
-  transition a work item or comment on one.
-- **The `github-source-control` rule** — always on when installed, so it is already in
-  context. It governs branches, worktrees, pull request bodies and review requests.
-  Follow it. There is nothing to invoke, and nothing about it is optional because the
-  change felt small.
-- **The Figma↔code component map** (e.g. `figma-code-map.json`) — if the project keeps
-  one, consult it before building UI. Find the component to extend rather than adding
-  a second one. Update its entry when you add or rename a component, then run
+- **`github-projects`** — invoke it before you transition a work item or comment on one.
+- **The `github-source-control` rule** governs branches, worktrees, pull request bodies
+  and review requests. Nothing in it is optional because the change felt small.
+- **The Figma↔code component map** (`figma-code-map.json`) — when the project keeps one,
+  consult it before building UI. Extend the existing component rather than adding a
+  second. Update its entry on add or rename, then run
   `.agents/tools/figma-code-map-lint.sh` and fix any failure.
 
-Only when no tracker is available: gather requirements conversationally and deliver
-code with a written summary. Only when no source control is available: deliver code
-and tests in the conversation. Say which case applies.
+Only when no tracker is available: gather requirements conversationally and deliver code
+with a written summary. Only when no source control is available: deliver code and tests
+in the conversation. Say which case applies.
 
