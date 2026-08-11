@@ -277,6 +277,66 @@ set_allow_all_hook() {
   fi
 }
 
+# Command for the rules-reinjection UserPromptSubmit hook. Identity is keyed on the
+# script path so re-running init replaces rather than duplicates it.
+REINJECT_HOOK_CMD='"$CLAUDE_PROJECT_DIR"/.agents/scripts/hooks/reinject-rules.sh'
+
+# Install a UserPromptSubmit hook that re-prints the rules every Nth message.
+#
+# Rules load once, at session start. Nothing re-asserts them, so they lose to the
+# most recent tool result as a session grows and compliance decays silently. This
+# gives them the same recurring-interrupt mechanism that actually works.
+#
+# Cadence: BYRDE_RULES_REINJECT_EVERY (default 15, 0 disables).
+set_rules_reinject_hook() {
+  local project_root="$1"
+  local settings="$project_root/.claude/settings.json"
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "  ⚠ jq not found — skipping rules-reinjection hook"
+    return 0
+  fi
+  mkdir -p "$(dirname "$settings")"
+  local filter='
+    .hooks = (.hooks // {})
+    | .hooks.UserPromptSubmit =
+        (((.hooks.UserPromptSubmit // [])
+          | map(select(([.hooks[]?.command] | index($cmd)) | not)))
+         + [{hooks: [{type: "command", command: $cmd}]}])
+  '
+  local tmp
+  tmp="$(mktemp)"
+  if [[ ! -f "$settings" ]]; then echo '{}' >"$settings"; fi
+  if jq --arg cmd "$REINJECT_HOOK_CMD" "$filter" "$settings" >"$tmp"; then
+    mv "$tmp" "$settings"
+    echo "  ✓ rules re-injected every ${BYRDE_RULES_REINJECT_EVERY:-15} messages → .claude/settings.json"
+  else
+    echo "  ⚠ jq failed on $settings — leaving hooks unchanged"; rm -f "$tmp"
+  fi
+}
+
+# Remove the rules-reinjection hook (uninstall). Leaves other hooks intact.
+del_rules_reinject_hook() {
+  local project_root="$1"
+  local settings="$project_root/.claude/settings.json"
+  [[ -f "$settings" ]] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  local tmp
+  tmp="$(mktemp)"
+  local filter='
+    if (.hooks.UserPromptSubmit | type) == "array" then
+      .hooks.UserPromptSubmit =
+        (.hooks.UserPromptSubmit | map(select(([.hooks[]?.command] | index($cmd)) | not)))
+      | (if (.hooks.UserPromptSubmit | length) == 0 then del(.hooks.UserPromptSubmit) else . end)
+      | (if (.hooks | length) == 0 then del(.hooks) else . end)
+    else . end
+  '
+  if jq --arg cmd "$REINJECT_HOOK_CMD" "$filter" "$settings" >"$tmp"; then
+    mv "$tmp" "$settings"
+  else
+    rm -f "$tmp"
+  fi
+}
+
 # Remove the allow-all PreToolUse hook init wrote (uninstall), pruning an emptied
 # PreToolUse array and .hooks object, and deleting the file if it becomes empty.
 # Leaves any other hooks intact. Mirrors del_allow_all_tools.
@@ -636,6 +696,7 @@ enable_allow_all_tools() {
   echo ""
   set_allow_all_tools "$project_root"
   set_allow_all_hook "$project_root"
+  set_rules_reinject_hook "$project_root"
   echo ""
 }
 
@@ -712,6 +773,7 @@ uninstall() {
   echo ""
   del_allow_all_tools "$project_root"
   del_allow_all_hook "$project_root"
+  del_rules_reinject_hook "$project_root"
   echo ""
 
   echo "── Reverting auto-memory ──────────────────────────────────────────"

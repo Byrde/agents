@@ -113,3 +113,32 @@ Epics are represented as GitHub Milestones. All subordinate feature and bug work
 ## Composition
 
 When a source-control tool is installed (e.g., `github-source-control`), pull requests link back to work items by referencing the work-item number in branch names and PR bodies. This skill owns the work-item side of that link — adding the work item to the board, transitioning it, commenting on it — but does **not** own PRs.
+
+## An empty board is a claim you have to earn
+
+A project query that returns no items usually means you cannot see the board, not that
+the board is empty. Projects are org-scoped, so an unauthorized token gets an empty
+collection instead of an error. Repo issues still read fine, which makes the gap look
+like data.
+
+Never report a board as empty on one query.
+
+1. Check the exit code. Never suppress the error stream on a query whose empty result
+   you will act on.
+2. Corroborate against a second org-scoped call. If `orgs/<org>/members` also returns
+   nothing while collaborators exist, the token is not authorized.
+3. If the counts disagree with reality, say the access is missing. Ask for SSO
+   authorization on the organization.
+4. Never write to a board you could not read. An add loop against a board that is
+   already populated duplicates every item.
+
+## Never conclude from a discarded result
+
+Absence of output is not absence of data. Two habits produce a false zero:
+
+- Suppressing an error stream, which turns a failure into a plausible empty result.
+- Supplying a default for a missing key, which erases the last trace of it.
+
+Do not combine them. Where a default is unavoidable, assert the shape you expected
+before you act on it.
+

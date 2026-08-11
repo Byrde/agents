@@ -22,3 +22,15 @@ skills to lean on:
 - **figma** — the project's Figma file: reusable components, tokens, design work
 - **figma-use** — the Figma plugin-API mechanics the `figma` skill builds on
 - **memory** — persistent project memory (recall before work, save decisions)
+
+## Evidence
+
+Absence of output is not absence of data.
+
+- Never suppress an error stream on a query whose empty result you will act on. Check
+  the exit code instead.
+- Corroborate a zero. If a count contradicts what you expect, confirm it against a
+  second call before you report it.
+- Never write to a resource you could not read. A blind write duplicates or destroys.
+- Where a default value is unavoidable, assert the shape you expected before acting on
+  it. A check that cannot fail is not a check.
