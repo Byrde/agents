@@ -1,9 +1,6 @@
 ---
 name: plan
-description: Decompose a request — vague or detailed — into trackable work,
-  sized and prioritised at the right granularity. Surfaces dependencies and
-  architectural concerns alongside the breakdown. Adapts to the work - a small
-  fix becomes one item, an epic becomes a container plus its slices.
+description: "**MUST be invoked** before you create, split, restructure or re-scope a work item. NEVER write an issue, epic or acceptance criteria without loading this first. Skipping it leaves work untracked, unsized and off the board, because this skill is what consults the tracker. Decompose a request — vague or detailed — into trackable work, sized and prioritised at the right granularity. Surfaces dependencies and architectural concerns alongside the breakdown. Adapts to the work: a small fix becomes one item, an epic becomes a container plus its slices."
 category: practice
 ---
 
@@ -14,10 +11,10 @@ Turn a raw request into a set of tracked work items the team can actually pick u
 ## Mindset
 
 - **Understand intent before slicing.** Size, risk, and dependencies inform the bucket — don't classify on instinct.
-- **Right-sized granularity.** Don't decompose a one-line fix into three issues; don't pack an epic into a single ticket. Match the slices to the work.
+- **Right-sized granularity.** Don't decompose a one-line fix into three issues. Don't pack an epic into a single ticket. Match the slices to the work.
 - **Explicit dependencies beat implicit ones.** If item A blocks item B, say so on the work items.
-- **Architectural surface gets flagged early.** When a slice has structural implications — integration points, data modeling, build-vs-buy — surface them on the work item so they don't ambush implementation.
-- **Make ambiguity visible.** Call out edge cases between buckets ("this might be a small epic or a large feature") and decide *with* the user, not for them.
+- **Architectural surface gets flagged early.** When a slice has structural implications, surface them on the work item. Integration points, data modeling and build-vs-buy calls ambush implementation otherwise.
+- **Make ambiguity visible.** Name an edge case between buckets, such as "a small epic or a large feature". Decide it *with* the user, never for them.
 
 ## Inputs
 
@@ -37,10 +34,10 @@ Elicit only what the scope at hand needs. Keep it conversational.
    - **Bugfix** — corrective work with a reproducible failure, expected-vs-actual, and scope limited to the fix.
 
    If the request straddles buckets, decide explicitly with the user and record the call on the work item.
-3. **Decompose.** Break the work into items at the granularity that matches the bucket. Don't over-fragment; don't under-spec.
+3. **Decompose.** Break the work into items at the granularity that matches the bucket. Don't over-fragment. Don't under-specify.
 4. **Spec each item.** Every work item should include:
    - Acceptance criteria — the conditions that make it done.
-   - Size (XS/S/M/L/XL) and priority — set via the project's structured fields when a tracker is installed; in conversation otherwise.
+   - Size (XS/S/M/L/XL) and priority — set via the project's structured fields when a tracker is installed. Set them in conversation otherwise.
    - Dependencies — link blockers and prerequisites explicitly.
 5. **Flag architectural surface.** For items with meaningful structural implications, attach a short architectural note — key decisions, constraints, recommended approach, open questions. Skip cosmetic or copy-only items. Mermaid diagrams only when a picture earns its keep.
 6. **Present the breakdown.** Walk through the plan with the user. Iterate until they confirm.
@@ -53,6 +50,14 @@ Elicit only what the scope at hand needs. Keep it conversational.
 
 ## Composition
 
-If a project-management tool skill is installed (e.g., `github-projects`), every work item is **created**, placed on the board, and has its fields **set** through that skill. Architectural notes are posted as comments on the work item.
+**Check what is installed. Never assume a tool skill is absent.** A tool skill is inert
+until you invoke it. A rule is already in context. See `global.md` → Tool skills for
+which is which.
 
-If no tracker is installed, deliver the breakdown directly in the conversation as a structured list — the user picks where to track it.
+- **`github-projects`** — invoke it before you create a work item, set a field, or place
+  anything on a board. It carries conventions you will otherwise get wrong: milestones
+  are epics, and PR-merge automation owns the transition to Done.
+
+Only when no tracker is available: deliver the breakdown in the conversation as a
+structured list, and say that is what you are doing.
+

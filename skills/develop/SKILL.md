@@ -1,10 +1,6 @@
 ---
 name: develop
-description: Implement a feature or fix from clear requirements using TDD.
-  Reads and updates work items when a tracker is installed; opens pull requests
-  when source control is installed; otherwise delivers code and tests in the
-  conversation. Writes contract tests first, implements to green, refactors
-  within scope, halts on ambiguity.
+description: "**MUST be invoked** before the first edit of any change that will open a pull request. NEVER start implementing and decide later that the work was too small to need it. Skipping it means no contract tests, no work-item transition, and no review request, because this skill is what consults the tracker and source control. Invoke once per slice, not once per session — its procedure ends at Ship and does not carry forward. Implement a feature or fix from clear requirements using TDD: contract tests first, implement to green, refactor within scope, halt on ambiguity."
 category: practice
 ---
 
@@ -29,10 +25,10 @@ When a work item is referenced, read it and all its comments — that's where pr
 
 ## Procedure
 
-1. **Align on the work.** Confirm what's being built. If a work item is referenced, read it through and verify it isn't already implemented. List assumptions and ambiguities; resolve them with the user. Reflect back what will be built and what the tests will cover — confirm before coding.
-2. **Set up.** If the change ships through code review, **create a branch in a dedicated worktree** (`.worktrees/<branch>`) following the project's conventions — isolating the work so parallel efforts don't collide. Trivial `patch/`-class fixes may stay in the main checkout. Install dependencies in the new worktree before building, and tear it down once the PR merges (see the `github-source-control` rule for worktree mechanics). If a work item is in play, **transition the work item** to its in-progress state.
+1. **Align on the work.** Confirm what's being built. If a work item is referenced, read it through and verify it isn't already implemented. List assumptions and ambiguities. Resolve them with the user. Reflect back what will be built and what the tests will cover — confirm before coding.
+2. **Set up.** If the change ships through code review, **create a branch in a dedicated worktree** at `.worktrees/<branch>`. Isolation stops parallel efforts colliding. A trivial `patch/`-class fix may stay in the main checkout. Install dependencies in the new worktree before building. Remove the worktree once the pull request merges. The `github-source-control` rule has the mechanics. If a work item is in play, **transition the work item** to its in-progress state.
 3. **Implement.** Write contract tests that encode the acceptance criteria. Implement to green. Refactor within scope. Follow the architectural standards. If you hit ambiguity mid-flight, stop and flag it on the work item or in the conversation — don't guess.
-4. **Ship.** **Open the pull request** with a body covering summary, how the change satisfies acceptance criteria, test evidence, risks and follow-ups, and a link to the work item if one exists. If a work item is in play, **transition the work item** to its post-PR state and **comment on the work item** with what was done, the PR link, and anything a reviewer or tester should know.
+4. **Ship.** **Open the pull request.** The body follows the pull request rules in `github-source-control`. If a work item is in play, **transition the work item** to its post-PR state. Then **comment on the work item** with what was done, the pull request link, and anything a reviewer or tester should know.
 
 ## When to halt
 
@@ -42,8 +38,19 @@ When a work item is referenced, read it and all its comments — that's where pr
 
 ## Composition
 
-If a project-management tool skill is installed (e.g., `github-projects`), work-item operations (**transition**, **comment on work item**) go through that skill. If a source-control tool skill is installed (e.g., `github-source-control`), branch creation and PR operations go through that skill.
+**Check what is installed. Never assume a tool skill is absent.** A tool skill is inert
+until you invoke it. A rule is already in context. See `global.md` → Tool skills for
+which is which.
 
-If no tracker is installed, treat the work as ad-hoc — gather requirements conversationally, skip the work-item steps, and deliver code with a written summary in the conversation. If no source-control tool is installed, deliver code and tests in the conversation without a branch or PR.
+- **`github-projects`** — invoke it before you transition a work item or comment on one.
+- **The `github-source-control` rule** governs branches, worktrees, pull request bodies
+  and review requests. Nothing in it is optional because the change felt small.
+- **The Figma↔code component map** (`figma-code-map.json`) — when the project keeps one,
+  consult it before building UI. Extend the existing component rather than adding a
+  second. Update its entry on add or rename, then run
+  `.agents/tools/figma-code-map-lint.sh` and fix any failure.
 
-If the project keeps a **Figma↔code component map** (e.g., `figma-code-map.json`; maintained via the Figma tool skill), consult it before building UI to find the existing component to implement or extend, and update its entry when you add or rename a component — keep the design↔code links current. After editing the map, run `.agents/tools/figma-code-map-lint.sh` and fix any failures.
+Only when no tracker is available: gather requirements conversationally and deliver code
+with a written summary. Only when no source control is available: deliver code and tests
+in the conversation. Say which case applies.
+

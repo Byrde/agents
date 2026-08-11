@@ -1,11 +1,6 @@
 ---
 name: github-projects
-description: Owns work-item and project-board operations against GitHub for
-  this project: create work item, transition work item, comment on work item,
-  set work item field (priority, size, type), link work item to milestone,
-  place work item on board, create milestone. Consulted by any practice skill
-  that needs to create, query, transition, or annotate a work item. Configured
-  for {{ACCOUNT}}/{{REPOSITORY}} project board {{PROJECT_ID}}.
+description: "**MUST be consulted** by any practice skill that creates, queries, transitions or annotates a work item. NEVER write an issue, set a field, or touch the board through a raw API call without loading this first. Skipping it means milestones, board status and the work-item/PR link go unset. Owns work-item and project-board operations against GitHub for this project: create work item, transition work item, comment on work item, set work item field (priority, size, type), link work item to milestone, place work item on board, create milestone. Configured for {{ACCOUNT}}/{{REPO}} project board {{PROJECT_ID}}."
 category: tool
 ---
 
@@ -32,7 +27,7 @@ Issue operations and milestone operations go through the **GitHub MCP server**. 
 ### Preflight (first operation of the session)
 
 1. **Server health.** Verify the GitHub MCP server is reachable and authenticated.
-2. **Context.** Verify the server is pointed at `{{ACCOUNT}}/{{REPOSITORY}}`. Switch if possible; halt if not.
+2. **Context.** Verify the server is pointed at `{{ACCOUNT}}/{{REPOSITORY}}`. Switch if possible. Halt if not.
 3. **Board.** Verify project board `{{PROJECT_ID}}` is accessible under `{{ACCOUNT}}` via `gh project view {{PROJECT_ID}} --owner {{ACCOUNT}}`. Halt if not.
 
 ## Conventions
@@ -113,3 +108,32 @@ Epics are represented as GitHub Milestones. All subordinate feature and bug work
 ## Composition
 
 When a source-control tool is installed (e.g., `github-source-control`), pull requests link back to work items by referencing the work-item number in branch names and PR bodies. This skill owns the work-item side of that link — adding the work item to the board, transitioning it, commenting on it — but does **not** own PRs.
+
+## An empty board is a claim you have to earn
+
+A project query that returns no items usually means you cannot see the board, not that
+the board is empty. Projects are org-scoped, so an unauthorized token gets an empty
+collection instead of an error. Repo issues still read fine, which makes the gap look
+like data.
+
+Never report a board as empty on one query.
+
+1. Check the exit code. Never suppress the error stream on a query whose empty result
+   you will act on.
+2. Corroborate against a second org-scoped call. If `orgs/<org>/members` also returns
+   nothing while collaborators exist, the token is not authorized.
+3. If the counts disagree with reality, say the access is missing. Ask for SSO
+   authorization on the organization.
+4. Never write to a board you could not read. An add loop against a board that is
+   already populated duplicates every item.
+
+## Never conclude from a discarded result
+
+Absence of output is not absence of data. Two habits produce a false zero:
+
+- Suppressing an error stream, which turns a failure into a plausible empty result.
+- Supplying a default for a missing key, which erases the last trace of it.
+
+Do not combine them. Where a default is unavoidable, assert the shape you expected
+before you act on it.
+

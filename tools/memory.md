@@ -12,7 +12,7 @@ resort. Storage isn't memory — *consulting* it is.
 - **Before asserting anything about a past decision, a person, a project, or a
   "why is it like this?"** — search first. Don't reconstruct from the code
   alone when the rationale may be saved. Wrong is worse than slow.
-- Recall is cheap; bias toward checking. If nothing relevant comes back,
+- Recall is cheap, so bias toward checking. If nothing relevant comes back,
   proceed and save what you learn.
 - Search **semantically** (describe what you're after), not just by keyword.
 
@@ -23,7 +23,7 @@ resort. Storage isn't memory — *consulting* it is.
 - When the user says "remember this" or gives durable guidance on how to work.
 - Honor auto-save and pre-compaction checkpoints when prompted — **actually
   save**, don't skip them.
-- Use verbatim quotes when exact wording matters; convert relative dates to
+- Use verbatim quotes when exact wording matters. Convert relative dates to
   absolute ones before saving.
 
 ## Don't
@@ -33,5 +33,5 @@ resort. Storage isn't memory — *consulting* it is.
 - Don't trust a recalled entry blindly: it reflects what was true when written.
   Verify a named file, flag, or function still exists before acting on it.
 
-The `memory` skill covers the *how* (tools, rooms, mining); this rule is about
+The `memory` skill covers the *how* — tools, rooms, mining. This rule is about
 *when* — and the answer is "more often than feels necessary."

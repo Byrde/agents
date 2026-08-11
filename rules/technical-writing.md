@@ -1,163 +1,84 @@
 # Technical writing — ASD-STE100
 
-All prose written for humans MUST follow **ASD-STE100 Simplified Technical
-English**. This is not a style preference. It is the house standard, and it
-applies to every artifact below.
+All prose for humans MUST follow **ASD-STE100 Simplified Technical English**. It is the
+house standard, not a preference. The dictionary is copyrighted, so get the current
+issue from <https://asd-ste100.org>. Below is the operative subset.
 
-> The standard is **ASD-STE100** (AeroSpace and Defence Industries Association
-> of Europe). It has two parts: the writing rules, and a controlled dictionary
-> of approved words. The dictionary is copyrighted — do not reproduce it. Get
-> the current issue from <https://asd-ste100.org>. The rules below are the
-> operative subset for software work.
+## Where it applies
 
-## 1. Where this applies
+Docs, work items, specs, pull request bodies, commit messages, review comments, and
+shipped copy — error messages, UI strings, log messages.
 
-Apply the standard to:
+Not code, identifiers or configuration. Not quoted material either: error strings, log
+output, a user's words, third-party text. Quote those exactly.
 
-- Documentation — READMEs, guides, runbooks, ADRs, release notes.
-- Work items — epics, stories, tasks, bugs, acceptance criteria.
-- Specifications — design docs, architecture notes, API descriptions.
-- Pull request bodies, commit messages, and review comments.
-- Product copy that ships — error messages, UI strings, log messages.
+## Levels
 
-Do not apply it to:
+- **Strict** — procedures, runbooks, acceptance criteria, error messages, anything read
+  under pressure. Every rule, the length limits, the approved words.
+- **STE-flavored** — every other document, and the default. Every rule except the closed
+  dictionary, so domain and technical names are fine.
+- **Conversational** — replies in a session. Register only: short common words, active
+  voice, no filler, no marketing adjectives, and stop when the thought stops. Ignore the
+  dictionary, the word counts, and the bans on phrasal verbs and semicolons. A procedure
+  inside a reply is strict.
 
-- Code, identifiers, and configuration. Code follows the code conventions.
-- Quoted material — error strings, log output, user words, third-party text.
-  Quote them exactly. Do not "improve" a quote.
+If you are unsure, use strict.
 
-Conversational replies get the register rules only. See level three.
+## The rules
 
-## 2. Three levels
+**Words.** One word per meaning, one meaning per word. Never use a synonym for variety.
+Choose the short common word: `use` not `utilize`, `start` not `initiate`, `to` not `in
+order to`. Delete marketing adjectives — `seamless`, `robust`, `powerful`, `blazing`,
+`simply`, `just`, `very`, `comprehensive`. Delete filler openers — `It is worth noting
+that`, `In today's landscape`, `Let's dive into`. Use American spelling, consistently.
+Keep technical verbs: `deserialize` stays.
 
-**Strict.** Use it for procedures, runbooks, acceptance criteria, error
-messages, and anything a person follows under pressure. Apply all rules,
-the length limits, and the approved-word discipline.
+**Verbs.** Active voice. Imperative in a procedure. Simple tenses only. Never stack
+auxiliaries. Never use an `-ing` form as the main verb. Avoid phrasal verbs: `start` not
+`kick off`, `remove` not `take out`. A past participle as an adjective is fine, as in
+`the failed job`.
 
-**STE-flavored.** Use it for all other documents. This is the default. Apply
-all rules except the closed dictionary: you may use domain vocabulary and
-technical names that the dictionary does not list.
+**Sentences.** One instruction per sentence, 20 words maximum. Descriptive sentences, 25
+maximum. Condition first: `If the token is expired, refresh it.` Keep the articles.
+Split a chain of clauses into sentences.
 
-**Conversational.** Use it for replies in a session. Apply the register rules
-only — the word choices, the active voice, the ban on filler and on marketing
-adjectives, and the discipline that ends a sentence when the thought ends.
-Ignore the mechanical rules: the dictionary, the word counts, the ban on
-phrasal verbs, and the ban on semicolons. A reply is a conversation, not a
-procedure. When a reply contains a procedure, that part is strict.
+**Nouns.** Three words maximum in a cluster. Rewrite `user account deletion request
+handler` as `the handler for requests to delete a user account`. Define an abbreviation
+once, then use it.
 
-When you are not sure which level applies, use strict.
+**Punctuation.** A full stop replaces a semicolon. A comma follows a leading condition.
+Never hide a second thought in a parenthesis. Make it a sentence.
 
-## 3. The rules
+**Structure.** One topic per paragraph, six sentences maximum. Numbered list for a
+procedure, bulleted for a set. A warning goes immediately before its step, never after.
+Write a descriptive heading: `Retry behavior` beats `Notes`.
 
-### Words
+## Artifacts
 
-- Use one word for one meaning. Do not use synonyms for variety.
-- Use one meaning for one word. Do not reuse a word for a second sense.
-- Choose the short common word. Write `use`, not `utilize`. Write `start`,
-  not `initiate`. Write `to`, not `in order to`.
-- Delete marketing adjectives and intensifiers: `seamless`, `robust`,
-  `powerful`, `blazing`, `simply`, `just`, `very`, `comprehensive`.
-- Delete filler openers: `It is worth noting that`, `In today's landscape`,
-  `Let's dive into`, `At the end of the day`.
-- Use American spelling. Keep it consistent in the document.
-- Keep technical names and technical verbs as they are. `deserialize` is a
-  technical verb; do not replace it with a vague word.
+- **Work items.** The title is one imperative sentence. The description states the
+  problem, the change and the boundary. Acceptance criteria are strict: one testable
+  statement per line, in `Given / When / Then` form, with no adjective a test cannot
+  measure. `Responds in under 200 ms at p95`, never `fast`.
+- **Specifications.** State a decision as a fact once you have made it. Record the
+  rejected alternatives and the reason in one section. Never spread hedges through a
+  document.
+- **Commits and pull requests.** The subject is one imperative sentence, 72 characters
+  maximum. The body follows `github-source-control`.
+- **Error messages and UI copy.** Strict. State what happened, then what the reader must
+  do. Two sentences maximum.
 
-### Verbs
+## Guards
 
-- Use the active voice. Write `The service writes the record`, not `The record
-  is written by the service`.
-- In a procedure, use the imperative. Write `Run the migration.`
-- Use the simple tenses only: simple present, simple past, simple future.
-- Do not stack auxiliaries. Write `The job fails`, not `The job may have been
-  able to fail`.
-- Do not use an `-ing` form as the main verb. Write `The worker retries the
-  call`, not `The worker is retrying the call`.
-- Avoid phrasal verbs. Write `start`, not `kick off`. Write `remove`, not
-  `take out`.
-- A past participle used as an adjective is allowed: `the failed job`.
+- **Facts first.** Never change a fact, number, identifier, API name or path to satisfy
+  a rule. Keep the fact and restructure the sentence.
+- **Minimal edit.** Change only the spans that break a rule.
+- **No loss.** A rewrite carries every claim of the original. Shorter is the goal.
+  Vaguer is a defect.
+- **Say when it complies.** Report that, and change nothing.
+- **A hedge is not uncertainty.** Delete the hedge. State the uncertainty plainly: `I
+  did not run this` beats `this should probably work`. Never let a rule about confident
+  prose produce false confidence.
 
-### Sentences
-
-- One instruction per sentence. Maximum 20 words.
-- Descriptive sentences: maximum 25 words.
-- Put the condition first, then the action: `If the token is expired, refresh
-  it.`
-- Restore the articles. Write `Open the file`, not `Open file`.
-- Do not chain clauses. Split them into separate sentences.
-
-### Nouns
-
-- Maximum three words in a noun cluster. Rewrite `user account deletion
-  request handler` as `the handler for requests to delete a user account`.
-- Define an abbreviation at first use, then use the abbreviation.
-
-### Punctuation
-
-- Replace a semicolon with a full stop.
-- Use a comma after a leading condition.
-- Do not use a parenthesis to hide a second thought. Make it a sentence.
-
-### Structure
-
-- One topic per paragraph. Maximum six sentences.
-- Use a numbered list for a procedure. Use a bulleted list for a set.
-- Put a warning or a caution immediately before the step it applies to, never
-  after it.
-- Use a descriptive heading. `Retry behavior` beats `Notes`.
-
-## 4. Rules for specific artifacts
-
-**Work items.** The title is one imperative sentence. The description states
-the problem, the change, and the boundary. Acceptance criteria are strict
-level: one testable statement per line, in `Given / When / Then` form, with no
-adjective that a test cannot measure. `Fast` is not a criterion. `Responds in
-under 200 ms at p95` is.
-
-**Specifications.** State each decision as a fact, not an option, once you have
-made it. Record the alternatives you rejected and the reason in one section.
-Do not spread hedges through the document.
-
-**Commit messages and PR bodies.** The subject is one imperative sentence,
-maximum 72 characters. The body follows the pull request rules in
-`github-source-control`, and each section follows the sentence rules above.
-
-**Error messages and UI copy.** Strict level. State what happened, then what
-the reader must do. Maximum two sentences.
-
-## 5. Guards
-
-- **Facts first.** Never change a fact, a number, an identifier, an API name,
-  or a file path to satisfy a rule. If a rule and a fact conflict, keep the
-  fact and restructure the sentence.
-- **Minimal edit.** When you rewrite text, change only the spans that break a
-  rule. Do not rewrite compliant text.
-- **No loss.** A rewrite must carry every claim of the original. Shorter is
-  the goal. Vaguer is a defect.
-- **Say when it complies.** If the input already meets the standard, report
-  that and change nothing.
-- **A hedge is not uncertainty.** A hedge softens a claim you could state
-  plainly. Uncertainty is a fact about what you know. Delete the first. State
-  the second directly: `I did not run this` beats `this should probably work`.
-  Never let a rule about confident prose produce false confidence.
-
-## 6. Check before you publish
-
-1. Is every sentence within the word limit?
-2. Is every verb active, simple tense, and not a phrasal verb?
-3. Does any noun cluster have more than three words?
-4. Does one word carry two meanings anywhere in the document?
-5. Are there adjectives that no test can measure?
-6. Does any sentence contain a semicolon or a hidden second thought?
-7. Did the facts survive?
-
-Fix what fails, then publish.
-
-## 7. Composition
-
-The practice skills produce most of this repo's prose. `plan` writes work items
-and acceptance criteria. `architect` and `design` write specifications.
-`develop` writes commit messages and pull request bodies. `test` writes defect
-reports. Each of them writes to this standard — this rule is the writing
-contract they share, and it overrides any looser wording guidance inside a
-skill.
+The practice skills write most of this repo's prose. This rule overrides any looser
+wording guidance inside one.

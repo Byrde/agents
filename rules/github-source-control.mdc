@@ -1,81 +1,63 @@
 ---
-description: Branches, pull requests, and code review against GitHub via the account-wide MCP server; target repo resolved from the workspace map
+description: Branches, pull requests, and code review against GitHub via the account-wide MCP server. Target repo resolved from the workspace map
 globs: ["**/*"]
 alwaysApply: true
 ---
 
-# GitHub source control — branches, PRs, review
+# GitHub source control
 
-Source-control operations against GitHub — **create branch, open pull request,
-request review, leave review comment, merge pull request** — go through the
-**GitHub MCP server**. Any practice skill that needs to branch code, ship a
-change for review, or touch a PR routes through here.
+**Create branch, open pull request, request review, leave review comment, merge** — all
+go through the **GitHub MCP server**. It is OAuth'd to you and account-wide, not pinned
+to one repo.
 
-The GitHub MCP server is **account-wide** — OAuth'd to you, it works across every
-repository you can access. It is *not* pinned to one repo.
+If the server is unreachable or unauthenticated, **halt and report**. Never fall back to
+the `gh` CLI or the raw REST API for these operations.
 
-## Which repository
+The target repo is whichever one the work is in. Resolve it as the `workspace` rule does.
+A change spanning repos gets one pull request per repo.
 
-This capability is not tied to a single repo. The target repo is **whichever one
-the work is in** — resolve it exactly as the workspace rule does: from
-`.workspace.agents.json` (match the repo by `name`/`path`/`remote`/`owner`), or
-the repo you're already operating inside. For a change that spans repos, treat
-each repo's PR as a separate unit of work.
+## Branch names
 
-## Access
-
-All owned operations go through the GitHub MCP server. If it's unreachable or
-unauthenticated, **halt and report** — do not fall back to the `gh` CLI or the
-raw REST API for these operations.
-
-First operation of a session: confirm the MCP server is reachable, and that
-you've identified the correct target repo (`owner/name`) from the workspace map.
-
-## Conventions
-
-### Branch naming
 - `feature/{WORK_ITEM_NUMBER}` — features and feature-like work.
 - `bugfix/{WORK_ITEM_NUMBER}` — bug fixes.
-- `patch/{short-kebab-slug}` — small patches with no backing work item.
+- `patch/{short-kebab-slug}` — a small patch with no work item.
 
-### Worktrees — isolate each branch in its own working directory
-When kicking off work, create the branch in a **dedicated git worktree** rather
-than switching the main checkout. Each worktree has its own working tree, index,
-and `HEAD` backed by the shared `.git`, so parallel efforts — including parallel
-agents — never clobber each other's files or build state.
+## Worktrees
 
-- **Default for `feature/`/`bugfix/` work.** A trivial `patch/`-class change or a
-  one-line fix may stay in the main checkout; the worktree earns its keep once
-  work runs in parallel or spans more than a quick edit.
-- **Location.** One worktree per branch under a gitignored `.worktrees/` dir at
-  the repo root: `.worktrees/<branch>` (e.g. `.worktrees/feature/42`). Ensure
-  `.worktrees/` is in `.gitignore`.
-- **Create.** `git worktree add -b <branch> .worktrees/<branch>` for a new branch,
-  or `git worktree add .worktrees/<branch> <branch>` for an existing one. The
-  local branch is created with the worktree and published on first push; the
-  pull request, review, and merge still route through the GitHub MCP server.
-- **Cost is real.** Untracked files, `node_modules`, and build artifacts are
-  **not** shared from the main checkout — install dependencies in the new
-  worktree before building, and remember that environment-shared services (e.g.
-  the single local QA stack) are contended, not duplicated.
-- **Clean up after merge.** Once the PR merges, `git worktree remove
-  .worktrees/<branch>` and delete the branch. Don't leave stale worktrees behind.
+Create the branch in a dedicated worktree at `.worktrees/<branch>` rather than switching
+the main checkout. Parallel work then cannot clobber another branch's files or build
+state. Keep `.worktrees/` in `.gitignore`.
 
-### Pull request body
-Every PR body must include:
+```
+git worktree add -b <branch> .worktrees/<branch>    # new branch
+git worktree add .worktrees/<branch> <branch>       # existing branch
+```
+
+Default to this for `feature/` and `bugfix/` work. A `patch/`-class one-liner may stay in
+the main checkout.
+
+**The cost is real.** Untracked files, `node_modules` and build artifacts are not shared,
+so install dependencies in the new worktree before building. Environment-shared services
+are contended, not duplicated.
+
+After the pull request merges, run `git worktree remove .worktrees/<branch>` and delete
+the branch.
+
+## Pull request body
+
+Every body carries:
+
 - **Summary** of the change.
-- **How it satisfies the acceptance criteria** (when a work item is linked).
-- **Test evidence** — what was run, what passed, what was added.
+- **How it satisfies the acceptance criteria**, when a work item is linked.
+- **Test evidence** — what ran, what passed, what was added.
 - **Risks and follow-ups.**
-- **Link to the backing work item** (e.g. `Fixes #123`), except for `patch/` branches.
+- **A link to the work item** (`Fixes #123`), except on a `patch/` branch.
 
-### Review and merge
-- Request review per the target repo's CODEOWNERS or stated policy.
-- Use that repo's standard merge strategy (squash, rebase, or merge commit) — don't deviate without user confirmation.
+## Review and merge
 
-## Composition
+Request review per the target repo's `CODEOWNERS` or stated policy. If neither exists,
+ask who reviews. Use that repo's merge strategy, and never deviate without confirmation.
 
-When a work-item tracker is installed (e.g. `github-projects`), link pull
-requests back to work items via the work-item-number reference in the branch
-name and PR body. Notifying the tracker of PR state is the tracker's job, not
-this rule's — this ends at the PR.
+When a tracker is installed, link the pull request to the work item through the number in
+the branch name and body. Telling the tracker about pull request state is the tracker's
+job, not this rule's.

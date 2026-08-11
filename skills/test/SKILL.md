@@ -1,9 +1,6 @@
 ---
 name: test
-description: Adversarially validate an implementation against its acceptance
-  criteria. Reads the spec, exercises the build, attacks the seams where it's
-  likely to break, and rejects defects with a precise report. Works against
-  tracked work items or ad-hoc.
+description: "**MUST be invoked** before you claim an implementation meets its acceptance criteria. NEVER assert that work is validated from a passing test run alone. Skipping it means the seams go unattacked and a defect ships looking green. Adversarially validate an implementation against its acceptance criteria: read the spec, exercise the build, attack where it is likely to break, and reject defects with a precise report. Works against tracked work items or ad-hoc."
 category: practice
 ---
 
@@ -16,7 +13,7 @@ Hold an implementation against its requirements, then look for where it breaks a
 - **Guilty until proven innocent.** A claim of "it works" isn't validation. Verify against the spec, then attack.
 - **Adversarial, not collaborative.** The job is to find what's broken, not to help the developer ship. Politeness costs precision.
 - **Standards count.** Architectural and engineering standards (the always-on `development` rule) are part of the validation surface. Deviations are defects, not stylistic preferences.
-- **Reject; don't fix.** When a defect surfaces, document it and send it back. Fixing it yourself muddies the boundary.
+- **Reject rather than fix.** When a defect surfaces, document it and send it back. Fixing it yourself muddies the boundary.
 - **Edge cases are where it lives.** Inputs, latency, error paths, concurrency, unhappy flows — that's where developers cut corners under pressure.
 
 ## Inputs
@@ -35,17 +32,26 @@ When a work item is referenced, read the body and all comments — that's where 
 3. **Validate against standards.** Check folder structure, dependency rules, separation of concerns, testing strategy per the `development` rule. Deviations are defects.
 4. **Attack the seams.** Hostile inputs, error states, latency, concurrency, edge cases the spec didn't enumerate. Look where shortcuts hide.
 5. **Report.**
-   - **Defects found:** reject the work. Each defect gets: a blunt statement of what's broken, foolproof reproduction steps, expected-vs-actual, and any environmental context. **Comment on the work item** with the rejection and **transition the work item** back to its in-progress state — or if no tracker is installed, deliver the report in the conversation.
-   - **Passed:** **comment on the work item** confirming approval and leave the work item in its post-PR state. Don't move it to "Done" manually; merge automation closes the loop. If no tracker is installed, confirm approval in the conversation.
+   - **Defects found:** reject the work. Each defect gets a blunt statement of what is broken, foolproof reproduction steps, expected against actual, and any environmental context. **Comment on the work item** with the rejection. **Transition the work item** back to its in-progress state. If no tracker is installed, deliver the report in the conversation.
+   - **Passed:** **comment on the work item** confirming approval and leave the work item in its post-PR state. Don't move it to "Done" manually. Merge automation closes the loop. If no tracker is installed, confirm approval in the conversation.
 
 ## When to halt
 
-- The build isn't reachable (no branch, no environment, no test accounts) — go back to setup; don't test from imagination.
+- The build isn't reachable (no branch, no environment, no test accounts) — go back to setup. Never test from imagination.
 - Acceptance criteria are missing or contradictory — flag it, route back to planning or the developer.
 - A defect is severe enough that further testing would be wasted effort (e.g., the feature simply doesn't load) — report and stop.
 
 ## Composition
 
-If a project-management tool skill is installed (e.g., `github-projects`), defect reports and approvals are posted as **comments on the work item**, and rejected work has its status **transitioned** back. If no tracker is installed, deliver the same report in the conversation.
+**Check what is installed. Never assume a tool skill is absent.** A tool skill is inert
+until you invoke it. A rule is already in context. See `global.md` → Tool skills for
+which is which.
 
-If a source-control tool skill is installed and the change has a PR, leaving review comments belongs to that skill — this skill's outputs are validation results on the work item, not code-review comments on the PR.
+- **`github-projects`** — invoke it before you post a defect report, record an approval,
+  or transition rejected work back.
+- **The `github-source-control` rule** owns review comments on a pull request. This
+  skill's output is a validation result on the work item, not a code review.
+
+Only when no tracker is available: deliver the same report in the conversation, and say
+so.
+
