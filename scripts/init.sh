@@ -58,7 +58,8 @@ AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 . "$SCRIPT_DIR/lib/workspace.sh"
 # shellcheck source=lib/mcp.sh
 . "$SCRIPT_DIR/lib/mcp.sh"
-# shellcheck source=lib/manifest.sh  (for migrating the old github-source-control skill)
+# manifest.sh migrates the old github-source-control skill.
+# shellcheck source=lib/manifest.sh
 . "$SCRIPT_DIR/lib/manifest.sh"
 SKILLS_DIR="$AGENTS_ROOT/skills"
 RULES_DIR="$AGENTS_ROOT/rules"
@@ -281,13 +282,17 @@ set_allow_all_hook() {
 # script path so re-running init replaces rather than duplicates it.
 REINJECT_HOOK_CMD='"$CLAUDE_PROJECT_DIR"/.agents/scripts/hooks/reinject-rules.sh'
 
-# Install a UserPromptSubmit hook that re-prints the rules every Nth message.
+# Install a PostToolUse hook that re-injects the rules every Nth tool call.
 #
 # Rules load once, at session start. Nothing re-asserts them, so they lose to the
-# most recent tool result as a session grows and compliance decays silently. This
-# gives them the same recurring-interrupt mechanism that actually works.
+# most recent tool result as a session grows and compliance decays silently.
 #
-# Cadence: BYRDE_RULES_REINJECT_EVERY (default 10, 0 disables).
+# The trigger is a tool call, not a user message. The model works for many tool
+# calls between two of your messages, and that output is what buries the rules.
+# Older installs wired this to UserPromptSubmit; this replaces that entry, so
+# re-running init migrates them and nothing injects twice.
+#
+# Cadence: BYRDE_RULES_REINJECT_EVERY (default 12 tool calls, 0 disables).
 set_rules_reinject_hook() {
   local project_root="$1"
   local settings="$project_root/.claude/settings.json"
@@ -298,23 +303,30 @@ set_rules_reinject_hook() {
   mkdir -p "$(dirname "$settings")"
   local filter='
     .hooks = (.hooks // {})
-    | .hooks.UserPromptSubmit =
-        (((.hooks.UserPromptSubmit // [])
+    | .hooks.PostToolUse =
+        (((.hooks.PostToolUse // [])
           | map(select(([.hooks[]?.command] | index($cmd)) | not)))
-         + [{hooks: [{type: "command", command: $cmd}]}])
+         + [{matcher: "*", hooks: [{type: "command", command: $cmd}]}])
+    | (if (.hooks.UserPromptSubmit | type) == "array" then
+         .hooks.UserPromptSubmit =
+           (.hooks.UserPromptSubmit | map(select(([.hooks[]?.command] | index($cmd)) | not)))
+         | (if (.hooks.UserPromptSubmit | length) == 0 then del(.hooks.UserPromptSubmit) else . end)
+       else . end)
   '
   local tmp
   tmp="$(mktemp)"
   if [[ ! -f "$settings" ]]; then echo '{}' >"$settings"; fi
   if jq --arg cmd "$REINJECT_HOOK_CMD" "$filter" "$settings" >"$tmp"; then
     mv "$tmp" "$settings"
-    echo "  ✓ rules re-injected every ${BYRDE_RULES_REINJECT_EVERY:-10} messages → .claude/settings.json"
+    echo "  ✓ rules re-injected every ${BYRDE_RULES_REINJECT_EVERY:-12} tool calls → .claude/settings.json"
   else
     echo "  ⚠ jq failed on $settings — leaving hooks unchanged"; rm -f "$tmp"
   fi
 }
 
-# Remove the rules-reinjection hook (uninstall). Leaves other hooks intact.
+# Remove the rules-reinjection hook (uninstall). Clears both the current
+# PostToolUse entry and the UserPromptSubmit entry older installs wrote. Leaves
+# other hooks intact.
 del_rules_reinject_hook() {
   local project_root="$1"
   local settings="$project_root/.claude/settings.json"
@@ -323,12 +335,12 @@ del_rules_reinject_hook() {
   local tmp
   tmp="$(mktemp)"
   local filter='
-    if (.hooks.UserPromptSubmit | type) == "array" then
-      .hooks.UserPromptSubmit =
-        (.hooks.UserPromptSubmit | map(select(([.hooks[]?.command] | index($cmd)) | not)))
-      | (if (.hooks.UserPromptSubmit | length) == 0 then del(.hooks.UserPromptSubmit) else . end)
-      | (if (.hooks | length) == 0 then del(.hooks) else . end)
-    else . end
+    reduce ("PostToolUse", "UserPromptSubmit") as $ev (.;
+      if (.hooks[$ev] | type) == "array" then
+        .hooks[$ev] = (.hooks[$ev] | map(select(([.hooks[]?.command] | index($cmd)) | not)))
+        | (if (.hooks[$ev] | length) == 0 then del(.hooks[$ev]) else . end)
+      else . end)
+    | (if (.hooks // {}) == {} then del(.hooks) else . end)
   '
   if jq --arg cmd "$REINJECT_HOOK_CMD" "$filter" "$settings" >"$tmp"; then
     mv "$tmp" "$settings"
@@ -850,4 +862,8 @@ main() {
   print_summary
 }
 
-main "$@"
+# Run only when executed. The test suite sources this file to exercise the
+# settings and hook helpers on their own.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

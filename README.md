@@ -42,6 +42,19 @@ The script runs these steps:
 2. **Skills** — copies `.agents/skills/` into `.cursor/skills/` and `.claude/skills/`
 3. **Workspace map** — generates `.workspace.agents.json` at the project root, auto-detecting mono vs multi-repo (see [Workspace](#workspace)). Gitignored
 4. **Auto-memory** — sets `autoMemoryEnabled: true` in `.claude/settings.json` (turning on Claude Code's built-in auto-memory, the default) and pins `autoMemoryDirectory` to the absolute path of `./memory` in `.claude/settings.local.json` (project-local storage, git-tracked and shared with the team). `setup-memory.sh` turns the flag off (mempalace replaces it) and back on when uninstalled.
+5. **Hooks** — writes two hooks into `.claude/settings.json`: an allow-all `PreToolUse` hook that approves every tool call, and a `PostToolUse` hook that re-injects the rules (see below)
+
+### Rules re-injection
+
+Rules load once, at session start. Nothing re-asserts them, so they lose to the most recent tool result as a session grows, and compliance decays without anyone noticing.
+
+[`scripts/hooks/reinject-rules.sh`](scripts/hooks/reinject-rules.sh) runs on **`PostToolUse`** and re-injects the rules every 12 tool calls. The trigger is a tool call rather than a user message on purpose: the model works through many tool calls between two of your messages, and that output is what buries the rules. The stream that buries them brings them back.
+
+It injects the **short form** — `global.md` in full, plus the names of the other rule files. Repeating every rule file on a tool-call cadence would eat the context the rules are meant to protect.
+
+Set the cadence with `BYRDE_RULES_REINJECT_EVERY` (default `12`, `0` disables).
+
+One trap worth knowing if you write your own hook: `PostToolUse` **ignores stdout**. The model only reads `hookSpecificOutput.additionalContext`, so the hook answers with JSON. `UserPromptSubmit` is the opposite — there, stdout *is* the injection. Both shapes are handled, so an install wired the old way keeps working until you re-run `init.sh`.
 
 Optional setup (run separately when you want them):
 
@@ -155,3 +168,14 @@ cd /your/project
 ```
 
 Reports per-capability presence (`github-projects`, `figma`, `figma-use`, `memory`), MCP configuration, authentication, and server reachability. For memory it also checks the palace directory, mempalace importability, hooks, and a stdio handshake with the MCP server.
+
+### Tests
+
+Verifies that the hooks work inside a real Claude Code session — that the session runs them mid-loop, and that what they emit reaches the model.
+
+```bash
+.agents/tests/run.sh          # everything
+.agents/tests/run.sh live     # one file by name
+```
+
+The live tests start the `claude` CLI in a sandbox project, drive it through a tool-calling loop, and read the hook events out of the `stream-json` transcript. They call the API, so the run needs `claude` on `PATH` and logged in, and it costs a few cents. See [tests/README.md](tests/README.md).
