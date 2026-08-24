@@ -71,12 +71,3 @@ Absence of output is not absence of data.
 - Never write to a resource you could not read. A blind write duplicates or destroys.
 - Where a default value is unavoidable, assert the shape you expected before acting on it.
   A check that cannot fail is not a check.
-
-## Tool skills
-
-Installed per project, for the practice skills to consult:
-
-- **github-source-control** — branches, pull requests, code review. A rule, always on.
-- **github-projects** — work items, milestones, the board. A skill, so invoke it.
-- **figma**, **figma-use** — the design file, and the plugin-API mechanics beneath it.
-- **memory** — persistent project memory.
