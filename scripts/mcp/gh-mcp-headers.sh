@@ -4,62 +4,99 @@
 # connection and merges the output into the request headers — so the token is
 # fetched live and NEVER written to disk.
 #
-# Token source, in order:
-#   1. `gh auth token`                   — your existing GitHub CLI login
-#   2. $GITHUB_PERSONAL_ACCESS_TOKEN     — fallback if gh is unavailable
+# WHICH ACCOUNT, in order:
+#   1. $BYRDE_GH_ACCOUNT                     — explicit override
+#   2. `githubAccount` in the workspace map  — this workspace's account
+#   3. the machine-active `gh` account       — the default
 #
-# `gh` is resolved WITHOUT trusting PATH, and that is the point of gh_bin below.
-# An editor launched from Finder or the Dock inherits PATH=/usr/bin:/bin:/usr/
-# sbin:/sbin from launchd, which carries neither Homebrew nor nvm. A bare `gh`
-# is then unresolvable, this script emits nothing, the server gets no
-# Authorization header, and the editor falls back to the OAuth handshake that
-# GitHub cannot complete — surfacing as "Incompatible auth server: does not
-# support dynamic client registration". That message names OAuth and the real
-# cause is a missing binary, so it sends you the wrong way.
+# Ranks 1 and 2 are BINDING. When a workspace names an account and no token for
+# it is available, this script fails instead of falling back. GitHub is
+# per-client: somebody working across several client organisations would
+# otherwise get the last-switched-to client's token in every workspace, and a
+# valid token for the wrong account looks exactly like success.
 #
-# Set BYRDE_GH_BIN to an explicit path to override the search.
+# HOW THE TOKEN IS FOUND:
+#   `gh auth token`                      — your GitHub CLI login
+#   $GITHUB_PERSONAL_ACCESS_TOKEN        — fallback, rank 3 only
 #
-# For SAML-SSO orgs (e.g. enterprise), the gh login / token must be authorized
-# for the org. Output shape: {"Authorization": "Bearer <token>"}.
+# `gh` and `jq` are resolved WITHOUT trusting PATH. An editor launched from
+# Finder or the Dock inherits PATH=/usr/bin:/bin:/usr/sbin:/sbin from launchd,
+# which carries neither Homebrew nor nvm. A bare `gh` is then unresolvable, this
+# script emits nothing, the server gets no Authorization header, and the editor
+# falls back to an OAuth handshake GitHub cannot complete — surfacing as
+# "Incompatible auth server: does not support dynamic client registration".
+# That message names OAuth while the real cause is a missing binary.
+#
+# For SAML-SSO orgs, the gh login must be authorized for the org.
+# Output shape: {"Authorization": "Bearer <token>"}.
 
 set -euo pipefail
 
-# Standard install locations, tried in order when PATH does not resolve gh.
-GH_CANDIDATES="
-/opt/homebrew/bin/gh
-/usr/local/bin/gh
-/usr/bin/gh
-/home/linuxbrew/.linuxbrew/bin/gh
-/snap/bin/gh
-"
+# Standard install locations, tried in order when PATH does not resolve a binary.
+BIN_DIRS="/opt/homebrew/bin /usr/local/bin /usr/bin /home/linuxbrew/.linuxbrew/bin /snap/bin"
 
-# Print the path to a usable gh, or nothing. Always exits 0 — an absent gh is a
-# normal state here, because the token can still come from the environment.
-gh_bin() {
-  local candidate found
-
-  if [ -n "${BYRDE_GH_BIN:-}" ]; then
-    if [ -x "$BYRDE_GH_BIN" ]; then printf '%s\n' "$BYRDE_GH_BIN"; fi
+# find_bin <name> [<explicit override>] — print a usable path, or nothing.
+# Always exits 0. An absent binary is a normal state that callers decide about.
+find_bin() {
+  local name="$1" override="${2:-}" dir found
+  if [ -n "$override" ]; then
+    if [ -x "$override" ]; then printf '%s\n' "$override"; fi
     return 0
   fi
-
-  found="$(command -v gh 2>/dev/null || true)"
+  found="$(command -v "$name" 2>/dev/null || true)"
   if [ -n "$found" ]; then printf '%s\n' "$found"; return 0; fi
-
-  for candidate in $GH_CANDIDATES; do
-    if [ -x "$candidate" ]; then printf '%s\n' "$candidate"; return 0; fi
+  for dir in $BIN_DIRS; do
+    if [ -x "$dir/$name" ]; then printf '%s\n' "$dir/$name"; return 0; fi
   done
   return 0
 }
 
-token=""
-gh="$(gh_bin)"
-[ -n "$gh" ] && token="$("$gh" auth token 2>/dev/null || true)"
-[ -n "$token" ] || token="${GITHUB_PERSONAL_ACCESS_TOKEN:-}"
+# The context root is three levels above this script's directory:
+#   <root>/.agents/scripts/mcp/gh-mcp-headers.sh
+# `.mcp.json` records an absolute path into this workspace's own `.agents`, so
+# the root resolves from the script's own location and never from the working
+# directory — the editor runs this helper from a directory of its choosing.
+_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONTEXT_ROOT="$(cd "$_here/../../.." 2>/dev/null && pwd || true)"
 
-if [ -z "$token" ]; then
-  echo "gh-mcp-headers: no GitHub token — run 'gh auth login' or set GITHUB_PERSONAL_ACCESS_TOKEN" >&2
-  exit 1
+# Print this workspace's GitHub account, or nothing for the active account.
+gh_account() {
+  if [ -n "${BYRDE_GH_ACCOUNT:-}" ]; then
+    printf '%s\n' "$BYRDE_GH_ACCOUNT"
+    return 0
+  fi
+  local map="$CONTEXT_ROOT/.workspace.agents.json" jq_bin
+  [ -n "$CONTEXT_ROOT" ] && [ -f "$map" ] || return 0
+  jq_bin="$(find_bin jq "${BYRDE_JQ_BIN:-}")"
+  # No jq means the map cannot be read. Degrade to the active account rather
+  # than guess at JSON with a regex.
+  [ -n "$jq_bin" ] || return 0
+  "$jq_bin" -r '.githubAccount // empty' "$map" 2>/dev/null || true
+}
+
+gh="$(find_bin gh "${BYRDE_GH_BIN:-}")"
+account="$(gh_account)"
+token=""
+
+if [ -n "$account" ]; then
+  # Binding. Never hand this workspace another account's token.
+  if [ -z "$gh" ]; then
+    echo "gh-mcp-headers: this workspace requires the '$account' GitHub account, but gh was not found" >&2
+    exit 1
+  fi
+  token="$("$gh" auth token --user "$account" 2>/dev/null || true)"
+  if [ -z "$token" ]; then
+    echo "gh-mcp-headers: no token for the '$account' GitHub account that this workspace requires." >&2
+    echo "  Log that account in with 'gh auth login', or change githubAccount in .workspace.agents.json." >&2
+    exit 1
+  fi
+else
+  [ -n "$gh" ] && token="$("$gh" auth token 2>/dev/null || true)"
+  [ -n "$token" ] || token="${GITHUB_PERSONAL_ACCESS_TOKEN:-}"
+  if [ -z "$token" ]; then
+    echo "gh-mcp-headers: no GitHub token — run 'gh auth login' or set GITHUB_PERSONAL_ACCESS_TOKEN" >&2
+    exit 1
+  fi
 fi
 
 printf '{"Authorization": "Bearer %s"}\n' "$token"

@@ -139,12 +139,37 @@ _mcp_remove_github() {
 
 # Register the account-wide GitHub MCP in both editor configs under a context
 # root. $1 = context root (the folder that holds .mcp.json / .cursor/).
+# Report when the approval cannot take effect yet.
+#
+# Claude Code SKIPS project settings entirely until the workspace is trusted:
+#
+#   if (o === "projectSettings" && !workspaceTrusted) continue
+#
+# So the approval written above is inert on a fresh clone, and `.claude/
+# settings.local.json` is gated too. Without this warning the installer prints a
+# success line and the server still never loads — which is how the failure
+# reaches the user as an unrelated message about dynamic client registration.
+#
+# The trust prompt is interactive by design, so this reports rather than sets it.
+_mcp_warn_if_untrusted() {
+  local root="$1" cfg="$HOME/.claude.json" trusted
+  [[ -f "$cfg" ]] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  trusted="$(jq -r --arg r "$root" \
+    '.projects[$r].hasTrustDialogAccepted // false' "$cfg" 2>/dev/null || echo "false")"
+  [[ "$trusted" == "true" ]] && return 0
+  echo "  ⚠ this workspace is NOT trusted yet, so Claude Code ignores the approval above." >&2
+  echo "    Accept the trust prompt when the editor asks. Until you do, the GitHub MCP" >&2
+  echo "    stays unavailable and reports an error about dynamic client registration." >&2
+}
+
 mcp_merge_github() {
   local root="$1"
   _mcp_merge_claude "$root/.mcp.json"  && echo "  ✓ .mcp.json — mcpServers.github"
   _mcp_approve_claude "$root/.claude/settings.json" \
     && echo "  ✓ .claude/settings.json — enabledMcpjsonServers=[github]"
   _mcp_merge_cursor "$root/.cursor/mcp.json" && echo "  ✓ .cursor/mcp.json — mcpServers.github"
+  _mcp_warn_if_untrusted "$root"
 }
 
 # Remove the GitHub MCP from both editor configs under a context root.
