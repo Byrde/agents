@@ -84,7 +84,9 @@ Auth: GitHub's OAuth doesn't support dynamic client registration, so the MCP aut
 - **Claude Code** — zero setup. `init.sh` configures a `headersHelper` (`.agents/scripts/mcp/gh-mcp-headers.sh`) that Claude Code runs on each connection to pull the token live from `gh auth token`. Nothing is stored on disk and there's no env var to set — just be logged in (`gh auth login`). For SAML-SSO orgs, ensure your `gh` login is authorized for the org.
 - **Cursor** — has no `headersHelper`, so it gets a static `"Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}"` header (expanded at load time). Cursor users export that var: `export GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)"`.
 
-(The helper falls back to `$GITHUB_PERSONAL_ACCESS_TOKEN` if `gh` isn't available, so a PAT works everywhere too.)
+(The helper falls back to `$GITHUB_PERSONAL_ACCESS_TOKEN` if `gh` isn't available, so a PAT works everywhere too. It resolves `gh` by absolute path rather than through `PATH`, because an editor launched from Finder or the Dock inherits a `PATH` that holds no Homebrew.)
+
+Claude Code also needs the server **approved**, not just registered: a server declared in a project `.mcp.json` stays untrusted until it is listed in `enabledMcpjsonServers`, and an unapproved server never loads. `init.sh` writes that approval into `.claude/settings.json` alongside the registration. Skipping it is how you get `Incompatible auth server: does not support dynamic client registration` — the editor never reaches the header path above and falls back to the OAuth handshake this section explains GitHub cannot complete. The message blames auth while the token is fine.
 
 **Projects** (work items, milestones, board state) is the one piece that needs a pin — a project board (owner + board number) can't be auto-detected — so it stays an explicit, opt-in step:
 
