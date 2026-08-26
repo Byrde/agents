@@ -15,11 +15,16 @@
 #     "repos": [
 #       { "name": "...", "path": "<rel>", "remote": "...", "owner": "...",
 #         "stack": ["scala","docker"], "purpose": "<human-editable>" }
-#     ]
+#     ],
+#     "githubAccount": "<gh login>"      # optional, human-authored
 #   }
 #
 # Auto-detected fields (path/remote/owner/stack) are refreshed on regeneration;
-# the human-authored `purpose` is preserved across refreshes (merged by name).
+# the human-authored `purpose` and `githubAccount` are preserved across refreshes.
+#
+# `githubAccount` pins which GitHub account this workspace's MCP token belongs
+# to, for somebody who works across several client organisations. Absent means
+# the machine-active `gh` account. Read by scripts/mcp/gh-mcp-headers.sh.
 #
 # Source AFTER lib/layout.sh (so AGENTS_ROOT / WORKSPACE_ROOT / SIBLING_REPOS are
 # available). Requires jq. Compatible with Bash 3.2 (macOS).
@@ -117,11 +122,30 @@ workspace_generate() {
         )')"
   fi
 
+  # Preserve the human-authored account pin. The writer below emits a fixed set
+  # of top-level keys, so anything not carried over here is silently dropped —
+  # and a pin that disappears on the next `init.sh` is worse than no pin, because
+  # the workspace goes back to the machine-active account without saying so.
+  local account=""
+  if [[ -f "$WORKSPACE_FILE" ]]; then
+    account="$(jq -r '.githubAccount // empty' "$WORKSPACE_FILE" 2>/dev/null || true)"
+  fi
+
   local stamp
   stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")"
-  jq -n --arg mode "$mode" --arg stamp "$stamp" --argjson repos "$merged" '
-    { mode: $mode, contextRoot: ".", generated: $stamp, repos: $repos }' \
+  jq -n --arg mode "$mode" --arg stamp "$stamp" --argjson repos "$merged" \
+        --arg account "$account" '
+    { mode: $mode, contextRoot: ".", generated: $stamp, repos: $repos }
+    | if $account != "" then .githubAccount = $account else . end' \
     >"$WORKSPACE_FILE"
+}
+
+# Echo this workspace's pinned GitHub account, or nothing. The headers helper
+# reads the map directly (it runs standalone, outside this library).
+workspace_github_account() {
+  [[ -f "$WORKSPACE_FILE" ]] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  jq -r '.githubAccount // empty' "$WORKSPACE_FILE" 2>/dev/null || true
 }
 
 # Print a compact human summary of the current map (for setup/doctor output).
