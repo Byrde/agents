@@ -106,6 +106,22 @@ Ranks 1 and 2 are **binding**. If a workspace names an account and no token for 
 
 Claude Code also needs the server **approved**, not just registered: a server declared in a project `.mcp.json` stays untrusted until it is listed in `enabledMcpjsonServers`, and an unapproved server never loads. `init.sh` writes that approval into `.claude/settings.json` alongside the registration. Skipping it is how you get `Incompatible auth server: does not support dynamic client registration` — the editor never reaches the header path above and falls back to the OAuth handshake this section explains GitHub cannot complete. The message blames auth while the token is fine.
 
+**And the approval only counts once the workspace is trusted.** Claude Code skips a project's settings wholesale until then, so the approval is inert and the token helper is never run:
+
+```
+MCP server 'github': headersHelper not run — this workspace has no persisted trust;
+accept the trust dialog here once interactively, or set
+projects["<root>"].hasTrustDialogAccepted in ~/.claude.json.
+```
+
+`init.sh` takes the second remedy, because the first cannot happen in a non-interactive session. It sets `hasTrustDialogAccepted` for this workspace, and only when the workspace has a GitHub remote — so a folder that needs no MCP is not trusted as a side effect.
+
+Trust is **not** MCP-specific: it makes Claude Code honour this project's `.claude/settings.json` generally. That is a real widening of what the installer does, so it is announced on install and `init.sh uninstall` gives it back. It gives back **only what init granted** — if you accepted the trust dialog yourself, an uninstall leaves your decision alone. The grant is recorded as `workspace-trust` in `.manifest.local.yml`.
+
+`init.sh` never creates `~/.claude.json`, and never rewrites it when it cannot be parsed. That file holds every project on the machine and the account block, so a corrupt one is left untouched and the MCP simply stays unregistered.
+
+To diagnose any of this, ask the tool rather than guessing — `claude mcp get github` names the cause and the remedy.
+
 **Projects** (work items, milestones, board state) is the one piece that needs a pin — a project board (owner + board number) can't be auto-detected — so it stays an explicit, opt-in step:
 
 **Requires:** `gh` (GitHub CLI, authenticated, `read:project` scope), `jq`, `python3`

@@ -61,6 +61,8 @@ AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # manifest.sh migrates the old github-source-control skill.
 # shellcheck source=lib/manifest.sh
 . "$SCRIPT_DIR/lib/manifest.sh"
+# shellcheck source=lib/trust.sh
+. "$SCRIPT_DIR/lib/trust.sh"
 SKILLS_DIR="$AGENTS_ROOT/skills"
 RULES_DIR="$AGENTS_ROOT/rules"
 
@@ -599,6 +601,10 @@ register_github_mcp() {
     return 0
   fi
   if workspace_has_github_remote; then
+    # Before the merge, not after: Claude Code skips this project's settings
+    # entirely while the workspace is untrusted, so the approval mcp_merge_github
+    # writes would be inert and its own warning would fire on a fresh install.
+    grant_workspace_trust "$WORKSPACE_ROOT"
     mcp_merge_github "$WORKSPACE_ROOT"
     echo "    account-wide (works across all your repos). Claude Code fetches the"
     echo "    token live from 'gh auth token' on each connect (headersHelper) —"
@@ -799,6 +805,7 @@ uninstall() {
   if command -v jq >/dev/null 2>&1; then
     echo "── Removing GitHub MCP ──"
     mcp_remove_github "$WORKSPACE_ROOT"
+    revoke_workspace_trust "$WORKSPACE_ROOT"
   fi
   echo ""
 
