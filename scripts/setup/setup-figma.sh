@@ -82,7 +82,7 @@ print_intro() {
   echo ""
   printf '  %-16s %s\n' "Project Root" "$project_root"
   printf '  %-16s %s\n' "Layout" "$(layout_describe)"
-  printf '  %-16s %s\n' "Auth" "Figma Personal Access Token"
+  printf '  %-16s %s\n' "Auth" "OAuth, in your editor. No token needed here."
   echo "$bar"
   echo ""
 }
@@ -96,7 +96,7 @@ print_summary() {
   echo "$bar"
   echo ""
   printf '  %-16s %s\n' "Team" "${team_name:-$team_id}"
-  printf '  %-16s %s\n' "Project" "$selected_project_name"
+  printf '  %-16s %s\n' "Folder" "$selected_folder_name"
   printf '  %-16s %s\n' "Figma file" "$figma_file_name"
   echo ""
   echo "  Skills:"
@@ -106,13 +106,13 @@ print_summary() {
   echo "  MCP server:"
   printf '    %-13s %s\n' "Cursor:"      "${cursor_status:-skipped}"
   printf '    %-13s %s\n' "Claude Code:" "${claude_status:-skipped}"
-  if [[ "$figma_file_url" == *"pending"* ]]; then
+  if [[ "$figma_file_url" == *"not recorded"* ]]; then
     echo ""
-    echo "  ⚠  Follow-up — the Figma file is pending:"
-    echo "     1. Create '$figma_file_name' in Figma inside '$selected_project_name'."
-    echo "     2. Add a 'Components' page for the reusable pieces. Design pages"
-    echo "        get added as work begins — nothing else is required up front."
-    echo "     3. Re-run this script to update the file reference."
+    echo "  ⚠  Follow-up — the skill names the file but carries no URL:"
+    echo "     1. Open '$figma_file_name' in Figma, under '$selected_folder_name'."
+    echo "        Create it first if it does not exist. Add a 'Components' page for"
+    echo "        the reusable pieces; design pages get added as work begins."
+    echo "     2. Re-run this script and paste the file URL when asked."
   fi
   echo ""
   echo "  Authenticate the MCP server through your editor on first use (OAuth)."
@@ -151,12 +151,66 @@ pick_from_menu() {
 
 # ─── Figma API helpers ──────────────────────────────────────────────────────
 
+# GET an endpoint, and SAY WHAT HAPPENED when it fails.
+#
+# The old body was `curl -sf … 2>/dev/null`. Both halves destroyed evidence:
+# `-f` discards the response body on HTTP >= 400, and the redirect discards
+# curl's own diagnostics. Every caller was then left printing a guess.
+#
+# Figma paid for this rule. It retired the scopes `/v1/teams/:id/projects` still
+# demands, so a token holding every scope the current UI offers gets a 403 whose
+# body names the three accepted scopes exactly. The script reported "check
+# permissions or team ID" and sent the reader to look at the team ID, which was
+# correct all along.
+#
+# The body goes to stdout on success. On failure the status and the body go to
+# stderr and nothing goes to stdout, so `x="$(figma_get …)" || …` still works.
 figma_get() {
   local endpoint="$1"
-  local response
-  response="$(curl -sf -H "X-FIGMA-TOKEN: $FIGMA_TOKEN" "$FIGMA_API$endpoint" 2>/dev/null)" \
-    || return 1
-  echo "$response"
+  local body status
+
+  # `-w` appends the status to the body, so one call yields both without a
+  # temporary file. No `-f`: a 4xx body is the part worth reading.
+  #
+  # `|| true` is load-bearing. The script runs under `set -e`, so a non-zero
+  # curl would kill the shell on this assignment — before the reporting below
+  # could run, which is the whole point of the function.
+  body="$(curl -sS -w $'\n%{http_code}' \
+    -H "X-FIGMA-TOKEN: $FIGMA_TOKEN" "$FIGMA_API$endpoint" 2>&1)" || true
+  status="${body##*$'\n'}"
+  body="${body%$'\n'*}"
+
+  case "$status" in
+    2??)
+      echo "$body"
+      return 0
+      ;;
+    # `000` is curl's answer when nothing was served — DNS, TLS, refused
+    # connection. It is not an HTTP status and must not be reported as one.
+    000 | "")
+      echo "figma: GET $endpoint did not reach Figma" >&2
+      ;;
+    [0-9][0-9][0-9])
+      echo "figma: GET $endpoint returned HTTP $status" >&2
+      ;;
+    *)
+      echo "figma: GET $endpoint did not complete" >&2
+      ;;
+  esac
+
+  # Figma answers an error as JSON with a `message`. Print that when it is
+  # there, and the raw body when it is not, so an HTML error page is still seen.
+  local message=""
+  if [[ -n "$body" ]] && command -v jq >/dev/null 2>&1; then
+    message="$(echo "$body" | jq -r '.message // .err // empty' 2>/dev/null)"
+  fi
+  if [[ -n "$message" ]]; then
+    echo "figma: $message" >&2
+  elif [[ -n "$body" ]]; then
+    echo "figma: $body" >&2
+  fi
+
+  return 1
 }
 
 verify_token() {
@@ -168,10 +222,9 @@ verify_token() {
   echo "$handle"
 }
 
-list_files() {
-  local project_id="$1"
-  figma_get "/v1/projects/$project_id/files" | jq -r '.files[] | "\(.key)\t\(.name)"'
-}
+# `list_files` is gone. It read `/v1/projects/:id/files`, which requires the same
+# retired scope as the team endpoint, so it cannot succeed for anybody. The file
+# name is asked for instead.
 
 get_file_pages() {
   local file_key="$1"
@@ -189,6 +242,20 @@ extract_team_id() {
     tid="$(echo "$url" | grep -oE '/[0-9]{10,}' | head -1 | sed 's|/||')"
   fi
   echo "$tid"
+}
+
+# The file key out of a Figma file URL.
+#
+# Both forms carry it in the same position:
+#   https://www.figma.com/design/<key>/<name>
+#   https://www.figma.com/file/<key>/<name>
+#
+# Empty when the URL carries none, which the caller treats as "not recorded"
+# rather than an error. The key is a convenience here — the skill records the URL
+# as text and the MCP server resolves the file itself.
+extract_file_key() {
+  local url="$1"
+  echo "$url" | sed -nE 's|.*figma\.com/(design\|file)/([A-Za-z0-9]+).*|\2|p' | head -1
 }
 
 # ─── Template rendering ─────────────────────────────────────────────────────
@@ -240,11 +307,11 @@ EOF
 }
 
 render_skill() {
-  local template="$1" out="$2" team="$3" project="$4" figma_file="$5"
+  local template="$1" out="$2" team="$3" folder="$4" figma_file="$5"
   [[ -f "$template" ]] || die "missing template: $template"
   mkdir -p "$(dirname "$out")"
   RENDER_TEMPLATE="$template" RENDER_OUT="$out" \
-    RENDER_TEAM="$team" RENDER_PROJECT="$project" \
+    RENDER_TEAM="$team" RENDER_FOLDER="$folder" \
     RENDER_FIGMA_FILE="$figma_file" \
     python3 <<'PY'
 from pathlib import Path
@@ -252,9 +319,13 @@ import os
 src = Path(os.environ["RENDER_TEMPLATE"])
 dst = Path(os.environ["RENDER_OUT"])
 text = src.read_text()
+# {{PROJECT}} is accepted as well as {{FOLDER}}, so a checkout holding the older
+# template still renders instead of shipping a literal placeholder into a skill.
+folder = os.environ["RENDER_FOLDER"]
 out = (
     text.replace("{{TEAM}}", os.environ["RENDER_TEAM"])
-    .replace("{{PROJECT}}", os.environ["RENDER_PROJECT"])
+    .replace("{{FOLDER}}", folder)
+    .replace("{{PROJECT}}", folder)
     .replace("{{FIGMA_FILE}}", os.environ["RENDER_FIGMA_FILE"])
 )
 dst.write_text(out)
@@ -473,167 +544,174 @@ main() {
   # vendored copy reflects upstream on every setup run.
   install_figma_use
 
-  # ── Step 1: Authenticate ──────────────────────────────────────────────────
+  # ── Step 1: Name the team, the folder and the file ────────────────────────
+  #
+  # ## Why this asks instead of looking it up
+  #
+  # These three values are substituted into the skill's PROSE and nowhere else.
+  # No identifier is needed: the MCP server authenticates over OAuth in the
+  # editor, and it is the only thing that talks to Figma at run time. A token was
+  # never stored by this script — it was read, used for the picker, and dropped.
+  #
+  # So discovery bought a menu, and it cost a secret paste. Then Figma retired
+  # the scopes `/v1/teams/:id/projects` demands, and the menu stopped working for
+  # everyone. Asking is now both the reliable path and the one that handles no
+  # credential.
+  #
+  # A token is still honoured when the environment already carries one:
+  #
+  #   FIGMA_TOKEN=figd_… ./setup-figma.sh
+  #
+  # That path fills the answers in from the API and falls back to asking when any
+  # call fails. It never prompts, because a prompt for a secret this script does
+  # not keep is a cost with no return.
+  #
+  # ## Folder, not Project
+  #
+  # Figma renamed Projects to Folders in the product. The REST API did NOT: the
+  # path is still `/v1/teams/:id/projects` and the field is still `.projects[]`.
+  # Human-facing text below says Folder. Every API string keeps the old name,
+  # because renaming it would break the call.
 
-  echo ""
-  echo "A Figma Personal Access Token is required."
-  echo "Generate one at: https://www.figma.com/developers/api#access-tokens"
-  echo "Required scopes: file_content:read, projects:read"
-  echo ""
+  local team_id="" team_name="" selected_folder_name=""
+  local figma_file_key="" figma_file_name="" figma_file_url=""
+  local discovered="n"
 
-  local FIGMA_TOKEN
-  read -r -s -p "Paste your Figma Personal Access Token: " FIGMA_TOKEN || die "stdin closed"
-  echo ""
-  export FIGMA_TOKEN
+  if [[ -n "${FIGMA_TOKEN:-}" ]]; then
+    export FIGMA_TOKEN
+    echo ""
+    echo "FIGMA_TOKEN is set — trying to read the team from the API."
+    echo "Any failure below falls back to typing the names in. Nothing is stored."
+    echo ""
 
-  echo "Verifying token …"
-  local handle
-  handle="$(verify_token)" || die "authentication failed — token is invalid or expired"
-  echo "Authenticated as: $handle"
-
-  # ── Step 2: Get Team ID ───────────────────────────────────────────────────
-
-  echo ""
-  echo "Figma does not provide an API to list your teams."
-  echo "Navigate to your team in Figma's file browser and copy the URL."
-  echo "Example: https://www.figma.com/files/team/1234567890/My-Team"
-  echo ""
-
-  local team_url team_id
-  read -r -p "Paste your Figma team URL: " team_url || die "stdin closed"
-  team_id="$(extract_team_id "$team_url")"
-  [[ -n "$team_id" ]] || die "could not extract team ID from URL: $team_url"
-
-  echo "Extracted team ID: $team_id"
-
-  # Verify the team ID works by listing projects
-  echo "Verifying team access …"
-  local projects_raw
-  projects_raw="$(figma_get "/v1/teams/$team_id/projects")" \
-    || die "cannot access team $team_id — check permissions or team ID"
-
-  local team_name
-  team_name="$(echo "$projects_raw" | jq -r '.name // empty')"
-  if [[ -n "$team_name" ]]; then
-    echo "Team: $team_name"
+    local handle
+    if handle="$(verify_token)"; then
+      echo "Authenticated as: $handle"
+      discovered="y"
+    else
+      echo "The token did not verify. Falling back to typing the names in." >&2
+      discovered="n"
+    fi
   fi
 
-  # ── Step 3: Select Project ────────────────────────────────────────────────
-
-  local project_ids=()
-  local project_names=()
-  while IFS=$'\t' read -r pid pname || [[ -n "$pid" ]]; do
-    [[ -n "$pid" ]] || continue
-    project_ids+=("$pid")
-    project_names+=("$pname")
-  done < <(echo "$projects_raw" | jq -r '.projects[] | "\(.id)\t\(.name)"')
-
-  [[ ${#project_names[@]} -gt 0 ]] || die "no projects found in team $team_id"
-
-  local selected_project_name
-  selected_project_name="$(pick_from_menu "Projects in this team:" "${project_names[@]}")"
-
-  local selected_project_id=""
-  local idx=0
-  for pn in "${project_names[@]}"; do
-    if [[ "$pn" == "$selected_project_name" ]]; then
-      selected_project_id="${project_ids[$idx]}"
-      break
-    fi
-    ((idx++)) || true
-  done
-  [[ -n "$selected_project_id" ]] || die "internal error: project ID not found"
-
-  echo "Selected project: $selected_project_name (ID: $selected_project_id)"
-
-  # ── Step 4: Select the project's Figma file ───────────────────────────────
-  # One file holds components, tokens, and design work. Pages inside it are the
-  # team's business — nothing is validated or required here.
-
-  local figma_file_key="" figma_file_name="" figma_file_url=""
-
-  echo ""
-  echo "Listing files in project '$selected_project_name' …"
-
-  local file_keys=()
-  local file_names=()
-  while IFS=$'\t' read -r fkey fname || [[ -n "$fkey" ]]; do
-    [[ -n "$fkey" ]] || continue
-    file_keys+=("$fkey")
-    file_names+=("$fname")
-  done < <(list_files "$selected_project_id")
-
-  if [[ ${#file_names[@]} -eq 0 ]]; then
+  if [[ "$discovered" == "y" ]]; then
     echo ""
-    echo "No files found in this project."
-    echo "You will need to create the design file in Figma and re-run this script."
+    echo "Figma provides no API to list your teams."
+    echo "Open the team in Figma's file browser and copy the URL."
+    echo "Example: https://www.figma.com/files/team/1234567890/My-Team"
     echo ""
-    read -r -p "Enter the name for your future Figma file: " figma_file_name || true
-    [[ -n "$figma_file_name" ]] || figma_file_name="Design"
-    figma_file_url="(pending — create the file in Figma, then re-run setup)"
-  else
-    local -a file_display=()
-    for fn in "${file_names[@]}"; do
-      file_display+=("$fn")
-    done
+    local team_url
+    read -r -p "Paste your Figma team URL: " team_url || die "stdin closed"
+    team_id="$(extract_team_id "$team_url")"
+    [[ -n "$team_id" ]] || die "could not read a team ID from: $team_url"
+    echo "Team ID: $team_id"
 
-    echo ""
-    echo "Select the file that is (or will be) this project's design file —"
-    echo "one file holding the reusable components and the design work."
-    echo "If it doesn't exist yet, choose 'Create new …' and set it up in Figma."
-    file_display+=("[Create new — I'll set it up in Figma]")
+    # `/projects` is Figma's path, not our word. See the note above.
+    echo "Reading the team's folders …"
+    local folders_raw=""
+    if folders_raw="$(figma_get "/v1/teams/$team_id/projects")"; then
+      team_name="$(echo "$folders_raw" | jq -r '.name // empty')"
+      local folder_names=()
+      while IFS= read -r fname || [[ -n "$fname" ]]; do
+        [[ -n "$fname" ]] && folder_names+=("$fname")
+      done < <(echo "$folders_raw" | jq -r '.projects[]?.name')
 
-    local selected_file_display
-    selected_file_display="$(pick_from_menu "Files in '$selected_project_name':" "${file_display[@]}")"
-
-    if [[ "$selected_file_display" == "[Create new — I'll set it up in Figma]" ]]; then
-      read -r -p "Enter the name for your Figma file: " figma_file_name || true
-      [[ -n "$figma_file_name" ]] || figma_file_name="Design"
-      figma_file_url="(pending — create the file in Figma, then re-run setup)"
+      if [[ ${#folder_names[@]} -gt 0 ]]; then
+        selected_folder_name="$(pick_from_menu "Folders in this team:" "${folder_names[@]}")"
+      else
+        echo "The team reports no folders. Falling back to typing the names in." >&2
+        discovered="n"
+      fi
     else
-      figma_file_name="$selected_file_display"
-      local fidx=0
-      for fn in "${file_names[@]}"; do
-        if [[ "$fn" == "$figma_file_name" ]]; then
-          figma_file_key="${file_keys[$fidx]}"
-          break
-        fi
-        ((fidx++)) || true
+      # `figma_get` already printed the status and Figma's own message, so this
+      # adds only what to do about it. Never restate the cause — a guess here is
+      # what made the original failure unreadable.
+      echo ""
+      echo "Could not read the team's folders. The message above is Figma's." >&2
+      echo "Falling back to typing the names in — the install does not need the API." >&2
+      discovered="n"
+    fi
+  fi
+
+  if [[ "$discovered" != "y" ]]; then
+    echo ""
+    echo "Name the Figma team, folder and file this project designs in."
+    echo "These go into the skill as text, so type them as Figma shows them."
+    echo "Figma calls a folder a Folder — it was called a Project until 2025."
+    echo ""
+
+    read -r -p "Team name: " team_name || die "stdin closed"
+    [[ -n "$team_name" ]] || die "a team name is required"
+
+    read -r -p "Folder name: " selected_folder_name || die "stdin closed"
+    [[ -n "$selected_folder_name" ]] || die "a folder name is required"
+
+    read -r -p "File name: " figma_file_name || die "stdin closed"
+    [[ -n "$figma_file_name" ]] || die "a file name is required"
+
+    echo ""
+    echo "Paste the file's URL to record it in the skill, or press enter to skip."
+    read -r -p "File URL: " figma_file_url || true
+    if [[ -n "$figma_file_url" ]]; then
+      figma_file_key="$(extract_file_key "$figma_file_url")"
+    else
+      figma_file_url="(not recorded — paste the file URL on a later run)"
+    fi
+  fi
+
+  # ── Step 2: Name the file, when the API supplied the folder ───────────────
+
+  if [[ "$discovered" == "y" && -z "$figma_file_name" ]]; then
+    echo ""
+    echo "Name the file inside '$selected_folder_name' that holds the components"
+    echo "and the design work. One file, not one per surface."
+    echo ""
+    read -r -p "File name: " figma_file_name || die "stdin closed"
+    [[ -n "$figma_file_name" ]] || figma_file_name="Design"
+
+    read -r -p "File URL (enter to skip): " figma_file_url || true
+    if [[ -n "$figma_file_url" ]]; then
+      figma_file_key="$(extract_file_key "$figma_file_url")"
+    else
+      figma_file_url="(not recorded — paste the file URL on a later run)"
+    fi
+  fi
+
+  # Informational only. The file's page structure is the team's business, and
+  # this needs `file_content:read`, which the current scopes DO grant.
+  if [[ -n "$figma_file_key" && -n "${FIGMA_TOKEN:-}" ]]; then
+    local -a existing_pages=()
+    while IFS= read -r pg || [[ -n "$pg" ]]; do
+      [[ -n "$pg" ]] && existing_pages+=("$pg")
+    done < <(get_file_pages "$figma_file_key" 2>/dev/null)
+
+    if [[ ${#existing_pages[@]} -gt 0 ]]; then
+      echo ""
+      echo "  Pages in '$figma_file_name':"
+      local ep has_components="n"
+      for ep in "${existing_pages[@]}"; do
+        echo "    • $ep"
+        [[ "$ep" == "Components" ]] && has_components="y"
       done
-      figma_file_url="https://www.figma.com/design/$figma_file_key"
-
-      # Informational only — the file's page structure is not prescribed.
-      local -a existing_pages=()
-      while IFS= read -r pg || [[ -n "$pg" ]]; do
-        [[ -n "$pg" ]] && existing_pages+=("$pg")
-      done < <(get_file_pages "$figma_file_key")
-
-      if [[ ${#existing_pages[@]} -gt 0 ]]; then
+      if [[ "$has_components" == "n" ]]; then
         echo ""
-        echo "  Current pages in '$figma_file_name':"
-        for ep in "${existing_pages[@]}"; do
-          echo "    • $ep"
-        done
-        local has_components="n"
-        for ep in "${existing_pages[@]}"; do
-          [[ "$ep" == "Components" ]] && has_components="y"
-        done
-        if [[ "$has_components" == "n" ]]; then
-          echo ""
-          echo "  Note: no 'Components' page yet — add one for the reusable"
-          echo "  pieces, or have an agent create it in your first session."
-        fi
+        echo "  Note: no 'Components' page yet — add one for the reusable"
+        echo "  pieces, or have an agent create it in your first session."
       fi
     fi
   fi
 
   # ── Step 5: Render the skill ──────────────────────────────────────────────
 
-  local team_field="${team_name:-$team_id} (ID: $team_id)"
+  # The ID is recorded only when the API supplied one. A manual install has no
+  # team ID and does not need one, so it must not render "(ID: )".
+  local team_field="$team_name"
+  [[ -n "$team_id" ]] && team_field="$team_name (ID: $team_id)"
+  [[ -n "$team_field" ]] || team_field="$team_id"
   local figma_field="$figma_file_name — $figma_file_url"
 
   render_skill "$FIGMA_TEMPLATE" "$FIGMA_OUT" \
-    "$team_field" "$selected_project_name" "$figma_field"
+    "$team_field" "$selected_folder_name" "$figma_field"
 
   # ── Step 5b: Sync skills into editor dirs ────────────────────────────────
   # .agents/skills/ is the source of truth; init.sh mirrors it into the
@@ -673,4 +751,9 @@ main() {
   print_summary
 }
 
-main "$@"
+# `SETUP_FIGMA_SOURCED_ONLY=1` lets a test source this file and call one
+# function. Without it, sourcing starts the installer — which is how a test suite
+# ends up prompting for a token and writing config into a sandbox.
+if [[ -z "${SETUP_FIGMA_SOURCED_ONLY:-}" ]]; then
+  main "$@"
+fi

@@ -5,14 +5,16 @@ description: Owns Figma operations for this project: read design tokens, read
   library, open design file, comment on design, mark frame ready for
   development. Consulted whenever design work needs the project's reusable
   components or a place to put a screen. Configured for the {{TEAM}} team,
-  project {{PROJECT}}, file {{FIGMA_FILE}}. Overlays on top of figma-use, which
+  folder {{FOLDER}}, file {{FIGMA_FILE}}. Overlays on top of figma-use, which
   owns the Figma plugin-API mechanics — load both when executing operations.
 category: tool
 ---
 
 # Figma
 
-This project's Figma tool. **One file — {{FIGMA_FILE}}** (team **{{TEAM}}**, project **{{PROJECT}}**) — holds both the reusable components and the design work.
+This project's Figma tool. **One file — {{FIGMA_FILE}}** (team **{{TEAM}}**, folder **{{FOLDER}}**) — holds both the reusable components and the design work.
+
+Figma calls a folder a **Folder**. It was called a Project until 2025, and the REST API still says `projects` in its paths and its responses. Read an API path as written; say "folder" to a person.
 
 ## Built on figma-use
 
