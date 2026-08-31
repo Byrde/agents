@@ -48,6 +48,20 @@ Two kinds of content in one file. That's the whole model.
 
 Components are used **locally, in the same file** — no import/publish round-trip for internal work. Reach for **publish design library** only when another Figma file needs to consume them. Re-publish after each change, with a note.
 
+### Read the page list through the plugin API
+
+Warning: `get_metadata` called with a `fileKey` and no `nodeId` returns the **first page only**. Its own description says it returns a list of the top-level pages in the document. It does not.
+
+A one-page answer looks like a complete answer. Nothing signals that the other pages are missing. Measured 2026-08-31 on a file holding 11 pages: the tool reported one, and an audit that trusted it stated the file held no screens. The file held 35 frames.
+
+List the pages through `use_figma`:
+
+```js
+return figma.root.children.map(p => ({ id: p.id, name: p.name }));
+```
+
+Pages load incrementally, so a page's children are not readable until the page is current. To read one page, get it with `getNodeByIdAsync`, then `await figma.setCurrentPageAsync(page)`, then read `page.children`. Set the current page once per `use_figma` call. For several pages, fan the calls out in parallel.
+
 ## Components
 
 - Built from variables — no hardcoded colors, sizes, or typography.

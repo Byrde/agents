@@ -169,4 +169,32 @@ test_prose_says_folder_and_the_api_still_says_projects() {
   assert_contains "$text" "Folder" "no human-facing text mentions a Folder"
 }
 
+test_rendered_skill_warns_that_get_metadata_lists_one_page() {
+  # `get_metadata` with a fileKey and no nodeId returns the FIRST page, not the
+  # page list its own description promises. The answer is formatted as a
+  # complete list, so a reader has no signal that the rest are missing.
+  #
+  # Measured 2026-08-31: a file holding 11 pages reported one, and the audit
+  # that trusted it stated the design file held no screens. It held 35 frames.
+  #
+  # Asserted against the RENDERED skill rather than the template, because the
+  # rendered file is what a reader gets. A renderer that dropped the section
+  # would leave the template correct and the reader uninformed.
+  local out="$SANDBOX/figma-skill.md" text
+  (
+    SETUP_FIGMA_SOURCED_ONLY=1 . "$SETUP_FIGMA" >/dev/null 2>&1
+    render_skill "$REPO_ROOT/tools/figma.md.template" "$out" \
+      "a-team" "a-folder" "A File"
+  ) >/dev/null 2>&1
+
+  text="$(cat "$out")"
+
+  assert_contains "$text" "get_metadata" \
+    "nothing names the tool that silently drops the pages"
+  assert_contains "$text" "figma.root.children" \
+    "the reliable page listing call is absent"
+  assert_contains "$text" "setCurrentPageAsync" \
+    "nothing says a page must be current before its children read"
+}
+
 run_tests
