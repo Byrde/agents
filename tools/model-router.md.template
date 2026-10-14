@@ -1,0 +1,96 @@
+---
+name: model-router
+description: Owns model routing for OpenCode in this project: define routing
+  tasks, keep tasks and practice skills in step, set scoring criteria
+  (dimensions and weights), set provider priority, evaluate models (score and
+  assign one per task), explain an assignment, settle unmatched models. Use when the user wants to set up, change, re-run or
+  understand which model handles which kind of work.
+category: tool
+---
+
+# Model router
+
+This project routes each kind of task to the model that suits it best. Tasks and practice skills match one to one: each practice skill (`plan`, `develop`, `review`, …) is the method for one task, and the task picks the model that runs it. Each task in `.opencode/model-router.json` becomes an OpenCode subagent, `route-<task>`, pinned to the model chosen for it and following its skill. The main agent delegates a matching request to that subagent on its own. Users can also force a task with the `/route-<task>` command.
+
+The choice comes from public benchmarks (Artificial Analysis), scored against criteria the user sets. Scoring runs only when the user asks. It never runs per request.
+
+## Owned operations
+
+- **define routing tasks:** work out with the user which kinds of work deserve their own model, and write them as tasks.
+- **keep tasks and skills in step:** every practice skill has a task and every task has a practice skill. See below.
+- **set scoring criteria:** choose the dimensions that matter for each task and how much each one weighs.
+- **set provider priority:** order the providers. When several providers serve the same model, the first one listed is used.
+- **evaluate models:** run the evaluation, then walk the user through the result.
+- **explain an assignment:** say why a task got its model, and what the runner-up lacked.
+- **settle unmatched models:** map a model the evaluation could not find in the benchmarks, or skip it.
+
+## The config
+
+`.opencode/model-router.json` is committed with the project. Edit every section except `evaluation`, which the evaluate step writes.
+
+| Key | Meaning |
+|---|---|
+| `providers` | OpenCode provider IDs to evaluate, in priority order. Only these providers' models are scored. |
+| `tasks.<id>` | `skill` (the practice skill it runs), `description` (what the work is), `when` (when to delegate; it becomes the subagent's trigger, so make it concrete), `weights` (dimension → weight), optional `require` and `minCoverage`. `seeded: true` marks weights that sync guessed; tune them, then remove the flag. |
+| `skipSkills` | Practice skills that deliberately get no task. Sync leaves them out. |
+| `dimensions.<id>.metrics` | Benchmark metric → weight. See the metric list below. |
+| `requirements` | Hard requirements for every task: `tools` (tool calling, default true), `minContext` (tokens), `input` (e.g. `["image"]`). A task's `require` adds to them. |
+| `minCoverage` | Minimum share of a task's weight that must rest on real data (default 0.5). |
+| `exclude` | Glob patterns over `provider/model` or the canonical ID, for models that must never be picked. |
+| `aliases` | `"<canonical id>": "<AA slug>"` maps an unmatched model. `null` skips it on purpose. `"<provider>/<model>": "<creator>/<model>"` overrides a model's canonical ID. |
+| `metrics` | Extra metrics: `"name": {"paths": ["evaluations.x"], "higherIsBetter": true}`. |
+| `commands` | `false` stops generating the `/route-<task>` commands. |
+
+**Metrics** (Artificial Analysis): `intelligence_index`, `coding_index`, `math_index`, `gpqa`, `hle`, `mmlu_pro`, `livecodebench`, `scicode`, `ifbench` (instruction following), `lcr` (long-context reasoning), `math_500`, `aime`, `terminalbench` (agentic terminal work), `tau2` and `tau_banking` (tool use in conversation), `price` (lower is better), `output_speed`, `latency` (lower is better). Any other AA evaluation key also works as a metric name.
+
+## Keep tasks and skills in step
+
+Sync runs on every install and evaluate. It works in both directions:
+
+- **Skill → task.** A practice skill without a task gets one. Its weights come from the starter set, or are seeded (`seeded: true`) for a skill the starter set does not know. Tune seeded weights with the user.
+- **Task → skill.** A task whose `skill` does not exist is reported. Resolve it with the user in one of three ways:
+  - **Write the practice skill.** Put it in `.agents/skills/<name>/SKILL.md`, beside the others, with `category: practice`. Follow their shape: a description that starts "**MUST be invoked** before you …", then Mindset, Inputs, Procedure, When to halt, and Composition. Add its trigger to the table in the `global` rule. It ships with the library, so propose it upstream as well.
+  - **Point the task at an existing skill**, if one covers the work.
+  - **Drop the task.**
+- **Dropping a task that has a skill:** add the skill to `skipSkills`, or the next sync adds the task back.
+
+## Define tasks and criteria together
+
+Work with the user, not for them. Propose, then let the user decide.
+
+1. Read the config and any previous `evaluation`.
+2. Start from the practice skills: each one already has a task. Ask which kinds of work the user hands the agent that no skill covers. Each answer is a new skill and task pair, so add one only when the work needs a different method or a different model. Fewer, sharper tasks route better than many overlapping ones.
+3. For each task, write a `description`, and a `when` the main agent can act on: concrete signals in the request, not adjectives.
+4. For each task, ask what matters: quality of reasoning, coding, agentic tool use, long context, instruction following, cost, speed. Turn the answers into dimension weights. Say what each weight trades away. For example, a high cost weight on `implement` will pick a cheaper, weaker coder.
+5. Ask for hard limits (context size, image input, models to exclude) and the provider order. A subscription the user already pays for usually comes first.
+6. Show the diff of the config, and write it once the user agrees.
+
+## Evaluate
+
+```bash
+{{SETUP}} evaluate              # fetch fresh data, score, assign, write the subagents
+{{SETUP}} evaluate --offline    # re-score from the last download, after changing weights
+{{SETUP}} show                  # print the current assignments
+```
+
+`evaluate` needs `ARTIFICIAL_ANALYSIS_API_KEY` in the environment. If it is missing, ask the user to export it in their shell. Never write the key to a file.
+
+After a run, report each task's model, its score and coverage, and the runner-up. Report what changed since the last run, the unmatched models, and any warnings. Low coverage means the score rests on few benchmarks: say so. Then remind the user to commit the config and `.opencode/agents/` and `.opencode/commands/`, and to restart OpenCode.
+
+## Explain an assignment
+
+Read `evaluation.candidates` in the config. Each row has the model's per-dimension percentiles (0 to 1, against every model Artificial Analysis lists) and their coverage. Compare the winner and the runner-up on the task's weighted dimensions. Name the one or two dimensions that decided it.
+
+## Settle unmatched models
+
+For each entry in `evaluation.unmatched`, look for the model in Artificial Analysis (artificialanalysis.ai/models). Propose an alias (the AA slug without its effort suffix, e.g. `claude-opus-5-5`), or `null` if the model has no benchmark or should not be routed. Confirm with the user, write it to `aliases`, then run `evaluate --offline`.
+
+## How scoring works
+
+- Each metric is a percentile against every model Artificial Analysis lists. Price and latency are flipped, because lower is better.
+- A dimension is the weighted mean of the metrics the model has.
+- A task score is the weighted mean of its dimensions. A dimension with no data counts as 0.5, the median, so missing data neither helps nor sinks a model.
+- Reasoning effort is scored per variant: AA's `-high` and `-low` entries map to OpenCode's `#high` and `#low`. The chosen effort is pinned in the subagent's model.
+- The best model wins. Among the providers that serve it, the first one in `providers` is used.
+
+Benchmark data: Artificial Analysis (https://artificialanalysis.ai/). Credit it when you show scores to anyone.

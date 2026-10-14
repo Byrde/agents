@@ -5,7 +5,7 @@
 #
 # Mirrors setup-github-project.sh / setup-figma.sh: it installs a tool skill,
 # pins identity (the Google account's ADC + GCP project + GA4 property), wires
-# the MCP server into .mcp.json / .cursor/mcp.json, records the capability in the
+# the MCP server into each selected harness's MCP config, records the capability in the
 # manifest, and ships an uninstall path.
 #
 # Auth model — NO SECRETS ON DISK (the house invariant):
@@ -20,8 +20,8 @@
 #   cd /your/workspace && /path/to/setup-google-analytics.sh
 #
 # Writes:
-#   - skills/google-analytics/SKILL.md (+ mirrored into .claude/ and .cursor/)
-#   - .mcp.json / .cursor/mcp.json — registers the analytics-mcp server
+#   - skills/google-analytics/SKILL.md (+ mirrored for each harness init chose)
+#   - each harness's MCP config — registers the analytics-mcp server
 #
 # Requires: gcloud (authenticated), pipx, jq, python3. Bash 3.2 (macOS) compatible.
 
@@ -34,6 +34,8 @@ AGENTS_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 resolve_layout
 # shellcheck source=lib/manifest.sh
 . "$SCRIPT_DIR/../lib/manifest.sh"
+# shellcheck source=lib/harness.sh
+. "$SCRIPT_DIR/../lib/harness.sh"
 TOOL_DIR="$AGENTS_ROOT/tools"
 GA_TEMPLATE="$TOOL_DIR/google-analytics.md.template"
 GA_OUT="$SKILLS_DIR/google-analytics/SKILL.md"
@@ -230,64 +232,22 @@ dst.write_text(out); print("Wrote", dst)
 PY
 }
 
+# Mirror the rendered skill into every selected harness (see lib/harness.sh).
 sync_skill_to_editors() {
-  local skill="$1"
-  local src="$SKILLS_DIR/$skill"
-  [[ -d "$src" ]] || return 0
-  local dest
-  for dest in "$WORKSPACE_ROOT/.claude/skills" "$WORKSPACE_ROOT/.cursor/skills"; do
-    mkdir -p "$dest"; rm -rf "${dest:?}/$skill"; cp -R "$src" "$dest/$skill"
-    echo "  skills/$skill → ${dest#"$WORKSPACE_ROOT"/}/$skill"
-  done
+  harness_skill_sync "$WORKSPACE_ROOT" "$SKILLS_DIR/$1"
 }
 
 # ─── MCP registration (analytics-mcp via pipx; GOOGLE_PROJECT_ID only) ───────
 
-_mcp_merge_ga() {
-  local path="$1" project="$2" tmp
-  tmp="$(mktemp)"
-  mkdir -p "$(dirname "$path")"
-  if [[ -f "$path" ]]; then
-    jq --arg proj "$project" '
-      .mcpServers = (.mcpServers // {}) |
-      .mcpServers["analytics-mcp"] = {
-        command: "pipx",
-        args: ["run", "analytics-mcp"],
-        env: { "GOOGLE_PROJECT_ID": $proj }
-      }' "$path" >"$tmp" || { rm -f "$tmp"; echo "  ⚠ jq failed on $path — left unchanged" >&2; return 1; }
-  else
-    jq -n --arg proj "$project" '{
-      mcpServers: { "analytics-mcp": {
-        command: "pipx", args: ["run", "analytics-mcp"],
-        env: { "GOOGLE_PROJECT_ID": $proj } } } }' >"$tmp"
-  fi
-  mv "$tmp" "$path"
-}
-
 mcp_merge_ga() {
-  local root="$1" project="$2"
-  _mcp_merge_ga "$root/.mcp.json" "$project" && echo "  ✓ .mcp.json — mcpServers[\"analytics-mcp\"]"
-  _mcp_merge_ga "$root/.cursor/mcp.json" "$project" && echo "  ✓ .cursor/mcp.json — mcpServers[\"analytics-mcp\"]"
-}
-
-_mcp_remove_ga() {
-  local path="$1" tmp
-  [[ -f "$path" ]] || return 0
-  jq -e '.mcpServers["analytics-mcp"]' "$path" >/dev/null 2>&1 || return 0
-  tmp="$(mktemp)"
-  if jq 'del(.mcpServers["analytics-mcp"])' "$path" >"$tmp" 2>/dev/null; then
-    mv "$tmp" "$path"
-    echo "  removed mcpServers[\"analytics-mcp\"] from $path"
-  else
-    rm -f "$tmp"
-    echo "  ⚠ jq failed on $path — left unchanged" >&2
-  fi
+  local root="$1" project="$2" spec
+  spec="$(jq -nc --arg proj "$project" '{type: "stdio", command: "pipx",
+    args: ["run", "analytics-mcp"], env: {GOOGLE_PROJECT_ID: $proj}}')"
+  harness_mcp_sync "$root" analytics-mcp "$spec"
 }
 
 mcp_remove_ga() {
-  local root="$1"
-  _mcp_remove_ga "$root/.mcp.json"
-  _mcp_remove_ga "$root/.cursor/mcp.json"
+  harness_mcp_purge "$1" analytics-mcp
 }
 
 # ─── Uninstall ──────────────────────────────────────────────────────────────
@@ -304,12 +264,9 @@ uninstall() {
   echo "$b"
   echo ""
 
+  harness_skill_purge "$WORKSPACE_ROOT" "google-analytics"
   rm -rf "$SKILLS_DIR/google-analytics"
-  echo "  removed skills/google-analytics"
-  local dest
-  for dest in "$WORKSPACE_ROOT/.claude/skills/google-analytics" "$WORKSPACE_ROOT/.cursor/skills/google-analytics"; do
-    rm -rf "$dest"; echo "  removed ${dest#"$WORKSPACE_ROOT"/}"
-  done
+  echo "  removed skills/google-analytics (and its copies in every harness)"
 
   echo ""
   echo "── Removing MCP registration ──"

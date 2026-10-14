@@ -18,9 +18,25 @@
 # Payload: global.md in full, plus a pointer to the other rule files. Short
 # enough to repeat often, and repetition is what beats decay.
 #
+# Harness: --harness claude|codex|cursor|copilot (default claude). Each reads
+# the injection from a different place in the answer:
+#   claude, codex  hookSpecificOutput.additionalContext
+#   cursor         additional_context
+#   copilot        additionalContext
+#
 # Cadence: BYRDE_RULES_REINJECT_EVERY (default 12 tool calls). Set 0 to disable.
-# State: one counter file per session under the project's .claude/ directory.
+# State: one counter file per session under the project's .claude/ directory,
+# or under $TMPDIR for a harness that has none.
 set -uo pipefail
+
+harness="claude"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --harness) harness="${2:-claude}"; shift 2 ;;
+    --harness=*) harness="${1#--harness=}"; shift ;;
+    *) shift ;;
+  esac
+done
 
 every="${BYRDE_RULES_REINJECT_EVERY:-12}"
 # A malformed cadence must not turn into an arithmetic error on every tool call.
@@ -32,18 +48,30 @@ payload="$(cat 2>/dev/null || true)"
 # A PostToolUse payload carries the whole tool result, so read the fields with
 # jq. The sed fallback covers a machine without jq.
 if command -v jq >/dev/null 2>&1; then
-  session="$(printf '%s' "$payload" | jq -r '.session_id // empty' 2>/dev/null)"
+  session="$(printf '%s' "$payload" | jq -r '.session_id // .conversation_id // .sessionId // empty' 2>/dev/null)"
   event="$(printf '%s' "$payload" | jq -r '.hook_event_name // empty' 2>/dev/null)"
+  cwd="$(printf '%s' "$payload" | jq -r '.cwd // .workspace_roots[0]? // empty' 2>/dev/null)"
 else
+  cwd=
   session="$(printf '%s' "$payload" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
   event="$(printf '%s' "$payload" | sed -n 's/.*"hook_event_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
 fi
 [ -n "$session" ] || session="default"
+# Keep the session id safe to use as a file name.
+session="$(printf '%s' "$session" | tr -c 'A-Za-z0-9._-' '_')"
 [ -n "$event" ] || event="PostToolUse"
 
-root="${CLAUDE_PROJECT_DIR:-$PWD}"
+root="${CLAUDE_PROJECT_DIR:-${CURSOR_PROJECT_DIR:-${cwd:-$PWD}}}"
+# Claude Code's installed rules come first: they carry any rule added beside
+# the shipped ones. Every other harness falls back to the
+# shared source next to this script, which all of them were rendered from.
 rules_dir="$root/.claude/rules"
-[ -d "$rules_dir" ] || exit 0
+rules_shown=".claude/rules/"
+if [ "$harness" != "claude" ] || [ ! -d "$rules_dir" ]; then
+  rules_dir="$(cd "$(dirname "$0")/../../rules" 2>/dev/null && pwd)"
+  rules_shown=".agents/rules/"
+fi
+[ -n "$rules_dir" ] && [ -d "$rules_dir" ] || exit 0
 
 # global.md leads: it carries the re-grounding checks, and the first thing read
 # after a long stretch should be the one that asks what drifted.
@@ -56,7 +84,11 @@ if [ ! -f "$lead" ]; then
 fi
 [ -n "$lead" ] || exit 0
 
-state_dir="$root/.claude/.byrde"
+if [ -d "$root/.claude" ]; then
+  state_dir="$root/.claude/.byrde"
+else
+  state_dir="${TMPDIR:-/tmp}/byrde-agents-$(printf '%s' "$root" | cksum | cut -d' ' -f1)"
+fi
 mkdir -p "$state_dir" 2>/dev/null || exit 0
 counter="$state_dir/rules-reinject.$session"
 
@@ -82,9 +114,10 @@ done
 build_context() {
   printf '<project-rules-reinjected after-tool-calls="%s">\n' "$n"
   printf 'These rules are binding. Tool output has pushed them out of view. Read them again before your next step.\n\n'
-  cat "$lead"
+  # Source rules carry frontmatter; installed Claude rules do not.
+  awk 'NR == 1 && $0 == "---" { fm = 1; next } fm && $0 == "---" { fm = 0; next } !fm' "$lead"
   if [ -n "$others" ]; then
-    printf '\nThe other rules are in .claude/rules/: %s.\n' "$others"
+    printf '\nThe other rules are in %s: %s.\n' "$rules_shown" "$others"
     printf 'Read one when your next step touches what it covers.\n'
   fi
   printf '</project-rules-reinjected>\n'
@@ -94,7 +127,7 @@ context="$(build_context)"
 
 # UserPromptSubmit reads stdout as context. Every other event ignores stdout and
 # reads additionalContext, which has to be JSON.
-if [ "$event" = "UserPromptSubmit" ]; then
+if [ "$harness" = "claude" ] && [ "$event" = "UserPromptSubmit" ]; then
   printf '%s\n' "$context"
   exit 0
 fi
@@ -102,5 +135,9 @@ fi
 # Without jq there is no safe way to escape the rules into JSON. Stay silent
 # rather than hand the session a broken hook response.
 command -v jq >/dev/null 2>&1 || exit 0
-jq -n --arg ev "$event" --arg ctx "$context" \
-  '{hookSpecificOutput: {hookEventName: $ev, additionalContext: $ctx}}'
+case "$harness" in
+  cursor)  jq -n --arg ctx "$context" '{additional_context: $ctx}' ;;
+  copilot) jq -n --arg ctx "$context" '{additionalContext: $ctx}' ;;
+  *)       jq -n --arg ev "$event" --arg ctx "$context" \
+             '{hookSpecificOutput: {hookEventName: $ev, additionalContext: $ctx}}' ;;
+esac

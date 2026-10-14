@@ -1,3 +1,8 @@
+---
+description: Identify which repository a task belongs to in a multi-repo workspace, and operate inside it
+trigger: always_on
+---
+
 # Workspace — route work to the right repo
 
 This context may span several repositories. A shared `.agents` sits at the context root
@@ -27,7 +32,7 @@ re-running `.agents/scripts/init.sh`.
 2. If two repos plausibly match, or none does, **ask** which. Name the candidates. Never
    spread a speculative change across repos.
 3. Treat that repo's `path` as the working root. Search, read, edit and build there.
-4. Follow **that** repo's conventions — its `CLAUDE.md`, its `.agents`, its rules — not
+4. Follow **that** repo's conventions — its `CLAUDE.md` or `AGENTS.md`, its `.agents`, its rules — not
    the context root's.
 5. For work spanning repos, handle each as a separate unit with its own branch and pull
    request. Call out the coordination.

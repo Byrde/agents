@@ -8,10 +8,14 @@ skills/github-projects/
 skills/jira/
 skills/google-analytics/
 skills/figma/
-skills/memory/
+skills/model-router/
 
 # Vendored upstream skill — fetched from figma/mcp-server-guide by setup-figma.sh.
 skills/figma-use/
+
+# Antigravity reads its project MCP config from .agents/, which is this checkout.
+# Generated per project by the harness adapters (scripts/lib/harness.sh).
+mcp_config.json
 
 # Installed-tools manifest — per-checkout state written by setup-*.sh, read by
 # doctor.sh. Not submodule-tracked content.

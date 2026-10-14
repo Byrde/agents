@@ -16,11 +16,13 @@
 #       { "name": "...", "path": "<rel>", "remote": "...", "owner": "...",
 #         "stack": ["scala","docker"], "purpose": "<human-editable>" }
 #     ],
-#     "githubAccount": "<gh login>"      # optional, human-authored
+#     "githubAccount": "<gh login>",     # optional, human-authored
+#     "harnesses": ["claude","cursor"]    # chosen at init; setup scripts follow it
 #   }
 #
 # Auto-detected fields (path/remote/owner/stack) are refreshed on regeneration;
-# the human-authored `purpose` and `githubAccount` are preserved across refreshes.
+# the human-authored `purpose` and `githubAccount`, and the `harnesses` chosen at
+# init, are preserved across refreshes.
 #
 # `githubAccount` pins which GitHub account this workspace's MCP token belongs
 # to, for somebody who works across several client organisations. Absent means
@@ -126,17 +128,20 @@ workspace_generate() {
   # of top-level keys, so anything not carried over here is silently dropped —
   # and a pin that disappears on the next `init.sh` is worse than no pin, because
   # the workspace goes back to the machine-active account without saying so.
-  local account=""
+  local account="" harnesses="null"
   if [[ -f "$WORKSPACE_FILE" ]]; then
     account="$(jq -r '.githubAccount // empty' "$WORKSPACE_FILE" 2>/dev/null || true)"
+    harnesses="$(jq -c '.harnesses // null' "$WORKSPACE_FILE" 2>/dev/null || echo null)"
+    [[ -n "$harnesses" ]] || harnesses="null"
   fi
 
   local stamp
   stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")"
   jq -n --arg mode "$mode" --arg stamp "$stamp" --argjson repos "$merged" \
-        --arg account "$account" '
+        --arg account "$account" --argjson harnesses "$harnesses" '
     { mode: $mode, contextRoot: ".", generated: $stamp, repos: $repos }
-    | if $account != "" then .githubAccount = $account else . end' \
+    | if $account != "" then .githubAccount = $account else . end
+    | if $harnesses != null then .harnesses = $harnesses else . end' \
     >"$WORKSPACE_FILE"
 }
 

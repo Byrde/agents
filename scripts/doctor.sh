@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Diagnose the health of the MCP servers configured by the Byrde Agents
-# setup scripts (GitHub, Figma, Mempalace) for both Cursor and Claude Code.
+# setup scripts (GitHub, Figma, Google Analytics, Jira) for every harness
+# init.sh chose (see lib/harness.sh).
 #
 # Only tools that are ACTUALLY set up are validated. The gitignored manifest
 # (.manifest.local.yml, written by setup-*.sh and pruned by their uninstall) is
 # the source of truth: a tool whose capability key is absent — never installed,
 # or installed and later uninstalled — is omitted from the report entirely, so
-# a leftover directory (e.g. a preserved .mempalace/ palace) never produces
-# phantom checks. A key present with its files missing surfaces as drift.
+# a leftover directory never produces phantom checks. A key present with its
+# files missing surfaces as drift.
 #
 # Run from the repository/project root:
 #   cd /path/to/project && /path/to/doctor.sh
@@ -28,6 +29,8 @@ AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 resolve_layout
 # shellcheck source=lib/manifest.sh
 . "$SCRIPT_DIR/lib/manifest.sh"
+# shellcheck source=lib/harness.sh
+. "$SCRIPT_DIR/lib/harness.sh"
 
 TOOL_VERSION="0.1.0"
 PROG_NAME="$(basename "${BASH_SOURCE[0]}")"
@@ -52,25 +55,6 @@ skip() { printf '  \033[90m- %s\033[0m\n' "$*"; ((SKIP++)) || true; }
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 has_cmd() { command -v "$1" >/dev/null 2>&1; }
-
-# Run a command with a timeout, portably. Uses GNU `timeout`/`gtimeout` when
-# available, otherwise falls back to a perl alarm wrapper (perl ships with
-# macOS). A pending alarm timer survives `exec`, and SIGALRM's default action
-# terminates the process — so the exec'd command is killed after `secs`.
-run_with_timeout() {
-  local secs="$1"
-  shift
-  if has_cmd timeout; then
-    timeout "$secs" "$@"
-  elif has_cmd gtimeout; then
-    gtimeout "$secs" "$@"
-  elif has_cmd perl; then
-    perl -e 'my $s = shift; alarm $s; exec @ARGV or exit 127' "$secs" "$@"
-  else
-    # No timeout mechanism available — run unbounded as a last resort.
-    "$@"
-  fi
-}
 
 # Check if a key exists in a JSON file. Returns 0 if present.
 json_has() {
@@ -109,6 +93,108 @@ claude_mcp_has() {
   claude mcp list --scope project 2>/dev/null | grep -qi "$name"
 }
 
+# check_mcp <server> <fail|warn> <fix hint> — the server is registered for every
+# selected harness. Antigravity skips servers it cannot carry (a token from the
+# environment), so its absence there is a note, not a fault.
+check_mcp() {
+  local name="$1" level="$2" hint="$3" h file
+  for h in $(harness_selected); do
+    file="$(harness_mcp_file "$h")"
+    if harness_mcp_has "$PROJECT_ROOT" "$h" "$name"; then
+      pass "$(harness_label "$h") MCP: $name in $file"
+    elif [[ "$h" == "claude" ]] && claude_mcp_has "$name"; then
+      pass "$(harness_label "$h") MCP: $name registered via claude CLI"
+    elif [[ "$h" == "antigravity" && "$name" == "github" ]]; then
+      skip "$(harness_label "$h") MCP: $name not registered (no env-var tokens in its config)"
+    else
+      "$level" "$(harness_label "$h") MCP: $name missing from $file — $hint"
+    fi
+  done
+}
+
+# Is rule <name> installed for harness <h>?
+rule_installed() {
+  local h="$1" name="$2" path
+  case "$h" in
+    codex | opencode) grep -qF "<!-- $HARNESS_MARK:rule $name -->" "$PROJECT_ROOT/AGENTS.md" 2>/dev/null ;;
+    antigravity) [[ -f "$PROJECT_ROOT/.agents/rules/$name.md" || -f "$PROJECT_ROOT/.agent/rules/$name.md" ]] ;;
+    *) path="$(harness_rule_path "$h" "$name")"; [[ -f "$PROJECT_ROOT/$path" ]] ;;
+  esac
+}
+
+# check_rule <name> <label> — the rule is installed for every selected harness.
+check_rule() {
+  local name="$1" label="$2" h
+  for h in $(harness_selected); do
+    if rule_installed "$h" "$name"; then
+      pass "$(harness_label "$h") rule: $label ($(harness_rule_where "$h" "$name"))"
+    else
+      warn "$(harness_label "$h") rule: $label missing ($(harness_rule_where "$h" "$name")) — run init.sh"
+    fi
+  done
+}
+
+# ─── Harness checks ──────────────────────────────────────────────────────────
+
+check_harnesses() {
+  echo ""
+  echo "Harnesses"
+  echo "---------"
+  local h saved
+  saved="$(harness_saved)"
+  if [[ -n "$saved" ]]; then
+    pass "Selected: $saved (from .workspace.agents.json)"
+  else
+    warn "No harness choice saved — assuming '$HARNESS_DEFAULT'; run init.sh to choose"
+  fi
+  for h in $(harness_selected); do
+    if rule_installed "$h" global; then
+      pass "$(harness_label "$h"): rules installed ($(harness_rule_where "$h" "*" | sed 's/section \*/sections/'))"
+    else
+      fail "$(harness_label "$h"): rules missing — run init.sh"
+    fi
+    if [[ -f "$PROJECT_ROOT/$(harness_skills_dir "$h")/develop/SKILL.md" ]]; then
+      pass "$(harness_label "$h"): practice skills in $(harness_skills_dir "$h")/"
+    else
+      fail "$(harness_label "$h"): practice skills missing from $(harness_skills_dir "$h")/ — run init.sh"
+    fi
+    if [[ "$h" == "claude" ]]; then
+      if json_has "$PROJECT_ROOT/.claude/settings.json" '.hooks.PostToolUse'; then
+        pass "$(harness_label "$h"): hooks in .claude/settings.json"
+      else
+        warn "$(harness_label "$h"): rules re-injection hook missing — run init.sh"
+      fi
+    elif [[ "$h" == "opencode" ]]; then
+      if harness_hooks_has "$PROJECT_ROOT" "$h"; then
+        pass "$(harness_label "$h"): plugin in $(harness_hook_file "$h")"
+      else
+        warn "$(harness_label "$h"): plugin missing from $(harness_hook_file "$h") — run init.sh"
+      fi
+      if [[ -f "$PROJECT_ROOT/.opencode/$HARNESS_MARK.json" ]] \
+         && cmp -s "$PROJECT_ROOT/$(harness_hook_file "$h")" "$HARNESS_OPENCODE_PLUGIN_SRC"; then
+        pass "$(harness_label "$h"): plugin current, settings in .opencode/$HARNESS_MARK.json"
+      else
+        warn "$(harness_label "$h"): plugin out of date or settings missing — re-run init.sh"
+      fi
+      local perm
+      perm="$(jq -c '.permission // empty' "$PROJECT_ROOT/.opencode/opencode.json" 2>/dev/null)"
+      if [[ "$perm" == '"allow"' ]]; then
+        pass "$(harness_label "$h"): permission \"allow\" in .opencode/opencode.json"
+      elif [[ -n "$perm" ]]; then
+        skip "$(harness_label "$h"): your own permission rules are kept; the plugin approves what they leave as ask"
+      else
+        warn "$(harness_label "$h"): no permission setting — re-run init.sh"
+      fi
+    elif harness_supports_hooks "$h"; then
+      if harness_hooks_has "$PROJECT_ROOT" "$h"; then
+        pass "$(harness_label "$h"): hooks in $(harness_hook_file "$h")"
+      else
+        warn "$(harness_label "$h"): hooks missing from $(harness_hook_file "$h") — run init.sh"
+      fi
+    fi
+  done
+}
+
 # ─── Workspace checks ────────────────────────────────────────────────────────
 
 check_workspace() {
@@ -136,35 +222,31 @@ check_workspace() {
     fail "Map: .workspace.agents.json is not valid JSON — re-run init.sh"
   fi
 
-  # The always-on rule should be installed in the editor rule dirs.
-  if [[ -f "$PROJECT_ROOT/.claude/rules/workspace.md" ]]; then
-    pass "Rule: .claude/rules/workspace.md"
-  else
-    warn "Rule: .claude/rules/workspace.md missing — run init.sh"
-  fi
+  # The always-on rule should be installed for every harness.
+  check_rule workspace "workspace routing"
 }
 
 # ─── GitHub checks ───────────────────────────────────────────────────────────
 
 check_github() {
-  local sc_rule="$PROJECT_ROOT/.claude/rules/github-source-control.md"
-  local pr_skill="$SKILLS_DIR/github-projects/SKILL.md"
+  local pr_skill="$SKILLS_DIR/github-projects/SKILL.md" h configured=0
 
   # GitHub is "set up" if the always-on source-control rule is installed, the
   # account-wide MCP is registered, or github-projects is in the manifest.
-  [[ -f "$sc_rule" ]] || json_has "$CLAUDE_MCP" '.mcpServers.github' \
-    || json_has "$CURSOR_MCP" '.mcpServers.github' || manifest_has github-projects || return 0
+  for h in $HARNESS_ALL; do
+    if rule_installed "$h" github-source-control && [[ "$h" != "antigravity" ]] \
+       || harness_mcp_has "$PROJECT_ROOT" "$h" github; then
+      configured=1
+    fi
+  done
+  [[ "$configured" -eq 1 ]] || manifest_has github-projects || return 0
 
   echo ""
   echo "GitHub"
   echo "------"
 
   # Source control — an always-on rule (installed by init.sh), not a skill.
-  if [[ -f "$sc_rule" ]]; then
-    pass "Source control: .claude/rules/github-source-control.md (always-on rule)"
-  else
-    warn "Source control: rule .claude/rules/github-source-control.md missing — run init.sh"
-  fi
+  check_rule github-source-control "source control (always-on)"
 
   # github-projects — manifest-gated skill (installed by setup-github-project.sh).
   if manifest_has github-projects; then
@@ -177,21 +259,7 @@ check_github() {
     skip "github-projects not installed (optional — setup-github-project.sh)"
   fi
 
-  # Cursor MCP config
-  if json_has "$CURSOR_MCP" '.mcpServers.github'; then
-    pass "Cursor MCP: mcpServers.github configured"
-  else
-    warn "Cursor MCP: mcpServers.github missing from $CURSOR_MCP — run init.sh"
-  fi
-
-  # Claude Code MCP config
-  if json_has "$CLAUDE_MCP" '.mcpServers.github'; then
-    pass "Claude MCP: mcpServers.github configured in .mcp.json"
-  elif claude_mcp_has github; then
-    pass "Claude MCP: mcpServers.github registered via claude CLI"
-  else
-    warn "Claude MCP: mcpServers.github missing — run init.sh"
-  fi
+  check_mcp github warn "run init.sh"
 
   # gh CLI
   if ! has_cmd gh; then
@@ -269,21 +337,7 @@ check_figma() {
     fail "Skill: skills/figma-use/SKILL.md missing — re-run setup-figma.sh to vendor the upstream skill"
   fi
 
-  # Cursor MCP config
-  if json_has "$CURSOR_MCP" '.mcpServers.figma'; then
-    pass "Cursor MCP: mcpServers.figma configured"
-  else
-    fail "Cursor MCP: mcpServers.figma missing from $CURSOR_MCP"
-  fi
-
-  # Claude Code MCP config
-  if json_has "$CLAUDE_MCP" '.mcpServers.figma'; then
-    pass "Claude MCP: mcpServers.figma configured in .mcp.json"
-  elif claude_mcp_has figma; then
-    pass "Claude MCP: mcpServers.figma registered via claude CLI"
-  else
-    fail "Claude MCP: mcpServers.figma missing"
-  fi
+  check_mcp figma fail "re-run setup-figma.sh"
 
   # HTTP health (Figma uses OAuth via the client — 401 is expected without a session)
   local rc=0
@@ -314,16 +368,7 @@ check_google_analytics() {
   fi
 
   # MCP registration (local stdio server — no health ping; just confirm config)
-  if json_has "$CLAUDE_MCP" '.mcpServers["analytics-mcp"]'; then
-    pass "Claude MCP: mcpServers[\"analytics-mcp\"] configured in .mcp.json"
-  else
-    warn "Claude MCP: mcpServers[\"analytics-mcp\"] missing — re-run setup-google-analytics.sh"
-  fi
-  if json_has "$CURSOR_MCP" '.mcpServers["analytics-mcp"]'; then
-    pass "Cursor MCP: mcpServers[\"analytics-mcp\"] configured"
-  else
-    warn "Cursor MCP: mcpServers[\"analytics-mcp\"] missing — re-run setup-google-analytics.sh"
-  fi
+  check_mcp analytics-mcp warn "re-run setup-google-analytics.sh"
 
   # Tooling + credentials
   if has_cmd pipx; then
@@ -363,18 +408,7 @@ check_jira() {
   fi
 
   # MCP registration (remote OAuth server — config-only, health pinged below)
-  if json_has "$CLAUDE_MCP" '.mcpServers.atlassian'; then
-    pass "Claude MCP: mcpServers.atlassian configured in .mcp.json"
-  elif claude_mcp_has atlassian; then
-    pass "Claude MCP: mcpServers.atlassian registered via claude CLI"
-  else
-    warn "Claude MCP: mcpServers.atlassian missing — re-run setup-jira.sh"
-  fi
-  if json_has "$CURSOR_MCP" '.mcpServers.atlassian'; then
-    pass "Cursor MCP: mcpServers.atlassian configured"
-  else
-    warn "Cursor MCP: mcpServers.atlassian missing — re-run setup-jira.sh"
-  fi
+  check_mcp atlassian warn "re-run setup-jira.sh"
 
   # HTTP health (Atlassian uses OAuth via the client — 401 is expected without a session)
   local rc=0
@@ -387,160 +421,88 @@ check_jira() {
   esac
 }
 
-# ─── Mempalace checks ───────────────────────────────────────────────────────
+# Days after which an evaluation is stale: models ship every few weeks.
+ROUTER_STALE_DAYS=45
 
-check_mempalace() {
-  local palace_path="$PROJECT_ROOT/.mempalace"
-
-  # Gate: the manifest is the source of truth. The `memory` key is removed on
-  # `setup-memory.sh uninstall`, so an uninstalled palace disappears from the
-  # report even though uninstall deliberately PRESERVES the .mempalace/
-  # directory (it holds committed memories) — a stale dir is no longer enough
-  # to trigger phantom checks.
-  manifest_has memory || return 0
+check_model_router() {
+  manifest_has model-router || return 0
 
   echo ""
-  echo "Mempalace"
-  echo "---------"
+  echo "Model router (OpenCode)"
+  echo "-----------------------"
 
-  # Palace directory
-  if [[ -d "$palace_path" ]]; then
-    pass "Palace directory: $palace_path"
+  local config="$WORKSPACE_ROOT/.opencode/model-router.json"
+  if [[ -f "$SKILLS_DIR/model-router/SKILL.md" ]]; then
+    pass "Skill: skills/model-router/SKILL.md"
   else
-    warn "Palace directory: $palace_path not found (run setup-memory.sh)"
+    fail "Skill: model-router in manifest but SKILL.md missing — re-run setup-model-router.sh"
+  fi
+  if ! jq -e . "$config" >/dev/null 2>&1; then
+    fail "Config: .opencode/model-router.json missing or not valid JSON — re-run setup-model-router.sh"
+    return 0
+  fi
+  pass "Config: .opencode/model-router.json ($(jq '.tasks | length' "$config") tasks)"
+
+  # Two-way: each practice skill has a task, each task a skill.
+  local sync_out sync_rc=0
+  sync_out="$(python3 "$SCRIPT_DIR/lib/model_router.py" sync "$config" "$AGENTS_ROOT/skills" --check 2>&1)" || sync_rc=$?
+  if [[ "$sync_rc" -eq 0 ]]; then
+    pass "Skills ↔ tasks: every practice skill has a task, and every task a skill"
+  else
+    warn "Skills ↔ tasks out of step — re-run setup-model-router.sh, or ask the agent (model-router skill):"
+    printf '%s\n' "$sync_out" | sed 's/^ */      /'
   fi
 
-  # Memory skill
-  if [[ -f "$SKILLS_DIR/memory/SKILL.md" ]]; then
-    pass "Skill: skills/memory/SKILL.md"
+  local at
+  at="$(jq -r '.evaluation.at // empty' "$config")"
+  if [[ -z "$at" ]]; then
+    warn "Evaluation: none yet — run setup-model-router.sh evaluate"
+    return 0
+  fi
+  local age
+  age="$(python3 -c 'import sys,datetime; print((datetime.date.today()-datetime.date.fromisoformat(sys.argv[1])).days)' "$at" 2>/dev/null || echo 0)"
+  if [[ "$age" -gt "$ROUTER_STALE_DAYS" ]]; then
+    warn "Evaluation: $at, $age days old — new models may beat these picks; re-run setup-model-router.sh evaluate"
   else
-    warn "Skill: skills/memory/SKILL.md missing — re-run setup-memory.sh to install it"
+    pass "Evaluation: $at ($age days old)"
   fi
 
-  # Ignore file
-  local ignore_file="$PROJECT_ROOT/.mempalaceignore"
-  if [[ -f "$ignore_file" ]]; then
-    pass "Ignore file: .mempalaceignore"
-  else
-    warn "Ignore file: .mempalaceignore missing — mining may index node_modules, etc."
-  fi
-
-  # Python + import
-  local py=""
-  for candidate in python3 python; do
-    if has_cmd "$candidate"; then
-      py="$(command -v "$candidate")"
-      break
+  # Each assigned task needs its subagent, pinned to the assigned model.
+  local task model file drift=0
+  while IFS=$'\t' read -r task model; do
+    [[ -n "$task" ]] || continue
+    file=".opencode/agents/route-$task.md"
+    if ! jq -e --arg f "$file" '(.evaluation.generated // []) | index($f)' "$config" >/dev/null; then
+      warn "Subagent: $file is not the router's (a file of yours sits there) — task $task is not routed"
+      drift=1
+    elif ! grep -qxF "model: \"$model\"" "$WORKSPACE_ROOT/$file" 2>/dev/null; then
+      fail "Subagent: $file missing or not pinned to $model — run setup-model-router.sh evaluate --offline"
+      drift=1
     fi
-  done
-  if [[ -z "$py" ]]; then
-    fail "Python: not found in PATH"
-    return
-  fi
-  pass "Python: $py"
+  done < <(jq -r '.evaluation.assignments // {} | to_entries[] | select(.value.model) | [.key, .value.model] | @tsv' "$config")
+  [[ "$drift" -eq 1 ]] || pass "Subagents: one per assigned task, each pinned to its model"
 
-  if "$py" -c "import mempalace" 2>/dev/null; then
-    local ver
-    ver="$("$py" -c "import mempalace; print(mempalace.__version__)" 2>/dev/null || echo "unknown")"
-    pass "mempalace: importable (v$ver)"
+  # A teammate without one of the committed providers gets a subagent pinned
+  # to a model they cannot call.
+  if ! has_cmd opencode; then
+    skip "Models: opencode not on PATH — cannot check the assigned models are usable here"
+    return 0
+  fi
+  local avail missing=""
+  avail="$(cd "$WORKSPACE_ROOT" && perl -e 'alarm shift; exec @ARGV' 60 opencode api --standalone GET /api/model 2>/dev/null \
+    | jq -r '(.data // .)[] | "\(.providerID)/\(.id)"' 2>/dev/null || true)"
+  if [[ -z "$avail" ]]; then
+    skip "Models: could not list OpenCode's models"
+    return 0
+  fi
+  while IFS= read -r model; do
+    [[ -n "$model" ]] || continue
+    grep -qxF "${model%%#*}" <<<"$avail" || missing="$missing ${model%%#*}"
+  done < <(jq -r '[.evaluation.assignments // {} | .[] | .model // empty] | unique[]' "$config")
+  if [[ -n "$missing" ]]; then
+    warn "Models: not usable on this machine:$missing — connect the provider, or re-evaluate"
   else
-    fail "mempalace: not importable — run setup-memory.sh"
-    return
-  fi
-
-  # Cursor MCP config
-  if json_has "$CURSOR_MCP" '.mcpServers.mempalace'; then
-    pass "Cursor MCP: mcpServers.mempalace configured"
-  else
-    fail "Cursor MCP: mcpServers.mempalace missing from $CURSOR_MCP"
-  fi
-
-  # Cursor hooks
-  local cursor_hooks="$PROJECT_ROOT/.cursor/hooks.json"
-  if [[ -f "$cursor_hooks" ]]; then
-    local has_stop=false has_precompact=false
-    json_has "$cursor_hooks" '.hooks.stop' && has_stop=true
-    json_has "$cursor_hooks" '.hooks.preCompact' && has_precompact=true
-    if [[ "$has_stop" == "true" && "$has_precompact" == "true" ]]; then
-      pass "Cursor hooks: stop + preCompact configured"
-    elif [[ "$has_stop" == "true" ]]; then
-      warn "Cursor hooks: stop configured, preCompact missing"
-    elif [[ "$has_precompact" == "true" ]]; then
-      warn "Cursor hooks: preCompact configured, stop missing"
-    else
-      fail "Cursor hooks: no mempalace hooks in $cursor_hooks"
-    fi
-  else
-    fail "Cursor hooks: $cursor_hooks not found"
-  fi
-
-  # Claude Code MCP config
-  if json_has "$CLAUDE_MCP" '.mcpServers.mempalace'; then
-    pass "Claude MCP: mcpServers.mempalace configured in .mcp.json"
-  elif claude_mcp_has mempalace; then
-    pass "Claude MCP: mcpServers.mempalace registered via claude CLI"
-  else
-    fail "Claude MCP: mcpServers.mempalace missing"
-  fi
-
-  # Claude Code hooks
-  local claude_settings="$PROJECT_ROOT/.claude/settings.local.json"
-  if [[ -f "$claude_settings" ]]; then
-    local has_stop=false has_precompact=false
-    if json_has "$claude_settings" '.hooks.Stop'; then
-      has_stop=true
-    fi
-    if json_has "$claude_settings" '.hooks.PreCompact'; then
-      has_precompact=true
-    fi
-    if [[ "$has_stop" == "true" && "$has_precompact" == "true" ]]; then
-      pass "Claude hooks: Stop + PreCompact configured"
-    elif [[ "$has_stop" == "true" ]]; then
-      warn "Claude hooks: Stop configured, PreCompact missing"
-    elif [[ "$has_precompact" == "true" ]]; then
-      warn "Claude hooks: PreCompact configured, Stop missing"
-    else
-      fail "Claude hooks: not configured in $claude_settings"
-    fi
-  else
-    fail "Claude hooks: $claude_settings not found"
-  fi
-
-  # MCP server health — try spawning and sending initialize
-  local mcp_response=""
-  mcp_response="$(printf '%s\n' "$MCP_INIT_REQ" \
-    | run_with_timeout 5 "$py" -m mempalace.mcp_server --palace "$palace_path" 2>/dev/null \
-    | head -1)" || true
-  if [[ -n "$mcp_response" ]] && echo "$mcp_response" | jq -e '.result' >/dev/null 2>&1; then
-    pass "MCP server: stdio handshake succeeded"
-  elif [[ -n "$mcp_response" ]]; then
-    warn "MCP server: process responded but handshake unclear"
-  else
-    warn "MCP server: stdio handshake timed out or failed (may work fine inside the editor)"
-  fi
-
-  # Concurrency: mempalace's ChromaDB backend is single-writer. More than one
-  # live server on the same palace = concurrent writers = vector-index drift.
-  local srv_count
-  srv_count="$(ps aux 2>/dev/null | grep "mempalace.mcp_server" | grep -F -- "$palace_path" | grep -cv grep | tr -d ' ')"
-  if [[ "${srv_count:-0}" -gt 1 ]]; then
-    warn "Concurrency: $srv_count mempalace servers running on this palace — concurrent writers drift the index. Keep ONE editor/window open on it. (sqlite is safe; 'setup-memory.sh repair' rebuilds.)"
-  elif [[ "${srv_count:-0}" -eq 1 ]]; then
-    pass "Concurrency: single MCP server on this palace"
-  fi
-
-  # Quarantine backups = the index drifted before and self-healed. Harmless to
-  # delete; flagged so recurring drift is visible (e.g. multiple servers).
-  if ls -d "$palace_path"/*.corrupt-* "$palace_path"/*.drift-* >/dev/null 2>&1; then
-    warn "Index: quarantine backups present (past drift) — safe to delete; investigate if recurring."
-  fi
-
-  # Portability: sqlite is the committed ground truth; the index is gitignored.
-  # On a fresh checkout sqlite is present but the index isn't — rebuild it.
-  if [[ -f "$palace_path/chroma.sqlite3" ]] \
-    && ! find "$palace_path" -mindepth 1 -maxdepth 1 -type d \
-         -name '*-*-*-*-*' ! -name '*.corrupt-*' ! -name '*.drift-*' 2>/dev/null | grep -q .; then
-    warn "Index: chroma.sqlite3 present but no vector index — run 'setup-memory.sh repair' (e.g. after checkout)."
+    pass "Models: every assigned model is usable here"
   fi
 }
 
@@ -557,7 +519,9 @@ main() {
       echo "Checks MCP server configuration and health for:"
       echo "  GitHub     (source-control rule + MCP via init.sh; projects via setup-github-project.sh)"
       echo "  Figma      (setup-figma.sh)"
-      echo "  Mempalace  (setup-memory.sh)"
+      echo "  Analytics  (setup-google-analytics.sh)"
+      echo "  Jira       (setup-jira.sh)"
+      echo "  Model router (setup-model-router.sh; OpenCode)"
       exit 0
       ;;
   esac
@@ -566,8 +530,6 @@ main() {
   has_cmd curl || { echo "error: curl is required" >&2; exit 1; }
 
   PROJECT_ROOT="$(pwd -P)"
-  CURSOR_MCP="$PROJECT_ROOT/.cursor/mcp.json"
-  CLAUDE_MCP="$PROJECT_ROOT/.mcp.json"
 
   local bar
   bar="$(printf '%*s' 68 '' | tr ' ' '=')"
@@ -576,33 +538,16 @@ main() {
   echo ""
   printf '  %-16s %s\n' "Project Root" "$PROJECT_ROOT"
   printf '  %-16s %s\n' "Layout" "$(layout_describe)"
-  printf '  %-16s %s\n' "Cursor MCP" "$CURSOR_MCP"
-  printf '  %-16s %s\n' "Claude MCP" "$CLAUDE_MCP"
+  printf '  %-16s %s\n' "Harnesses" "$(harness_selected)"
   echo "$bar"
 
-  # Config file existence (informational, not scored)
-  echo ""
-  echo "Config files"
-  echo "------------"
-  if [[ -f "$CURSOR_MCP" ]]; then
-    pass ".cursor/mcp.json exists"
-  else
-    warn ".cursor/mcp.json not found — no Cursor MCP servers configured"
-  fi
-  if [[ -f "$CLAUDE_MCP" ]]; then
-    pass ".mcp.json exists"
-  elif has_cmd claude; then
-    pass ".mcp.json absent but claude CLI available (may use project scope)"
-  else
-    warn ".mcp.json not found — no Claude Code MCP servers configured"
-  fi
-
+  check_harnesses
   check_workspace
   check_github
   check_figma
   check_google_analytics
   check_jira
-  check_mempalace
+  check_model_router
 
   # Summary
   echo ""

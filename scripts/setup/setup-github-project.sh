@@ -11,8 +11,8 @@
 #   cd /your/workspace && /path/to/setup-github-project.sh
 #
 # Writes:
-#   - skills/github-projects/SKILL.md (+ mirrored into .claude/ and .cursor/)
-#   - .mcp.json / .cursor/mcp.json — ensures the GitHub MCP server is present
+#   - skills/github-projects/SKILL.md (+ mirrored for each harness init chose)
+#   - each harness's MCP config — ensures the GitHub MCP server is present
 #
 # Requires: gh (authenticated), jq, python3. Bash 3.2 (macOS) compatible.
 
@@ -25,6 +25,8 @@ AGENTS_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 resolve_layout
 # shellcheck source=lib/manifest.sh
 . "$SCRIPT_DIR/../lib/manifest.sh"
+# shellcheck source=lib/harness.sh
+. "$SCRIPT_DIR/../lib/harness.sh"
 # shellcheck source=lib/mcp.sh
 . "$SCRIPT_DIR/../lib/mcp.sh"
 TOOL_DIR="$AGENTS_ROOT/tools"
@@ -177,15 +179,9 @@ dst.write_text(out); print("Wrote", dst)
 PY
 }
 
+# Mirror the rendered skill into every selected harness (see lib/harness.sh).
 sync_skill_to_editors() {
-  local skill="$1"
-  local src="$SKILLS_DIR/$skill"
-  [[ -d "$src" ]] || return 0
-  local dest
-  for dest in "$WORKSPACE_ROOT/.claude/skills" "$WORKSPACE_ROOT/.cursor/skills"; do
-    mkdir -p "$dest"; rm -rf "${dest:?}/$skill"; cp -R "$src" "$dest/$skill"
-    echo "  skills/$skill → ${dest#"$WORKSPACE_ROOT"/}/$skill"
-  done
+  harness_skill_sync "$WORKSPACE_ROOT" "$SKILLS_DIR/$1"
 }
 
 # ─── Uninstall ────────────────────────────────────────────────────────────────
@@ -202,12 +198,9 @@ uninstall() {
   echo "  managed by init.sh (run 'init.sh uninstall' to remove it)."
   echo "$bar"
   echo ""
+  harness_skill_purge "$WORKSPACE_ROOT" "github-projects"
   rm -rf "$SKILLS_DIR/github-projects"
-  echo "  removed skills/github-projects"
-  local dest
-  for dest in "$WORKSPACE_ROOT/.claude/skills/github-projects" "$WORKSPACE_ROOT/.cursor/skills/github-projects"; do
-    rm -rf "$dest"; echo "  removed ${dest#"$WORKSPACE_ROOT"/}"
-  done
+  echo "  removed skills/github-projects (and its copies in every harness)"
   manifest_remove "github-projects"
   echo ""
   echo "Done. Restart your editor so it drops the github-projects skill."

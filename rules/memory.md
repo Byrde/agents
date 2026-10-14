@@ -1,3 +1,8 @@
+---
+description: When to write memory, and what belongs in it
+trigger: always_on
+---
+
 # Memory — how often, and what for
 
 Memory is not a wrap-up task. Write it when the thing happens, or it does not get

@@ -1,3 +1,8 @@
+---
+description: Writing standard — ASD-STE100 Simplified Technical English for docs, work items, specs
+trigger: always_on
+---
+
 # Technical writing — ASD-STE100
 
 All prose for humans MUST follow **ASD-STE100 Simplified Technical English**. It is the
