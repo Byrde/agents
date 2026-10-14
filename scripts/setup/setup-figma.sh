@@ -12,11 +12,11 @@
 # Writes:
 #   - .agents/skills/figma/SKILL.md
 #   - .agents/skills/figma-use/       — vendored from upstream
-#   - .cursor/mcp.json   — Cursor project MCP (Figma server merged in)
-#   - .mcp.json          — Claude Code project MCP (Figma server merged in)
+#   - each selected harness's skill mirror and MCP config (Figma server merged
+#     in) — the harnesses init.sh chose; see lib/harness.sh for the paths
 #
-# Does not modify $HOME. Does not invoke the cursor or claude CLIs; only
-# merges JSON with jq.
+# Does not modify $HOME. Does not invoke any harness CLI; only merges config
+# files.
 #
 # Usage: cd /path/to/project && /path/to/setup-figma.sh
 #
@@ -34,6 +34,8 @@ AGENTS_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 resolve_layout
 # shellcheck source=lib/manifest.sh
 . "$SCRIPT_DIR/../lib/manifest.sh"
+# shellcheck source=lib/harness.sh
+. "$SCRIPT_DIR/../lib/harness.sh"
 TOOL_DIR="$AGENTS_ROOT/tools"  # templates: always the shared checkout
 # SKILLS_DIR is set by resolve_layout (per-project staging home).
 FIGMA_TEMPLATE="$TOOL_DIR/figma.md.template"
@@ -104,8 +106,7 @@ print_summary() {
   printf '    %s figma        → %s\n' "✓" "$FIGMA_OUT"
   echo ""
   echo "  MCP server:"
-  printf '    %-13s %s\n' "Cursor:"      "${cursor_status:-skipped}"
-  printf '    %-13s %s\n' "Claude Code:" "${claude_status:-skipped}"
+  printf '    %s\n' "${mcp_status:-skipped}"
   if [[ "$figma_file_url" == *"not recorded"* ]]; then
     echo ""
     echo "  ⚠  Follow-up — the skill names the file but carries no URL:"
@@ -335,76 +336,17 @@ PY
 
 # ─── Skill sync ──────────────────────────────────────────────────────────────
 
-# Mirror a skill from .agents/skills/ into the editor-local skill dirs, the
-# same way init.sh seeds them. Without this, Claude Code (.claude/skills/) and
-# Cursor (.cursor/skills/) never see skills that setup-figma installs.
+# Mirror a skill from .agents/skills/ into every selected harness, the same way
+# init.sh seeds them (see lib/harness.sh).
 sync_skill_to_editors() {
-  local project_root="$1" skill="$2"
-  local src="$SKILLS_DIR/$skill"
-  [[ -d "$src" ]] || return 0
-  local dest
-  for dest in "$project_root/.claude/skills" "$project_root/.cursor/skills"; do
-    mkdir -p "$dest"
-    rm -rf "${dest:?}/$skill"
-    cp -R "$src" "$dest/$skill"
-    echo "  skills/$skill → ${dest#$project_root/}/$skill"
-  done
+  harness_skill_sync "$1" "$SKILLS_DIR/$2"
 }
 
 # ─── MCP merging ─────────────────────────────────────────────────────────────
 
-merge_cursor_mcp_figma() {
-  local path="$1"
-  local tmp
-  tmp="$(mktemp)"
-  mkdir -p "$(dirname "$path")"
-  if [[ -f "$path" ]]; then
-    jq '
-      .mcpServers = (.mcpServers // {}) |
-      .mcpServers.figma = {
-        url: "https://mcp.figma.com/mcp"
-      }
-    ' "$path" >"$tmp" || die "jq failed on $path (invalid JSON?)"
-  else
-    jq -n '{
-      mcpServers: {
-        figma: {
-          url: "https://mcp.figma.com/mcp"
-        }
-      }
-    }' >"$tmp"
-  fi
-  mv "$tmp" "$path"
-  echo "Updated $path (restart Cursor to reload MCP)"
-}
-
-merge_claude_mcp_figma() {
-  local path="$1"
-  local tmp
-  tmp="$(mktemp)"
-  mkdir -p "$(dirname "$path")"
-  if [[ -f "$path" ]]; then
-    jq '
-      .mcpServers = (.mcpServers // {}) |
-      .mcpServers.figma = {
-        type: "http",
-        url: "https://mcp.figma.com/mcp"
-      }
-    ' "$path" >"$tmp" || die "jq failed on $path (invalid JSON?)"
-  else
-    jq -n '{
-      mcpServers: {
-        figma: {
-          type: "http",
-          url: "https://mcp.figma.com/mcp"
-        }
-      }
-    }' >"$tmp"
-  fi
-  mv "$tmp" "$path"
-  echo "Updated $path"
-  echo "Restart Claude Code if it is running so MCP picks up changes to $path"
-}
+# The Figma server, described once for every harness. OAuth runs in the editor,
+# so there is no credential to carry.
+FIGMA_MCP_SPEC='{"type":"http","url":"https://mcp.figma.com/mcp"}'
 
 # ─── Uninstall ────────────────────────────────────────────────────────────────
 
@@ -415,12 +357,9 @@ remove_skill() {
   local found="n"
   [[ -n "$skill" ]] || return 0
   [[ -d "$SKILLS_DIR/$skill" ]] && found="y"
+  [[ -d "$project_root/.claude/skills/$skill" ]] && found="y"
+  harness_skill_purge "$project_root" "$skill" "$SKILLS_DIR/$skill"
   rm -rf "${SKILLS_DIR:?}/$skill"
-  local dest
-  for dest in "$project_root/.claude/skills/$skill" "$project_root/.cursor/skills/$skill"; do
-    [[ -d "$dest" ]] && found="y"
-    rm -rf "$dest"
-  done
   [[ "$found" == "y" ]] && echo "  removed $skill"
   return 0
 }
@@ -437,30 +376,11 @@ remove_legacy_skills() {
   done
 }
 
-# Strip the figma MCP server from a JSON config. Reverses the merge_*_figma
-# helpers (both write .mcpServers.figma).
-remove_mcp_figma() {
-  local path="$1"
-  [[ -f "$path" ]] || return 0
-  jq -e '.mcpServers.figma' "$path" >/dev/null 2>&1 || return 0
-  local tmp
-  tmp="$(mktemp)"
-  if jq 'del(.mcpServers.figma)' "$path" >"$tmp" 2>/dev/null; then
-    mv "$tmp" "$path"
-    echo "  removed mcpServers.figma from $path"
-  else
-    rm -f "$tmp"
-    echo "  ⚠ jq failed on $path — left unchanged"
-  fi
-}
-
 uninstall() {
   require_cmd jq
 
   local project_root
   project_root="$(pwd -P)"
-  local cursor_mcp="$project_root/.cursor/mcp.json"
-  local claude_mcp="$project_root/.mcp.json"
 
   local bar
   bar="$(printf '%*s' 68 '' | tr ' ' '=')"
@@ -483,8 +403,7 @@ uninstall() {
   echo ""
 
   echo "── Removing MCP registration ──"
-  remove_mcp_figma "$cursor_mcp"
-  remove_mcp_figma "$claude_mcp"
+  harness_mcp_purge "$project_root" figma
   echo ""
 
   echo "$bar"
@@ -514,8 +433,7 @@ main() {
       echo "Writes:"
       echo "  .agents/skills/figma-use/     — always (refreshed each run)"
       echo "  .agents/skills/figma/SKILL.md"
-      echo "  .cursor/mcp.json   — Cursor project MCP"
-      echo "  .mcp.json          — Claude Code project MCP"
+      echo "  the MCP config of each harness init.sh chose (see lib/harness.sh)"
       exit 0
       ;;
     uninstall | remove)
@@ -531,8 +449,6 @@ main() {
 
   local project_root
   project_root="$(pwd -P)"
-  local cursor_mcp="$project_root/.cursor/mcp.json"
-  local claude_mcp="$project_root/.mcp.json"
   local figma_use_status="skipped"
 
   print_intro "$project_root"
@@ -713,10 +629,10 @@ main() {
   render_skill "$FIGMA_TEMPLATE" "$FIGMA_OUT" \
     "$team_field" "$selected_folder_name" "$figma_field"
 
-  # ── Step 5b: Sync skills into editor dirs ────────────────────────────────
-  # .agents/skills/ is the source of truth; init.sh mirrors it into the
-  # editor-local skill dirs. setup-figma writes new skills, so mirror the
-  # ones we just installed so Claude Code and Cursor can pick them up.
+  # ── Step 5b: Sync skills into each harness ───────────────────────────────
+  # .agents/skills/ is the source of truth; init.sh mirrors it for each
+  # selected harness. setup-figma writes new skills, so mirror the ones we
+  # just installed the same way.
   sync_skill_to_editors "$project_root" "figma-use"
   manifest_add "figma-use"
   sync_skill_to_editors "$project_root" "figma"
@@ -727,25 +643,19 @@ main() {
 
   # ── Step 6: Merge MCP ────────────────────────────────────────────────────
 
-  local cursor_status="skipped"
-  local claude_status="skipped"
+  local mcp_status="skipped" targets="" h
+  for h in $(harness_selected); do targets="$targets, $(harness_label "$h")"; done
+  targets="${targets#, }"
 
   echo ""
   echo "The Figma MCP server uses OAuth — authentication happens interactively"
-  echo "through your MCP client (Cursor, Claude Code) on first use."
+  echo "through your harness on first use."
   echo ""
 
-  read -r -p "Merge Figma MCP into $cursor_mcp? [Y/n] " a_cursor
-  if [[ "${a_cursor:-y}" =~ ^[Yy]|^$ ]]; then
-    merge_cursor_mcp_figma "$cursor_mcp"
-    cursor_status="merged → $cursor_mcp"
-  fi
-
-  echo ""
-  read -r -p "Merge Figma MCP into $claude_mcp (Claude Code project MCP)? [Y/n] " a_claude
-  if [[ "${a_claude:-y}" =~ ^[Yy]|^$ ]]; then
-    merge_claude_mcp_figma "$claude_mcp"
-    claude_status="merged → $claude_mcp"
+  read -r -p "Register the Figma MCP server for $targets? [Y/n] " a_mcp
+  if [[ "${a_mcp:-y}" =~ ^[Yy]|^$ ]]; then
+    harness_mcp_sync "$project_root" figma "$FIGMA_MCP_SPEC"
+    mcp_status="registered for $targets"
   fi
 
   print_summary

@@ -1,3 +1,8 @@
+---
+description: Branches, pull requests, and code review against GitHub via the account-wide MCP server. Target repo resolved from the workspace map
+trigger: always_on
+---
+
 # GitHub source control
 
 **Create branch, open pull request, request review, leave review comment, merge** — all

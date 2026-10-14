@@ -1,6 +1,12 @@
+---
+description: Project-wide baseline
+trigger: always_on
+---
+
 # Working in this project
 
-This repo ships **practice skills** — `plan`, `architect`, `design`, `develop`, `test` —
+This repo ships **practice skills** — `plan`, `architect`, `design`, `develop`, `test`,
+`debug`, `review`, `quick-edit`, `docs` —
 the team's methods for doing software work. They are broad methodologies, not narrow
 tool wrappers. Treat them as the playbook.
 
@@ -14,13 +20,17 @@ mechanical. Never decide whether the work "needs" a method.
 | `design` | build or change a screen, flow or component |
 | `develop` | make the first edit of any change that will open a pull request |
 | `test` | validate an implementation against its acceptance criteria |
+| `debug` | fix anything reported as broken — a failing test, an error, a regression — even when the fix looks obvious |
+| `review` | review code, a diff, a branch or a pull request |
+| `quick-edit` | make a small, fully specified edit that opens no pull request (a reported bug goes to `debug` first) |
+| `docs` | write or substantially rewrite prose for people: a README, a guide, a changelog |
 
 **Invoke once per unit of work, not once per session.** A skill's procedure ends when it
 ships. Repeating the last slice from working memory is faster than re-invoking, and that
 is the failure, not a shortcut.
 
-**The only exemption** is a single-file edit that opens no pull request. Say when you
-take it.
+**No exemptions.** A small edit that opens no pull request still has its skill:
+`quick-edit`.
 
 **What skipping costs.** Each practice skill consults the tool skills around it — the
 tracker, source control, the design file. Skip the practice skill and none of them are

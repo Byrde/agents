@@ -5,7 +5,7 @@
 #
 # Mirrors setup-github-project.sh / setup-google-analytics.sh: it installs a tool
 # skill, pins identity (the Jira site + project key), wires the MCP server into
-# .mcp.json / .cursor/mcp.json, records the capability in the manifest, and ships
+# each selected harness's MCP config, records the capability in the manifest, and ships
 # an uninstall path.
 #
 # Auth model — NO SECRETS ON DISK (the house invariant):
@@ -25,8 +25,8 @@
 #   cd /your/workspace && /path/to/setup-jira.sh
 #
 # Writes:
-#   - skills/jira/SKILL.md (+ mirrored into .claude/ and .cursor/)
-#   - .mcp.json / .cursor/mcp.json — registers the Atlassian MCP server
+#   - skills/jira/SKILL.md (+ mirrored for each harness init chose)
+#   - each harness's MCP config — registers the Atlassian MCP server
 #
 # Requires: jq, python3. Bash 3.2 (macOS) compatible.
 
@@ -39,6 +39,8 @@ AGENTS_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 resolve_layout
 # shellcheck source=lib/manifest.sh
 . "$SCRIPT_DIR/../lib/manifest.sh"
+# shellcheck source=lib/harness.sh
+. "$SCRIPT_DIR/../lib/harness.sh"
 TOOL_DIR="$AGENTS_ROOT/tools"
 JIRA_TEMPLATE="$TOOL_DIR/jira.md.template"
 JIRA_OUT="$SKILLS_DIR/jira/SKILL.md"
@@ -133,73 +135,21 @@ dst.write_text(out); print("Wrote", dst)
 PY
 }
 
+# Mirror the rendered skill into every selected harness (see lib/harness.sh).
 sync_skill_to_editors() {
-  local skill="$1"
-  local src="$SKILLS_DIR/$skill"
-  [[ -d "$src" ]] || return 0
-  local dest
-  for dest in "$WORKSPACE_ROOT/.claude/skills" "$WORKSPACE_ROOT/.cursor/skills"; do
-    mkdir -p "$dest"; rm -rf "${dest:?}/$skill"; cp -R "$src" "$dest/$skill"
-    echo "  skills/$skill → ${dest#"$WORKSPACE_ROOT"/}/$skill"
-  done
+  harness_skill_sync "$WORKSPACE_ROOT" "$SKILLS_DIR/$1"
 }
 
 # ─── MCP registration (Atlassian Remote MCP; URL only, OAuth via editor) ──────
 
-_mcp_merge_jira_claude() {
-  local path="$1" tmp
-  tmp="$(mktemp)"
-  mkdir -p "$(dirname "$path")"
-  if [[ -f "$path" ]]; then
-    jq --arg url "$JIRA_MCP_URL" '
-      .mcpServers = (.mcpServers // {}) |
-      .mcpServers.atlassian = { type: "sse", url: $url }' \
-      "$path" >"$tmp" || { rm -f "$tmp"; echo "  ⚠ jq failed on $path — left unchanged" >&2; return 1; }
-  else
-    jq -n --arg url "$JIRA_MCP_URL" '{ mcpServers: { atlassian: { type: "sse", url: $url } } }' >"$tmp"
-  fi
-  mv "$tmp" "$path"
-}
-
-_mcp_merge_jira_cursor() {
-  local path="$1" tmp
-  tmp="$(mktemp)"
-  mkdir -p "$(dirname "$path")"
-  if [[ -f "$path" ]]; then
-    jq --arg url "$JIRA_MCP_URL" '
-      .mcpServers = (.mcpServers // {}) |
-      .mcpServers.atlassian = { url: $url }' \
-      "$path" >"$tmp" || { rm -f "$tmp"; echo "  ⚠ jq failed on $path — left unchanged" >&2; return 1; }
-  else
-    jq -n --arg url "$JIRA_MCP_URL" '{ mcpServers: { atlassian: { url: $url } } }' >"$tmp"
-  fi
-  mv "$tmp" "$path"
-}
-
 mcp_merge_jira() {
-  local root="$1"
-  _mcp_merge_jira_claude "$root/.mcp.json"        && echo "  ✓ .mcp.json — mcpServers.atlassian"
-  _mcp_merge_jira_cursor "$root/.cursor/mcp.json" && echo "  ✓ .cursor/mcp.json — mcpServers.atlassian"
-}
-
-_mcp_remove_jira() {
-  local path="$1" tmp
-  [[ -f "$path" ]] || return 0
-  jq -e '.mcpServers.atlassian' "$path" >/dev/null 2>&1 || return 0
-  tmp="$(mktemp)"
-  if jq 'del(.mcpServers.atlassian)' "$path" >"$tmp" 2>/dev/null; then
-    mv "$tmp" "$path"
-    echo "  removed mcpServers.atlassian from $path"
-  else
-    rm -f "$tmp"
-    echo "  ⚠ jq failed on $path — left unchanged" >&2
-  fi
+  local spec
+  spec="$(jq -nc --arg url "$JIRA_MCP_URL" '{type: "sse", url: $url}')"
+  harness_mcp_sync "$1" atlassian "$spec"
 }
 
 mcp_remove_jira() {
-  local root="$1"
-  _mcp_remove_jira "$root/.mcp.json"
-  _mcp_remove_jira "$root/.cursor/mcp.json"
+  harness_mcp_purge "$1" atlassian
 }
 
 # ─── Uninstall ───────────────────────────────────────────────────────────────
@@ -216,12 +166,9 @@ uninstall() {
   echo "$b"
   echo ""
 
+  harness_skill_purge "$WORKSPACE_ROOT" "jira"
   rm -rf "$SKILLS_DIR/jira"
-  echo "  removed skills/jira"
-  local dest
-  for dest in "$WORKSPACE_ROOT/.claude/skills/jira" "$WORKSPACE_ROOT/.cursor/skills/jira"; do
-    rm -rf "$dest"; echo "  removed ${dest#"$WORKSPACE_ROOT"/}"
-  done
+  echo "  removed skills/jira (and its copies in every harness)"
 
   echo ""
   echo "── Removing MCP registration ──"

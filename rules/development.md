@@ -1,3 +1,8 @@
+---
+description: Architectural standards — Lite DDD modular monolith by default
+trigger: always_on
+---
+
 # Architecture — Lite DDD
 
 Unless scale demands otherwise, every new design and every code change defaults to

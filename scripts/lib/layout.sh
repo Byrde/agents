@@ -18,7 +18,7 @@
 #   multi  — one .agents at a workspace root sits ABOVE several sibling repos.
 #            You run setup from inside one of those nested repos. Rendered
 #            skills + manifest stage in a per-repo home, <repo>/.byrde/, so each
-#            repo keeps its own coordinates (GitHub repo, Figma file, palace)
+#            repo keeps its own coordinates (GitHub repo, Figma file, Jira project)
 #            and a second repo's setup never clobbers the first.
 #
 # In BOTH modes the editor mirrors (.claude/skills, .cursor/skills) and the
@@ -35,11 +35,12 @@
 # Per-project rendered/vendored tool skills — each owned by a setup-*.sh script
 # (rendered from a template or vendored from upstream), NOT submodule-tracked.
 # Returns 0 for a tool skill, 1 for a shared practice skill (plan, architect,
-# design, develop, test) that init.sh seeds. Keep in sync with .agents/.gitignore.
+# design, develop, test, debug, review, quick-edit, docs) that init.sh seeds.
+# Keep in sync with .agents/.gitignore.
 is_tool_skill() {
   case "$1" in
     github-projects | google-analytics | jira | \
-      figma | figma-use | memory)
+      figma | figma-use | model-router)
       return 0 ;;
     *)
       return 1 ;;

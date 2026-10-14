@@ -11,13 +11,13 @@
 # Capability keys (per-capability granularity):
 #   github-source-control  github-projects     google-analytics
 #   jira                   figma               figma-use
-#   memory
+#   model-router
 #
 # Format — deliberately simple so it parses with grep/sed (no yq, Bash 3.2 ok):
 #
 #   installed:
 #     - github-source-control
-#     - memory
+#     - figma
 #
 # Source this file after SCRIPT_DIR is set, then call manifest_add /
 # manifest_remove / manifest_has / manifest_list.

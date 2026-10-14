@@ -10,8 +10,10 @@
 # Claude Code: the token is generated LIVE on each connection by a `headersHelper`
 # (gh-mcp-headers.sh → `gh auth token`), so nothing is stored on disk and there's
 # no env var to set — it just works once you're logged in with gh.
-# Cursor: has no headersHelper, so it gets a static `${GITHUB_PERSONAL_ACCESS_TOKEN}`
-# env header — Cursor users export that var (e.g. to `$(gh auth token)`).
+# Every other harness has no headersHelper, so it gets a header (or, for Codex,
+# `bearer_token_env_var`) read from GITHUB_PERSONAL_ACCESS_TOKEN — export that var
+# (e.g. to `$(gh auth token)`). Antigravity cannot read the environment at all,
+# so it is skipped rather than handed a token on disk. See lib/harness.sh.
 #
 # REGISTERING THE SERVER IS TWO WRITES, NOT ONE. Claude Code treats a server
 # declared in a project `.mcp.json` as untrusted until it is approved, and an
@@ -31,39 +33,16 @@ GITHUB_MCP_URL="https://api.githubcopilot.com/mcp/"
 _SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GH_MCP_HEADERS_HELPER="$_SCRIPTS_DIR/mcp/gh-mcp-headers.sh"
 
-# Merge .mcpServers.github into a Claude-style config (.mcp.json). Uses
-# headersHelper so the token is fetched fresh from gh on each connection.
-_mcp_merge_claude() {
-  local path="$1" tmp
-  tmp="$(mktemp)"
-  mkdir -p "$(dirname "$path")"
-  if [[ -f "$path" ]]; then
-    jq --arg helper "$GH_MCP_HEADERS_HELPER" '.mcpServers = (.mcpServers // {}) |
-        .mcpServers.github = { type: "http", url: "https://api.githubcopilot.com/mcp/",
-          headersHelper: $helper }' \
-      "$path" >"$tmp" || { rm -f "$tmp"; echo "  ⚠ jq failed on $path — left unchanged" >&2; return 1; }
-  else
-    jq -n --arg helper "$GH_MCP_HEADERS_HELPER" '{ mcpServers: { github: {
-          type: "http", url: "https://api.githubcopilot.com/mcp/", headersHelper: $helper } } }' >"$tmp"
-  fi
-  mv "$tmp" "$path"
-}
+# Load the harness adapters unless the caller already did.
+if ! declare -f harness_mcp_put >/dev/null 2>&1; then
+  # shellcheck source=harness.sh
+  . "$_SCRIPTS_DIR/lib/harness.sh"
+fi
 
-# Merge .mcpServers.github into a Cursor-style config (.cursor/mcp.json: url+headers).
-_mcp_merge_cursor() {
-  local path="$1" tmp
-  tmp="$(mktemp)"
-  mkdir -p "$(dirname "$path")"
-  if [[ -f "$path" ]]; then
-    jq '.mcpServers = (.mcpServers // {}) |
-        .mcpServers.github = { url: "https://api.githubcopilot.com/mcp/",
-          headers: { "Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}" } }' \
-      "$path" >"$tmp" || { rm -f "$tmp"; echo "  ⚠ jq failed on $path — left unchanged" >&2; return 1; }
-  else
-    jq -n '{ mcpServers: { github: { url: "https://api.githubcopilot.com/mcp/",
-          headers: { "Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}" } } } }' >"$tmp"
-  fi
-  mv "$tmp" "$path"
+# The GitHub server, described once for every harness.
+_mcp_github_spec() {
+  jq -nc --arg url "$GITHUB_MCP_URL" --arg helper "$GH_MCP_HEADERS_HELPER" \
+    '{type: "http", url: $url, headersHelper: $helper, bearerEnv: "GITHUB_PERSONAL_ACCESS_TOKEN"}'
 }
 
 # Approve the project-scoped server in .claude/settings.json, so it actually
@@ -123,22 +102,6 @@ _mcp_unapprove_claude() {
   fi
 }
 
-_mcp_remove_github() {
-  local path="$1" tmp
-  [[ -f "$path" ]] || return 0
-  jq -e '.mcpServers.github' "$path" >/dev/null 2>&1 || return 0
-  tmp="$(mktemp)"
-  if jq 'del(.mcpServers.github)' "$path" >"$tmp" 2>/dev/null; then
-    mv "$tmp" "$path"
-    echo "  removed mcpServers.github from ${path}"
-  else
-    rm -f "$tmp"
-    echo "  ⚠ jq failed on $path — left unchanged" >&2
-  fi
-}
-
-# Register the account-wide GitHub MCP in both editor configs under a context
-# root. $1 = context root (the folder that holds .mcp.json / .cursor/).
 # Report when the approval cannot take effect yet.
 #
 # Claude Code SKIPS project settings entirely until the workspace is trusted:
@@ -164,18 +127,32 @@ _mcp_warn_if_untrusted() {
 }
 
 mcp_merge_github() {
-  local root="$1"
-  _mcp_merge_claude "$root/.mcp.json"  && echo "  ✓ .mcp.json — mcpServers.github"
-  _mcp_approve_claude "$root/.claude/settings.json" \
-    && echo "  ✓ .claude/settings.json — enabledMcpjsonServers=[github]"
-  _mcp_merge_cursor "$root/.cursor/mcp.json" && echo "  ✓ .cursor/mcp.json — mcpServers.github"
-  _mcp_warn_if_untrusted "$root"
+  local root="$1" spec h
+  spec="$(_mcp_github_spec)"
+  for h in $(harness_selected); do
+    if harness_mcp_put "$root" "$h" github "$spec"; then
+      echo "  ✓ $(harness_mcp_file "$h") — github ($(harness_label "$h"))"
+    fi
+    if [[ "$h" == "claude" ]]; then
+      _mcp_approve_claude "$root/.claude/settings.json" \
+        && echo "  ✓ .claude/settings.json — enabledMcpjsonServers=[github]"
+      _mcp_warn_if_untrusted "$root"
+    fi
+  done
+  for h in $(harness_unselected); do
+    harness_mcp_remove "$root" "$h" github
+    [[ "$h" == "claude" ]] && _mcp_unapprove_claude "$root/.claude/settings.json" >/dev/null
+  done
+  return 0
 }
 
-# Remove the GitHub MCP from both editor configs under a context root.
+# Remove the GitHub MCP from every harness config under a context root.
 mcp_remove_github() {
-  local root="$1"
-  _mcp_remove_github "$root/.mcp.json"
+  local root="$1" h
+  for h in $HARNESS_ALL; do
+    harness_mcp_has "$root" "$h" github && echo "  removed github from $(harness_mcp_file "$h")"
+    harness_mcp_remove "$root" "$h" github
+  done
   _mcp_unapprove_claude "$root/.claude/settings.json"
-  _mcp_remove_github "$root/.cursor/mcp.json"
+  return 0
 }
