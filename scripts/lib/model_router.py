@@ -131,60 +131,97 @@ STARTER_DIMENSIONS = {
     "speed": {"metrics": {"output_speed": 0.6, "latency": 0.4}},
 }
 
+# Weight profiles: what a kind of work needs from a model. Tasks with the same
+# needs share a profile, so they get the same model instead of whichever
+# frontier model a benchmark-noise margin favours, and there are four things
+# to tune instead of one per task.
+STARTER_PROFILES = {
+    "deep": {"reasoning": 0.4, "intelligence": 0.3, "long-context": 0.15, "instruction-following": 0.15},
+    "build": {"coding": 0.4, "agentic": 0.35, "reasoning": 0.15, "cost": 0.1},
+    "fast": {"speed": 0.35, "cost": 0.35, "coding": 0.3},
+    "write": {"instruction-following": 0.4, "intelligence": 0.3, "cost": 0.2, "speed": 0.1},
+}
+
 # One task per practice skill (skills/*/SKILL.md with category: practice). The
-# skill is the method; the task picks the model that runs it. A skill missing
-# here still gets a task on sync, seeded from its description.
+# skill is the method; the task picks the model that runs it, through its
+# profile plus any weights it overrides. A skill missing here still gets a task
+# on sync, seeded from its description.
 STARTER_TASKS = {
     "plan": {
         "description": "Turning a request into tracked, sized work items",
         "when": "the user wants work broken down, scoped, sized, or turned into issues or epics",
-        "weights": {"reasoning": 0.35, "intelligence": 0.3, "instruction-following": 0.2, "cost": 0.15},
+        "profile": "deep",
     },
     "architect": {
         "description": "Structural decisions: module boundaries, dependencies, integration, build versus buy",
         "when": "the user asks how a system should be structured, compares approaches, or adds a dependency",
-        "weights": {"reasoning": 0.45, "intelligence": 0.25, "coding": 0.15, "long-context": 0.15},
+        "profile": "deep",
     },
     "design": {
         "description": "Designing a feature, flow, screen or component before it is built",
         "when": "the user wants a screen, flow or component designed or changed",
-        "weights": {"intelligence": 0.35, "reasoning": 0.3, "instruction-following": 0.2, "long-context": 0.15},
-    },
-    "develop": {
-        "description": "Implementing a feature or fix across files, test-first, through a pull request",
-        "when": "the user asks for code to be written, a feature added, or a change that opens a pull request",
-        "weights": {"coding": 0.4, "agentic": 0.35, "intelligence": 0.15, "cost": 0.1},
-    },
-    "test": {
-        "description": "Validating an implementation against its acceptance criteria, adversarially",
-        "when": "the user wants a build checked against its acceptance criteria before it is called done",
-        "weights": {"agentic": 0.35, "reasoning": 0.35, "coding": 0.3},
-    },
-    "debug": {
-        "description": "Finding and proving the root cause of a failure: failing tests, errors, wrong behavior",
-        "when": "something is broken, a test fails, or an error needs explaining and fixing",
-        "weights": {"agentic": 0.35, "coding": 0.3, "reasoning": 0.25, "long-context": 0.2},
+        "profile": "deep",
     },
     "review": {
         "description": "Reviewing code, a diff or a pull request for defects, risk and fit",
         "when": "the user asks for a review of code, a diff, a branch or a pull request",
-        "weights": {"reasoning": 0.35, "coding": 0.35, "long-context": 0.1, "instruction-following": 0.1},
+        "profile": "deep",
+        "weights": {"coding": 0.25, "long-context": 0.1},
+    },
+    "develop": {
+        "description": "Implementing a feature or fix across files, test-first, through a pull request",
+        "when": "the user asks for code to be written, a feature added, or a change that opens a pull request",
+        "profile": "build",
+    },
+    "test": {
+        "description": "Validating an implementation against its acceptance criteria, adversarially",
+        "when": "the user wants a build checked against its acceptance criteria before it is called done",
+        "profile": "build",
+    },
+    "debug": {
+        "description": "Finding and proving the root cause of anything reported as broken, before it is fixed",
+        "when": (
+            "something behaves wrongly — a failing test, an error, a regression, a bug report — "
+            "even when the fix looks obvious"
+        ),
+        "profile": "build",
+        "weights": {"long-context": 0.2},
     },
     "quick-edit": {
-        "description": "Small, fully specified edits that open no pull request: a rename, a one-line fix, a config tweak",
-        "when": "the change is small and fully specified, with no design or investigation needed",
-        "weights": {"speed": 0.35, "cost": 0.35, "coding": 0.3},
+        "description": "Small, fully specified edits that open no pull request: a rename, a config tweak, a formatting change",
+        "when": (
+            "the change is small and fully specified, with no design or investigation needed; "
+            "a reported bug goes to debug first"
+        ),
+        "profile": "fast",
     },
     "docs": {
         "description": "Writing prose for people: READMEs, guides, reference docs, changelogs",
         "when": "the deliverable is documentation for people to read rather than code",
-        "weights": {"instruction-following": 0.4, "intelligence": 0.3, "cost": 0.2, "speed": 0.1},
+        "profile": "write",
     },
 }
 
-# Weights for a skill with no starter entry. Seeded tasks are marked so the
-# model-router skill asks the user to tune them.
-SEED_WEIGHTS = {"intelligence": 0.4, "reasoning": 0.3, "coding": 0.3}
+# The profile for a skill with no starter entry. Seeded tasks are marked so the
+# model-router skill asks the user to check the choice.
+SEED_PROFILE = "deep"
+
+
+def task_weights(config, name, task):
+    """The weights a task scores with: its profile's, then its own on top. A
+    weight of 0 removes a dimension the profile brings."""
+    weights = {}
+    prof = task.get("profile")
+    if prof:
+        profiles = config.get("profiles") or {}
+        if prof not in profiles:
+            die("task '%s' uses unknown profile '%s'" % (name, prof))
+        weights.update(profiles[prof])
+    weights.update(task.get("weights") or {})
+    weights = {d: w for d, w in weights.items() if w and w > 0}
+    if not weights:
+        die("task '%s' has no weights: give it a profile or weights" % name)
+    return weights
 
 
 def starter_config(models):
@@ -202,7 +239,8 @@ def starter_config(models):
         "skipSkills": [],
         "aliases": {},
         "metrics": {},
-        "dimensions": STARTER_DIMENSIONS,
+        "dimensions": json.loads(json.dumps(STARTER_DIMENSIONS)),
+        "profiles": json.loads(json.dumps(STARTER_PROFILES)),
         "tasks": {},  # filled by sync, one per practice skill
     }
 
@@ -241,8 +279,7 @@ def read_skills(dirs):
 def seed_task(name, description):
     """A task for a practice skill: the curated starter, or one derived from its description."""
     if name in STARTER_TASKS:
-        task = dict(STARTER_TASKS[name])
-        task["weights"] = dict(task["weights"])
+        task = json.loads(json.dumps(STARTER_TASKS[name]))
     else:
         text = description.replace("**", "")
         sentences = [x.strip() for x in re.split(r"(?<=\.)\s+", text) if x.strip()]
@@ -251,7 +288,7 @@ def seed_task(name, description):
         task = {
             "description": (" ".join(body) or name).rstrip(". ")[:300],
             "when": ("you are about to " + trigger.group(1)) if trigger else "the work calls for the %s skill" % name,
-            "weights": dict(SEED_WEIGHTS),
+            "profile": SEED_PROFILE,
             "seeded": True,
         }
     return dict([("skill", name)] + list(task.items()))
@@ -277,12 +314,18 @@ def sync(config, skills):
             tasks[name] = seed_task(name, skills[name])
             notes.append(
                 "added task '%s' for the %s skill%s"
-                % (name, name, " (weights seeded: tune them)" if tasks[name].get("seeded") else "")
+                % (name, name, " (profile seeded: check it)" if tasks[name].get("seeded") else "")
             )
-            # The seeded weights name starter dimensions; a config that renamed
-            # or dropped them gets them back rather than failing to evaluate.
+            # A seeded task names a starter profile and starter dimensions; a
+            # config that renamed or dropped them gets them back rather than
+            # failing to evaluate.
+            prof = tasks[name].get("profile")
+            profiles = config.setdefault("profiles", {})
+            if prof and prof not in profiles:
+                profiles[prof] = json.loads(json.dumps(STARTER_PROFILES[prof]))
+                notes.append("added profile '%s' for task '%s'" % (prof, name))
             dims = config.setdefault("dimensions", {})
-            for d in tasks[name]["weights"]:
+            for d in task_weights(config, name, tasks[name]):
                 if d not in dims:
                     dims[d] = json.loads(json.dumps(STARTER_DIMENSIONS[d]))
                     notes.append("added dimension '%s' for task '%s'" % (d, name))
@@ -526,7 +569,7 @@ def evaluate(config, models, catalog, aa):
     if not tasks:
         die("'tasks' is empty in the config")
     for tname, task in tasks.items():
-        for d in (task.get("weights") or {}):
+        for d in task_weights(config, tname, task):
             if d not in dimensions:
                 die("task '%s' weighs unknown dimension '%s'" % (tname, d))
     base_req = config.get("requirements") or {}
@@ -585,7 +628,7 @@ def evaluate(config, models, catalog, aa):
         req = dict(base_req)
         req.update(task.get("require") or {})
         cov_floor = float(task.get("minCoverage", min_cov))
-        weights = task.get("weights") or {}
+        weights = task_weights(config, tname, task)
         scored = []
         rejected = 0
         for c in candidates:
@@ -615,6 +658,8 @@ def evaluate(config, models, catalog, aa):
                 key=lambda p: rank.get(p, 99),
             ),
         }
+        if task.get("profile"):
+            a["profile"] = task["profile"]
         if runner:
             a["runnerUp"] = {"model": runner[1]["ref"], "score": rounded(runner[0]), "coverage": rounded(runner[2], 2)}
         assignments[tname] = a
@@ -731,7 +776,8 @@ def report(config, before):
             continue
         prev = (old.get(tname) or {}).get("model")
         change = "" if prev in (None, a["model"]) else "   (was %s)" % prev
-        lines.append("  %-*s  %s  score %.3f  coverage %.2f%s" % (width, tname, a["model"], a["score"], a["coverage"], change))
+        prof = ("[%s] " % a["profile"]) if a.get("profile") else ""
+        lines.append("  %-*s  %s%s  score %.3f  coverage %.2f%s" % (width, tname, prof, a["model"], a["score"], a["coverage"], change))
         ru = a.get("runnerUp")
         if ru:
             lines.append("  %-*s    runner-up %s  %.3f" % (width, "", ru["model"], ru["score"]))

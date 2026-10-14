@@ -193,6 +193,41 @@ test_the_same_inputs_give_the_same_evaluation() {
   assert_eq "$(cat "$SANDBOX/first.json")" "$(cat "$SANDBOX/second.json")" "two evaluations of the same data differ"
 }
 
+test_tasks_inherit_their_profile_and_override_it() {
+  need; fixtures
+  local cfg="$SANDBOX/p/.opencode/model-router.json" out
+  # think and think2 share a profile; fast2 inherits it but overrides it to speed.
+  jq '.profiles = {"brainy": {"intelligence": 1}}
+      | .tasks = {
+          "think":  {"profile": "brainy", "when": "hard", "require": {"minContext": 100000}},
+          "think2": {"profile": "brainy", "when": "hard too", "require": {"minContext": 100000}},
+          "fast2":  {"profile": "brainy", "weights": {"intelligence": 0, "speed": 1}}
+        }' "$cfg" >"$cfg.t" && mv "$cfg.t" "$cfg"
+  evaluate >/dev/null || fail "evaluate failed"
+  assert_json "$cfg" "$CFG_FILTER.think.model" "prov-b/acme-alpha-1#high" "a task did not score with its profile"
+  assert_json "$cfg" "$CFG_FILTER.think2.model" "prov-b/acme-alpha-1#high" "tasks sharing a profile got different models"
+  assert_json "$cfg" "$CFG_FILTER.think.profile" "brainy" "the assignment does not record its profile"
+  assert_json "$cfg" "$CFG_FILTER.fast2.model" "prov-b/acme-alpha-1#low" \
+    "an override did not replace the profile, or a 0 weight did not remove its dimension"
+
+  jq '.tasks.think.profile = "nope"' "$cfg" >"$cfg.t" && mv "$cfg.t" "$cfg"
+  out="$(evaluate 2>&1)" && fail "a task with an unknown profile was evaluated"
+  assert_contains "$out" "unknown profile 'nope'" "the error does not name the profile"
+}
+
+test_starter_tasks_on_one_profile_share_a_model() {
+  need; fixtures
+  local cfg="$SANDBOX/p/.opencode/model-router.json"
+  python3 "$ROUTER" init "$SANDBOX/starter.json" "$SANDBOX/models.json" "$REPO_ROOT/skills" >/dev/null || fail "init failed"
+  assert_json "$SANDBOX/starter.json" '[.tasks[] | select(.profile == null)] | length' "0" "a starter task has no profile"
+  assert_json "$SANDBOX/starter.json" '[.tasks[].profile] | unique | join(",")' "build,deep,fast,write" \
+    "the starter tasks do not use the four profiles"
+  jq '.providers = ["prov-b", "prov-a", "prov-c"]' "$SANDBOX/starter.json" >"$cfg"
+  evaluate >/dev/null || fail "evaluate failed"
+  assert_json "$cfg" '[.evaluation.assignments | (.plan, .architect, .design) | .model] | unique | length' "1" \
+    "the deep tasks without overrides were split across models"
+}
+
 # ─── Rendering ───────────────────────────────────────────────────────────────
 
 test_each_task_becomes_a_pinned_subagent_with_no_prompt() {
@@ -256,7 +291,9 @@ test_sync_gives_every_practice_skill_a_task_and_reports_skillless_tasks() {
   assert_json "$cfg" '.tasks.think.skill' "think" "a task named like a skill was not linked to it"
   assert_json "$cfg" '.tasks.deploy.skill' "deploy" "a practice skill got no task"
   assert_json "$cfg" '.tasks.deploy.when' "you are about to ship a deploy" "the trigger was not taken from the skill"
-  assert_json "$cfg" '.tasks.deploy.seeded' "true" "seeded weights are not marked for tuning"
+  assert_json "$cfg" '.tasks.deploy.seeded' "true" "a seeded profile is not marked for checking"
+  assert_json "$cfg" '.tasks.deploy.profile' "deep" "a seeded task got no profile"
+  assert_json "$cfg" '.profiles | has("deep")' "true" "sync did not add the profile a seeded task needs"
   assert_json "$cfg" '.tasks | has("tooly")' "false" "a tool skill got a routing task"
   assert_contains "$out" "task 'cheap' has no practice skill" "a task without a skill was not reported"
 

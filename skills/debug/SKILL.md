@@ -1,6 +1,6 @@
 ---
 name: debug
-description: "**MUST be invoked** before you change code to fix a failure whose cause you have not proven. NEVER edit until a reproduction shows the defect. Skipping it means a symptom gets patched, the cause survives, and the fix ships with no test to stop it coming back. Find and prove the root cause of a failure — a failing test, an error, wrong behavior, a regression: reproduce it, narrow it, confirm the cause, then hand over the fix with a test that fails without it."
+description: "**MUST be invoked** when anything is reported as broken — a failing test, an error, a regression, a bug report — before you change code to fix it, even when the fix looks obvious. NEVER edit until a reproduction shows the defect. Skipping it means a symptom gets patched, the cause survives, and the fix ships with no test to stop it coming back. Find and prove the root cause: reproduce it, narrow it, confirm the cause, then hand over the fix with a test that fails without it."
 category: practice
 ---
 

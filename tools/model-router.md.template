@@ -31,7 +31,8 @@ The choice comes from public benchmarks (Artificial Analysis), scored against cr
 | Key | Meaning |
 |---|---|
 | `providers` | OpenCode provider IDs to evaluate, in priority order. Only these providers' models are scored. |
-| `tasks.<id>` | `skill` (the practice skill it runs), `description` (what the work is), `when` (when to delegate; it becomes the subagent's trigger, so make it concrete), `weights` (dimension → weight), optional `require` and `minCoverage`. `seeded: true` marks weights that sync guessed; tune them, then remove the flag. |
+| `profiles.<id>` | Dimension → weight: what a kind of work needs from a model. Starter profiles: `deep` (reasoning), `build` (coding and agentic work), `fast` (speed and cost), `write` (instruction following). |
+| `tasks.<id>` | `skill` (the practice skill it runs), `description` (what the work is), `when` (when to delegate; it becomes the subagent's trigger, so make it concrete), `profile`, optional `weights` that override the profile's (`0` removes a dimension), optional `require` and `minCoverage`. `seeded: true` marks a profile that sync guessed; check it, then remove the flag. |
 | `skipSkills` | Practice skills that deliberately get no task. Sync leaves them out. |
 | `dimensions.<id>.metrics` | Benchmark metric → weight. See the metric list below. |
 | `requirements` | Hard requirements for every task: `tools` (tool calling, default true), `minContext` (tokens), `input` (e.g. `["image"]`). A task's `require` adds to them. |
@@ -61,7 +62,7 @@ Work with the user, not for them. Propose, then let the user decide.
 1. Read the config and any previous `evaluation`.
 2. Start from the practice skills: each one already has a task. Ask which kinds of work the user hands the agent that no skill covers. Each answer is a new skill and task pair, so add one only when the work needs a different method or a different model. Fewer, sharper tasks route better than many overlapping ones.
 3. For each task, write a `description`, and a `when` the main agent can act on: concrete signals in the request, not adjectives.
-4. For each task, ask what matters: quality of reasoning, coding, agentic tool use, long context, instruction following, cost, speed. Turn the answers into dimension weights. Say what each weight trades away. For example, a high cost weight on `implement` will pick a cheaper, weaker coder.
+4. For each task, pick the profile that matches what the work needs. Tune the profiles, not each task: tasks that need the same thing should run on the same model. A benchmark gap of 0.01 between two frontier models is noise, not a reason to split them. Override a task's weights only for a real difference, such as debug's extra long context for logs and traces. Say what each weight trades away. For example, a cost weight on `build` picks a cheaper, weaker coder for develop, debug and test together.
 5. Ask for hard limits (context size, image input, models to exclude) and the provider order. A subscription the user already pays for usually comes first.
 6. Show the diff of the config, and write it once the user agrees.
 

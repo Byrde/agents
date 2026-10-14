@@ -1,6 +1,6 @@
 ---
 name: quick-edit
-description: "**MUST be invoked** before a small, fully specified edit that opens no pull request: a rename, a one-line fix, a configuration or formatting change. NEVER let it grow past one file or into a design question without switching to `develop`. Skipping it means a small edit goes unverified, or quietly becomes a feature with no tests and no review. Make the smallest change that does what was asked, check it, and report exactly what changed."
+description: "**MUST be invoked** before a small, fully specified edit that opens no pull request: a rename, a configuration or formatting change, or a fix whose cause `debug` has already proven. NEVER take a reported bug straight here: it goes to `debug` first. NEVER let an edit grow past one file or into a design question without switching to `develop`. Skipping it means a small edit goes unverified, or quietly becomes a feature with no tests and no review. Make the smallest change that does what was asked, check it, and report exactly what changed."
 category: practice
 ---
 
@@ -22,7 +22,7 @@ Make a small, fully specified change, check it, and stop.
 
 ## Procedure
 
-1. **Confirm it qualifies.** One file, behavior fully specified, no pull request. If any of these fails, switch to `develop` and say why.
+1. **Confirm it qualifies.** One file, behavior fully specified, no pull request. If any of these fails, switch to `develop` and say why. If the request reports something broken and no cause has been proven, switch to `debug`.
 2. **Edit.** Make the change exactly as specified. Match the surrounding code and its conventions.
 3. **Check.** Run the narrowest check that covers the edit: the test for that file, the linter, a build, or the command whose output shows the change. Read the result. Do not assume it.
 4. **Report.** Show what changed, in one or two lines or as the diff, and the check you ran with its result.

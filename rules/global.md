@@ -20,9 +20,9 @@ mechanical. Never decide whether the work "needs" a method.
 | `design` | build or change a screen, flow or component |
 | `develop` | make the first edit of any change that will open a pull request |
 | `test` | validate an implementation against its acceptance criteria |
-| `debug` | change code to fix a failure whose cause you have not proven |
+| `debug` | fix anything reported as broken — a failing test, an error, a regression — even when the fix looks obvious |
 | `review` | review code, a diff, a branch or a pull request |
-| `quick-edit` | make a small, fully specified edit that opens no pull request |
+| `quick-edit` | make a small, fully specified edit that opens no pull request (a reported bug goes to `debug` first) |
 | `docs` | write or substantially rewrite prose for people: a README, a guide, a changelog |
 
 **Invoke once per unit of work, not once per session.** A skill's procedure ends when it

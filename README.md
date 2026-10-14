@@ -28,7 +28,7 @@ Ship with the repo. `init.sh` makes them visible to every selected harness.
 | [`design`](skills/design/SKILL.md) | build or change a screen, flow or component |
 | [`develop`](skills/develop/SKILL.md) | make the first edit of a change that will open a pull request (TDD, one slice at a time) |
 | [`test`](skills/test/SKILL.md) | claim an implementation meets its acceptance criteria |
-| [`debug`](skills/debug/SKILL.md) | change code to fix a failure whose cause you have not proven (reproduce, prove, encode as a test) |
+| [`debug`](skills/debug/SKILL.md) | fix anything reported as broken, even when the fix looks obvious (reproduce, prove, encode as a test) |
 | [`review`](skills/review/SKILL.md) | review code, a diff, a branch or a pull request (findings ranked by severity) |
 | [`quick-edit`](skills/quick-edit/SKILL.md) | make a small, fully specified edit that opens no pull request |
 | [`docs`](skills/docs/SKILL.md) | write or substantially rewrite prose for people: a README, a guide, a changelog |
@@ -344,9 +344,10 @@ cd /your/project
 | Key | Meaning |
 |---|---|
 | `providers` | OpenCode provider IDs to evaluate, in priority order. Only their models are scored. When several providers serve the same model, the first one listed wins. |
-| `tasks` | Per task: `skill`, `description`, `when` (the delegation trigger), `weights` over dimensions, optional `require` and `minCoverage` |
+| `tasks` | Per task: `skill`, `description`, `when` (the delegation trigger), `profile`, optional `weights` that override the profile's, `require` and `minCoverage` |
 | `skipSkills` | Practice skills that deliberately get no task |
 | `dimensions` | Benchmark metrics and their weights, e.g. `coding`: `coding_index`, `livecodebench`, `scicode` |
+| `profiles` | Dimension weights per kind of work, shared by tasks: `deep` (plan, architect, design, review), `build` (develop, test, debug), `fast` (quick-edit), `write` (docs) |
 | `requirements` | Hard limits for every task: `tools`, `minContext`, `input` (e.g. `["image"]`) |
 | `aliases` | Map a model the benchmarks list under another name, or `null` to skip it |
 | `exclude` | Glob patterns for models never to pick |
@@ -356,7 +357,8 @@ cd /your/project
 - **Identity.** The same model under different providers is recognised through the `canonical_model_id` in the models.dev catalogue OpenCode uses. For example, `github-copilot/claude-sonnet-5.5` and `openrouter/anthropic/claude-sonnet-5.5` are both `anthropic/claude-sonnet-5-5`.
 - **Benchmark match.** That ID is matched to an Artificial Analysis entry. A model with no match is listed, not guessed; settle it with `aliases`.
 - **Metrics.** Each metric becomes a percentile against every model Artificial Analysis lists, so adding a provider doesn't shift the other scores. Price and latency count lower as better.
-- **Dimensions and tasks.** A dimension is the weighted mean of the metrics the model has. A task score is the weighted mean of its dimensions, and a dimension with no data counts as the median (0.5), so missing data neither helps nor sinks a model. Each assignment reports its coverage: the share of the weight that rests on real data.
+- **Profiles.** Tasks that need the same thing share a weight profile, so they run on the same model. Otherwise a gap of a few thousandths between two frontier models, which is benchmark noise, would split them. A task overrides its profile only where its needs really differ: debug weighs long context more, for logs and traces.
+- **Dimensions and tasks.** A dimension is the weighted mean of the metrics the model has. A task score is the weighted mean of its profile's dimensions, with the task's own weights on top, and a dimension with no data counts as the median (0.5), so missing data neither helps nor sinks a model. Each assignment reports its coverage: the share of the weight that rests on real data.
 - **Effort.** Reasoning effort is scored per variant. AA's `-high` and `-low` entries map to OpenCode's `#high` and `#low`, and the winning effort is pinned in the subagent's model.
 
 **Commit** `.opencode/model-router.json`, `.opencode/agents/` and `.opencode/commands/` so the team shares the routing. Raw API responses are cached in `.opencode/.model-router/`, which ignores itself. A teammate who lacks a provider in the list gets a subagent pinned to a model they cannot call. `doctor.sh` flags that, and flags an evaluation older than 45 days.
