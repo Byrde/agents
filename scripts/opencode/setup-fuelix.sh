@@ -161,9 +161,6 @@ reevaluate() {
   if [[ -f "$WORKSPACE_ROOT/.opencode/byrde-agents.json" ]]; then
     echo ""
     "$OC_DIR/init.sh" evaluate
-  else
-    echo ""
-    echo "  Next: .agents/scripts/opencode/init.sh — it scores these models for each agent."
   fi
 }
 
