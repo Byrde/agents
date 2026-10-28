@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Diagnose the health of the MCP servers configured by the Byrde Agents
-# setup scripts (GitHub, Figma, Google Analytics, Jira) for every harness
-# init.sh chose (see lib/harness.sh).
+# Diagnose the health of what the Byrde Agents setup scripts configured —
+# GitHub (the gh CLI), and the Figma, Google Analytics and Jira tools — for
+# every harness init.sh chose (see lib/harness.sh).
 #
 # Only tools that are ACTUALLY set up are validated. The gitignored manifest
 # (.manifest.local.yml, written by setup-*.sh and pruned by their uninstall) is
@@ -31,11 +31,12 @@ resolve_layout
 . "$SCRIPT_DIR/lib/manifest.sh"
 # shellcheck source=lib/harness.sh
 . "$SCRIPT_DIR/lib/harness.sh"
+# shellcheck source=lib/mcp.sh
+. "$SCRIPT_DIR/lib/mcp.sh"
 
 TOOL_VERSION="0.1.0"
 PROG_NAME="$(basename "${BASH_SOURCE[0]}")"
 
-GITHUB_MCP_URL="https://api.githubcopilot.com/mcp/"
 FIGMA_MCP_URL="https://mcp.figma.com/mcp"
 JIRA_MCP_URL="https://mcp.atlassian.com/v1/sse"
 MCP_INIT_REQ='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"doctor","version":"0.1.0"}}}'
@@ -104,8 +105,6 @@ check_mcp() {
       pass "$(harness_label "$h") MCP: $name in $file"
     elif [[ "$h" == "claude" ]] && claude_mcp_has "$name"; then
       pass "$(harness_label "$h") MCP: $name registered via claude CLI"
-    elif [[ "$h" == "antigravity" && "$name" == "github" ]]; then
-      skip "$(harness_label "$h") MCP: $name not registered (no env-var tokens in its config)"
     else
       "$level" "$(harness_label "$h") MCP: $name missing from $file — $hint"
     fi
@@ -208,15 +207,12 @@ check_workspace() {
 # ─── GitHub checks ───────────────────────────────────────────────────────────
 
 check_github() {
-  local pr_skill="$SKILLS_DIR/github-projects/SKILL.md" h configured=0
+  local pr_skill="$SKILLS_DIR/github-projects/SKILL.md" h configured=0 out
 
-  # GitHub is "set up" if the always-on source-control rule is installed, the
-  # account-wide MCP is registered, or github-projects is in the manifest.
+  # GitHub is "set up" if the always-on source-control rule is installed or
+  # github-projects is in the manifest.
   for h in $HARNESS_ALL; do
-    if rule_installed "$h" github-source-control && [[ "$h" != "antigravity" ]] \
-       || harness_mcp_has "$PROJECT_ROOT" "$h" github; then
-      configured=1
-    fi
+    rule_installed "$h" github-source-control && configured=1
   done
   [[ "$configured" -eq 1 ]] || manifest_has github-projects || return 0
 
@@ -238,32 +234,38 @@ check_github() {
     skip "github-projects not installed (optional — setup-github-project.sh)"
   fi
 
-  check_mcp github warn "run init.sh"
+  # An older init registered a GitHub MCP server. Nothing drives it now.
+  for h in $HARNESS_ALL; do
+    if _mcp_github_is_ours "$PROJECT_ROOT" "$h"; then
+      warn "$(harness_label "$h"): old GitHub MCP server in $(harness_mcp_file "$h") — re-run init.sh to remove it"
+    fi
+  done
 
-  # gh CLI
+  # gh CLI, run the way the agents run it: as this workspace's account.
   if ! has_cmd gh; then
     fail "gh CLI not installed"
     return
   fi
   pass "gh CLI available"
 
-  # gh auth
-  if gh auth status -h github.com >/dev/null 2>&1; then
-    pass "gh auth: authenticated to github.com"
+  local account
+  account="$(gh_workspace_account)"
+  if out="$(cd "$PROJECT_ROOT" && "$SCRIPT_DIR/gh/gh.sh" api user --jq .login 2>&1)"; then
+    if [[ -n "$account" ]]; then
+      pass "gh auth: logged in as $out (the account this workspace names)"
+    else
+      pass "gh auth: logged in as $out (the active account)"
+    fi
   else
-    fail "gh auth: not logged in — run: gh auth login"
-    return
+    fail "gh auth: ${out%%$'\n'*} — run: gh auth login"
   fi
+}
 
-  # HTTP health (GitHub uses OAuth via the client — 401 is expected without a session)
-  local rc=0
-  http_mcp_check "$GITHUB_MCP_URL" || rc=$?
-  case $rc in
-    0) pass "MCP server: $GITHUB_MCP_URL responding" ;;
-    1) pass "MCP server: $GITHUB_MCP_URL reachable (auth handled by editor on first use)" ;;
-    2) fail "MCP server: $GITHUB_MCP_URL unreachable" ;;
-    *) warn "MCP server: $GITHUB_MCP_URL returned unexpected status" ;;
-  esac
+# The account the workspace names, or nothing.
+gh_workspace_account() {
+  [[ -n "${BYRDE_GH_ACCOUNT:-}" ]] && { echo "$BYRDE_GH_ACCOUNT"; return 0; }
+  [[ -f "$WORKSPACE_FILE" ]] || return 0
+  jq -r '.githubAccount // empty' "$WORKSPACE_FILE" 2>/dev/null || true
 }
 
 # ─── Figma checks ────────────────────────────────────────────────────────────
@@ -410,8 +412,8 @@ main() {
       echo "Usage:"
       echo "  cd /your/project && $0"
       echo ""
-      echo "Checks MCP server configuration and health for:"
-      echo "  GitHub     (source-control rule + MCP via init.sh; projects via setup-github-project.sh)"
+      echo "Checks the configuration and health of:"
+      echo "  GitHub     (source-control rule via init.sh, the gh CLI; projects via setup-github-project.sh)"
       echo "  Figma      (setup-figma.sh)"
       echo "  Analytics  (setup-google-analytics.sh)"
       echo "  Jira       (setup-jira.sh)"

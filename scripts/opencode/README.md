@@ -7,7 +7,7 @@ These scripts set up OpenCode 2 in a project. Each practice skill becomes an age
 - OpenCode 2, `jq`, `python3`, `curl` and `git`.
 - An [Artificial Analysis](https://artificialanalysis.ai/) API key in `ARTIFICIAL_ANALYSIS_API_KEY`. The free tier is enough. Without a key, the init uses the last download. If there is no download, the agents use the session's model.
 - For Fuel iX, a Fuel iX API key in `FUELIX_API_KEY`.
-- For the GitHub MCP server, a token in `GITHUB_PERSONAL_ACCESS_TOKEN`.
+- For GitHub, the `gh` CLI, logged in with `gh auth login`.
 
 ## Set up a project
 
@@ -17,7 +17,6 @@ These scripts set up OpenCode 2 in a project. Each practice skill becomes an age
    ```bash
    export ARTIFICIAL_ANALYSIS_API_KEY=...
    export FUELIX_API_KEY=...
-   export GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)"
    ```
 
 3. Optional: add Fuel iX models as providers. The script lists the models and asks which ones to add.
@@ -38,7 +37,7 @@ These scripts set up OpenCode 2 in a project. Each practice skill becomes an age
 
 | Command | What it does |
 |---|---|
-| `init.sh` | Installs the agents, the rules, the GitHub MCP server and the plugin. Then it scores the models. |
+| `init.sh` | Installs the agents, the rules and the plugin. Then it scores the models. |
 | `init.sh evaluate` | Scores the models again. Run it after you change a provider or its models. |
 | `init.sh uninstall` | Removes what `init.sh` wrote. |
 | `setup-fuelix.sh` | Adds the Fuel iX providers with the models you choose. If `init.sh` ran before, it then runs `init.sh evaluate`. |

@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
 # Configure the github-projects tool skill: pin a GitHub project board (work
-# items, milestones, board state) and ensure the GitHub MCP server is registered.
+# items, milestones, board state). The skill drives the board through the gh CLI.
 #
 # This is the one GitHub capability that needs configuration — a project board
 # (owner + project number) can't be auto-detected. Source-control (branches,
 # PRs, review) is NOT configured here: it's an always-on rule installed by
-# init.sh, and the account-wide GitHub MCP it uses is registered by init.sh too.
+# init.sh, and it uses the gh CLI too.
 #
 # Run from the folder your agent opens in (the one that contains .agents):
 #   cd /your/workspace && /path/to/setup-github-project.sh
 #
 # Writes:
 #   - skills/github-projects/SKILL.md (+ mirrored for each harness init chose)
-#   - each harness's MCP config — ensures the GitHub MCP server is present
 #
 # Requires: gh (authenticated), jq, python3. Bash 3.2 (macOS) compatible.
 
@@ -27,8 +26,6 @@ resolve_layout
 . "$SCRIPT_DIR/../lib/manifest.sh"
 # shellcheck source=lib/harness.sh
 . "$SCRIPT_DIR/../lib/harness.sh"
-# shellcheck source=lib/mcp.sh
-. "$SCRIPT_DIR/../lib/mcp.sh"
 TOOL_DIR="$AGENTS_ROOT/tools"
 PROJECTS_TEMPLATE="$TOOL_DIR/github-projects.md.template"
 PROJECTS_OUT="$SKILLS_DIR/github-projects/SKILL.md"
@@ -71,7 +68,7 @@ print_intro() {
   echo "  $PROG_NAME · Byrde Agents  v$TOOL_VERSION"
   echo ""
   echo "  Pin a GitHub project board and install the github-projects skill."
-  echo "  (Source-control is an always-on rule + MCP set up by init.sh.)"
+  echo "  (Source control is an always-on rule installed by init.sh.)"
   echo ""
   printf '  %-16s %s\n' "Context Root" "$WORKSPACE_ROOT"
   printf '  %-16s %s\n' "Layout" "$(layout_describe)"
@@ -193,9 +190,7 @@ uninstall() {
   echo "$bar"
   echo "  $PROG_NAME · Uninstall  v$TOOL_VERSION"
   echo ""
-  echo "  Removes the github-projects skill. Leaves the GitHub MCP server in"
-  echo "  place — it's shared with the always-on source-control rule and is"
-  echo "  managed by init.sh (run 'init.sh uninstall' to remove it)."
+  echo "  Removes the github-projects skill."
   echo "$bar"
   echo ""
   harness_skill_purge "$WORKSPACE_ROOT" "github-projects"
@@ -293,12 +288,6 @@ main() {
   sync_skill_to_editors "github-projects"
   manifest_add "github-projects"
 
-  # ── Ensure the GitHub MCP is registered (init normally owns this) ──────────
-  echo ""
-  echo "── Ensuring GitHub MCP ──"
-  mcp_merge_github "$WORKSPACE_ROOT"
-  echo "    auth: Claude Code pulls the token from 'gh auth token' live (no setup);"
-  echo "          Cursor users export GITHUB_PERSONAL_ACCESS_TOKEN."
 
   echo ""
   echo "Done. Board $repo_owner #$project_id (tracks $repo_pick)."

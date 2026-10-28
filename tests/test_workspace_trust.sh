@@ -4,18 +4,15 @@
 #
 # Wiring layer: no session, no API calls, no cost.
 #
-# Claude Code ignores project settings until a workspace is trusted, and the
-# GitHub MCP's headersHelper is one of the things it therefore never runs:
-#
-#   MCP server 'github': headersHelper not run — this workspace has no persisted
-#   trust; accept the trust dialog here once interactively, or set
-#   projects["<root>"].hasTrustDialogAccepted in ~/.claude.json.
-#
-# The tool names both remedies, so the installer takes the second one.
+# Claude Code ignores project settings until a workspace is trusted, so the
+# hooks and the permission mode init writes to .claude/settings.json never load.
+# The tool names two remedies — accept the trust dialog once, or set
+# projects["<root>"].hasTrustDialogAccepted in ~/.claude.json — and the
+# installer takes the second one.
 #
 # The care here is all in what it must NOT do. `~/.claude.json` holds every
 # project on the machine plus the account. Losing a key there is far worse than
-# an unregistered MCP server, and revoking a trust decision the human made in
+# an untrusted workspace, and revoking a trust decision the human made in
 # the dialog is worse still — hence the manifest marker.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/harness.sh"
 
@@ -166,17 +163,9 @@ test_the_installer_sources_the_trust_lib() {
     "init.sh does not source lib/trust.sh, so the functions are undefined at run time"
 }
 
-test_the_installer_grants_before_registering_the_mcp() {
-  local init="$REPO_ROOT/scripts/init.sh" grant merge
-  assert_contains "$(cat "$init")" 'grant_workspace_trust "$WORKSPACE_ROOT"' \
+test_the_installer_grants_the_trust() {
+  assert_contains "$(cat "$REPO_ROOT/scripts/init.sh")" 'grant_workspace_trust "$WORKSPACE_ROOT"' \
     "init.sh never grants workspace trust"
-  grant="$(grep -n 'grant_workspace_trust "\$WORKSPACE_ROOT"' "$init" | head -1 | cut -d: -f1)"
-  merge="$(grep -n 'mcp_merge_github "\$WORKSPACE_ROOT"' "$init" | head -1 | cut -d: -f1)"
-  [ -n "$grant" ] && [ -n "$merge" ] || fail "could not locate both call sites in init.sh"
-  # Granting after the merge leaves the approval inert for that run and fires
-  # mcp.sh's untrusted warning on a fresh install.
-  [ "$grant" -lt "$merge" ] || \
-    fail "init.sh grants trust AFTER registering the MCP (grant line $grant, merge line $merge)"
 }
 
 test_uninstall_revokes_the_trust() {

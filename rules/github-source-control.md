@@ -1,16 +1,29 @@
 ---
-description: Branches, pull requests, and code review against GitHub via the account-wide MCP server. Target repo resolved from the workspace map
+description: Branches, pull requests, and code review against GitHub through the gh CLI. Target repo resolved from the workspace map
 trigger: always_on
 ---
 
 # GitHub source control
 
 **Create branch, open pull request, request review, leave review comment, merge** — all
-go through the **GitHub MCP server**. It is OAuth'd to you and account-wide, not pinned
-to one repo.
+go through the **`gh` CLI**, run as `.agents/scripts/gh/gh.sh`. Never run a bare `gh`.
 
-If the server is unreachable or unauthenticated, **halt and report**. Never fall back to
-the `gh` CLI or the raw REST API for these operations.
+The wrapper runs `gh` as the GitHub account that this workspace names, and fails if
+there is no token for it. A bare `gh` runs as whichever account is active on the
+machine, which can be another client's.
+
+```
+.agents/scripts/gh/gh.sh pr create --repo <owner>/<name> --title "…" --body-file <file>
+.agents/scripts/gh/gh.sh pr edit <number> --add-reviewer <login>
+.agents/scripts/gh/gh.sh pr review <number> --comment --body "…"
+.agents/scripts/gh/gh.sh pr merge <number> --merge
+```
+
+Use `gh api` through the wrapper when no `gh pr` command does the job, such as a review
+comment on one line.
+
+If the wrapper fails, or `gh auth status` reports no login, **halt and report**. Never
+work around it with another account or a raw `curl` call.
 
 The target repo is whichever one the work is in. Resolve it as the `workspace` rule does.
 A change spanning repos gets one pull request per repo.

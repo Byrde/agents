@@ -23,7 +23,7 @@
 #   - .opencode/opencode.json         merged, never replaced: $schema, the
 #                                     allow-all permission, a deny for each
 #                                     practice skill as a skill (it is an agent
-#                                     now), and the GitHub MCP server
+#                                     now). An old GitHub MCP server is removed.
 #   - .opencode/agents/<skill>.md     one agent per practice skill
 #   - .opencode/plugins/byrde-agents.js  skill method, memory, rules re-injection
 #   - .opencode/byrde-agents.json     the plugin's settings and the evaluation
@@ -32,9 +32,9 @@
 #   - .gitignore                      a "byrde-agents opencode" block
 #
 # Auth — no secrets on disk. ARTIFICIAL_ANALYSIS_API_KEY is sent on curl's
-# stdin. The GitHub MCP server reads GITHUB_PERSONAL_ACCESS_TOKEN when OpenCode
-# loads the config. OpenCode's model list carries provider settings (API keys
-# among them); only ids, variants, capabilities, limits and prices are kept.
+# stdin. GitHub goes through the gh CLI and its own login. OpenCode's model
+# list carries provider settings (API keys among them); only ids, variants,
+# capabilities, limits and prices are kept.
 #
 # Requires: jq, python3, curl, opencode (2.x). Bash 3.2 (macOS) compatible.
 
@@ -49,7 +49,8 @@ AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 . "$SCRIPT_DIR/lib/workspace.sh"
 # shellcheck source=lib/root.sh
 . "$OC_DIR/lib/root.sh"
-# harness.sh (through mcp.sh) gives the fenced-block and frontmatter helpers.
+# harness.sh (through mcp.sh) gives the fenced-block and frontmatter helpers,
+# and mcp.sh the URL of the old GitHub MCP server.
 # shellcheck source=../lib/mcp.sh
 . "$SCRIPT_DIR/lib/mcp.sh"
 
@@ -196,21 +197,21 @@ write_settings() {
   ' --argjson skills "$skills" --argjson old "$old"
   echo "  ✓ permissions: allow every tool call; practice skills run as agents, not as skills"
 
-  if workspace_has_github_remote; then
-    # oauth: false — GitHub cannot do OAuth with dynamic client registration.
-    # Without it, a missing token makes OpenCode wait for an OAuth flow, and
-    # `opencode run` hangs before it prints anything.
-    json_edit "$CFG" '
-      .mcp = (.mcp // {}) | .mcp.servers = (.mcp.servers // {})
-      | .mcp.servers.github = {type: "remote", url: $url, oauth: false,
-          headers: {Authorization: "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"}}
-    ' --arg url "$GITHUB_MCP_URL"
-    echo "  ✓ mcp: github (export GITHUB_PERSONAL_ACCESS_TOKEN=\"\$(gh auth token)\")"
-  else
-    echo "  – mcp: no github.com remote in the workspace map, so no GitHub server"
+  # GitHub goes through the gh CLI. Retire the server that older installs wrote.
+  if jq -e --arg url "$GITHUB_MCP_URL" '.mcp.servers.github.url == $url' "$CFG" >/dev/null 2>&1; then
+    json_edit "$CFG" "$JQ_DROP_GITHUB" --arg url "$GITHUB_MCP_URL"
+    echo "  ✓ removed the old GitHub MCP server: GitHub goes through .agents/scripts/gh/gh.sh"
   fi
   echo ""
 }
+
+# Drop our GitHub MCP server, and the containers it leaves empty. A "github"
+# server that points somewhere else is not ours, so it stays.
+JQ_DROP_GITHUB='
+  (if .mcp.servers.github.url == $url then del(.mcp.servers.github) else . end)
+  | (if (.mcp.servers // null) == {} then del(.mcp.servers) else . end)
+  | (if (.mcp // null) == {} then del(.mcp) else . end)
+'
 
 remove_settings() {
   [[ -f "$CFG" ]] || return 0
@@ -220,14 +221,12 @@ remove_settings() {
     (($old + $now) | unique) as $all
     | .permissions = [(.permissions // [])[] | select(ours($all) | not)]
     | (if .permissions == [] then del(.permissions) else . end)
-    | (if .mcp.servers.github then del(.mcp.servers.github) else . end)
-    | (if (.mcp.servers // null) == {} then del(.mcp.servers) else . end)
-    | (if (.mcp // null) == {} then del(.mcp) else . end)
-  ' --argjson old "$old" --argjson now "$(practice_json)"
+    | '"$JQ_DROP_GITHUB"'
+  ' --argjson old "$old" --argjson now "$(practice_json)" --arg url "$GITHUB_MCP_URL"
   if [[ "$(jq -c 'del(.["$schema"])' "$CFG")" == "{}" ]]; then
     rm -f "$CFG"
   fi
-  echo "  ✓ removed the permissions and the GitHub server from .opencode/opencode.json"
+  echo "  ✓ removed the permissions from .opencode/opencode.json"
 }
 
 # ─── Plugin and memory ───────────────────────────────────────────────────────

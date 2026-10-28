@@ -108,11 +108,7 @@ test_rules_permissions_mcp_plugin_and_memory_are_installed() {
   assert_json "$cfg" '.permissions[0] | "\(.action) \(.resource) \(.effect)"' "* * allow" "allow-all is not the first rule"
   assert_json "$cfg" '[.permissions[] | select(.action == "skill" and .effect == "deny") | .resource] | index("develop") != null' \
     "true" "the develop skill is still offered as a skill"
-  assert_json "$cfg" '.mcp.servers.github.type' "remote" "the GitHub MCP server is missing"
-  assert_json "$cfg" '.mcp.servers.github.oauth' "false" \
-    "without oauth: false, a missing token makes OpenCode hang waiting for OAuth"
-  assert_json "$cfg" '.mcp.servers.github.headers.Authorization' 'Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}' \
-    "the GitHub token is not read from the environment"
+  assert_json "$cfg" '.mcp.servers.github // "none"' "none" "init registered a GitHub MCP server; GitHub goes through gh"
   assert_file "$HOST/.opencode/plugins/byrde-agents.js" "the plugin was not installed"
   assert_json "$HOST/.opencode/byrde-agents.json" '.memoryDir' "$(cd "$HOST" && pwd -P)/memory" "the plugin does not know where memory is"
   [ -d "$HOST/memory" ] || fail "memory/ was not created"
@@ -144,6 +140,28 @@ test_init_installs_in_the_project_it_runs_from() {
   [ ! -e "$tools/.opencode" ] || fail "setup-fuelix.sh wrote to the parent of the checkout: $out"
   assert_json "$proj/.opencode/opencode.json" '.providers["fuelix-anthropic"] != null' "true" \
     "setup-fuelix.sh did not write to the project it ran from"
+}
+
+test_a_rerun_retires_the_old_github_server_and_keeps_the_others() {
+  setup
+  mkdir -p "$HOST/.opencode"
+  jq -n '{mcp: {servers: {
+      github: {type: "remote", url: "https://api.githubcopilot.com/mcp/", oauth: false},
+      figma: {type: "remote", url: "https://mcp.figma.com/mcp"}}}}' >"$HOST/.opencode/opencode.json"
+  run_init "$HOST" "$(write_models builtin)" >/dev/null 2>&1 || fail "init failed"
+  local cfg="$HOST/.opencode/opencode.json"
+  assert_json "$cfg" '.mcp.servers | has("github")' "false" "the old GitHub MCP server stayed"
+  assert_json "$cfg" '.mcp.servers.figma.url' "https://mcp.figma.com/mcp" "the Figma server went with it"
+}
+
+test_a_github_server_that_is_not_ours_stays() {
+  setup
+  mkdir -p "$HOST/.opencode"
+  jq -n '{mcp: {servers: {github: {type: "remote", url: "https://ghe.example.com/mcp/"}}}}' >"$HOST/.opencode/opencode.json"
+  run_init "$HOST" "$(write_models builtin)" >/dev/null 2>&1 || fail "init failed"
+  run_init "$HOST" "$(write_models builtin)" uninstall >/dev/null 2>&1 || fail "uninstall failed"
+  assert_json "$HOST/.opencode/opencode.json" '.mcp.servers.github.url' "https://ghe.example.com/mcp/" \
+    "a GitHub server that points somewhere else is not ours"
 }
 
 test_a_rerun_changes_nothing() {
