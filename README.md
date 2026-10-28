@@ -1,6 +1,6 @@
 # .agents
 
-A library of self-contained, opinionated agent skills and rules for software development, adapted on install to Claude Code, Cursor, OpenAI Codex, GitHub Copilot, Google Antigravity and OpenCode. Drop it into any repository as a submodule. Two kinds of skills compose freely via shared verb+noun vocabulary ([`skills/CAPABILITIES.md`](skills/CAPABILITIES.md)): **practice skills** (the *what* — `plan`, `architect`, `design`, `develop`, `test`, `debug`, `review`, `quick-edit`, `docs`) ship with the repo. **Tool skills** (the *how* — `github-projects`, `jira`, `google-analytics`, `figma`, the vendored `figma-use`, `model-router`) are installed per-project by setup scripts. Some capabilities are always-on **rules** instead of opt-in skills — notably `workspace` (multi-repo routing) and `github-source-control` (branches/PRs/review) — installed automatically by `init.sh`.
+A library of self-contained, opinionated agent skills and rules for software development, adapted on install to Claude Code, Cursor, OpenAI Codex, GitHub Copilot and Google Antigravity. OpenCode is not supported here: it gets its own init and setup scripts. Drop it into any repository as a submodule. Two kinds of skills compose freely via shared verb+noun vocabulary ([`skills/CAPABILITIES.md`](skills/CAPABILITIES.md)): **practice skills** (the *what* — `plan`, `architect`, `design`, `develop`, `test`, `debug`, `review`, `quick-edit`, `docs`) ship with the repo. **Tool skills** (the *how* — `github-projects`, `jira`, `google-analytics`, `figma`, the vendored `figma-use`) are installed per-project by setup scripts. Some capabilities are always-on **rules** instead of opt-in skills — notably `workspace` (multi-repo routing) and `github-source-control` (branches/PRs/review) — installed automatically by `init.sh`.
 
 ## What's included
 
@@ -43,7 +43,6 @@ Opt-in, one setup script each (see [Setup Tools](#setup-tools)). Each renders it
 | `jira` | `setup-jira.sh` | Work items and the project board in Jira | Atlassian Remote MCP |
 | `google-analytics` | `setup-google-analytics.sh` | GA4 reporting queries | Google `analytics-mcp` |
 | `figma` + `figma-use` | `setup-figma.sh` | Design tokens, components and design work in one Figma file | Figma |
-| `model-router` | `setup-model-router.sh` | Which model handles which task (OpenCode only) | — |
 
 Pick one work-item tracker per project: `github-projects` and `jira` claim the same operations.
 
@@ -78,19 +77,19 @@ One-command bootstrap that installs rules, skills, MCP servers and hooks, adapte
 
 ```bash
 cd /your/project
-.agents/scripts/init.sh                            # OpenCode only (asks first on a terminal)
-.agents/scripts/init.sh --harness opencode,claude  # these harnesses, no question
-.agents/scripts/init.sh --harness all              # every harness
-.agents/scripts/init.sh uninstall                  # remove everything init installed
+.agents/scripts/init.sh                          # Claude Code only (asks first on a terminal)
+.agents/scripts/init.sh --harness claude,cursor  # these harnesses, no question
+.agents/scripts/init.sh --harness all            # every harness
+.agents/scripts/init.sh uninstall                # remove everything init installed
 ```
 
-**The default is OpenCode and nothing else.** On a terminal, init shows the harness list with OpenCode ticked, and Enter accepts it. A non-interactive run (CI, a script, piped stdin) installs for OpenCode without asking. Once a choice is saved, it becomes the default for later runs.
+**The default is Claude Code and nothing else.** On a terminal, init shows the harness list with Claude Code ticked, and Enter accepts it. A non-interactive run (CI, a script, piped stdin) installs for Claude Code without asking. Once a choice is saved, it becomes the default for later runs.
 
 ### Init parameters
 
 | Parameter | Meaning |
 |---|---|
-| `--harness LIST` | Harnesses to install and adapt assets for, comma-separated. Names: `opencode`, `claude`, `cursor`, `codex`, `copilot`, `antigravity`, or `all`. Numbers select by position in `claude cursor codex copilot antigravity opencode` (1–6). Also spelled `--harness=LIST` or `--harnesses LIST`. Skips the question. |
+| `--harness LIST` | Harnesses to install and adapt assets for, comma-separated. Names: `claude`, `cursor`, `codex`, `copilot`, `antigravity`, or `all`. Numbers select by position in `claude cursor codex copilot antigravity` (1–5). Also spelled `--harness=LIST` or `--harnesses LIST`. Skips the question. |
 | `uninstall` (alias `remove`) | Removes rules, skills, the GitHub MCP server, hooks and settings from **every** harness, not only the selected ones. Tool skills from `setup-*.sh` stay; uninstall those with their own scripts. |
 | `-h`, `--help`, `help` | Prints usage. |
 
@@ -98,11 +97,11 @@ cd /your/project
 |---|---|
 | `BYRDE_HARNESSES` | Same as `--harness`, for one run. The flag wins when both are set. The setup scripts read it too. |
 | `BYRDE_WORKSPACE_MODE` | `mono` or `multi`: force the workspace flavour instead of auto-detecting it (see [Single-Repo or Multi-Repo Workspace](#single-repo-or-multi-repo-workspace)). |
-| `BYRDE_RULES_REINJECT_EVERY` | Re-inject the rules every N tool calls (default `12`, `0` turns it off). Read at run time by the hooks and the OpenCode plugin, not by init. |
+| `BYRDE_RULES_REINJECT_EVERY` | Re-inject the rules every N tool calls (default `12`, `0` turns it off). Read at run time by the hooks, not by init. |
 
-Which harnesses are used, in order of precedence: `--harness` > `BYRDE_HARNESSES` > the answer to the question (terminal only) > `harnesses` saved in `.workspace.agents.json` > `opencode`.
+Which harnesses are used, in order of precedence: `--harness` > `BYRDE_HARNESSES` > the answer to the question (terminal only) > `harnesses` saved in `.workspace.agents.json` > `claude`.
 
-The choice is saved as `harnesses` in `.workspace.agents.json`. Re-runs and every `setup-*.sh` script use it. Re-running with fewer harnesses removes what the dropped ones had. For example, `init.sh --harness opencode` after `--harness all` removes the Claude Code, Cursor, Codex, Copilot and Antigravity files.
+The choice is saved as `harnesses` in `.workspace.agents.json`. Re-runs and every `setup-*.sh` script use it. Re-running with fewer harnesses removes what the dropped ones had. For example, `init.sh --harness claude` after `--harness all` removes the Cursor, Codex, Copilot and Antigravity files. A saved `opencode` entry from an older version is ignored.
 
 ### What init does
 
@@ -124,7 +123,6 @@ Every asset has one source, and each harness gets it in its own files and format
 | **OpenAI Codex** | one fenced section per rule in `AGENTS.md` | `.agents/skills/` | `.codex/config.toml` | `.codex/hooks.json` |
 | **GitHub Copilot** | `.github/instructions/*.instructions.md` (`applyTo: "**"`) | `.agents/skills/` | `.vscode/mcp.json` | `.github/hooks/byrde-agents.json` |
 | **Google Antigravity** | `.agents/rules/*.md`, read in place | `.agents/skills/` | `.agents/mcp_config.json` | — |
-| **OpenCode** | sections in `AGENTS.md` (shared with Codex) | `.agents/skills/` | `.opencode/opencode.json` | plugin `.opencode/plugins/byrde-agents.js` |
 
 **`.agents/` is shared ground.** Cursor, Codex, Copilot and Antigravity all read `.agents/skills/` natively, and Antigravity reads `.agents/rules/` too. That folder is this checkout, so they use the source in place and nothing is copied twice. Only Claude Code gets a copy. Rule sources carry `description` and `trigger: always_on` frontmatter for this reason. The other formats are rendered from them, so there is no hand-kept `.mdc` twin.
 
@@ -135,27 +133,6 @@ Things to know:
 - **Antigravity hooks**: none. Its `PostToolUse` cannot add context.
 - **Copilot**: `.vscode/mcp.json` is for VS Code. Copilot CLI reads `.mcp.json`, which exists when Claude Code is selected too. The coding agent takes MCP config from repository settings, not from a file.
 - **Claude Code only**: auto-memory, `permissions.defaultMode`, the MCP approval, and workspace trust. They are removed when Claude Code is dropped.
-
-### OpenCode
-
-OpenCode is configured by files under `.opencode/`, so a host's own root `opencode.json` is never touched. Works with OpenCode 1.18.29+ and 2.x.
-
-**Settings — `.opencode/opencode.json`.** Merged, never replaced: `$schema`, `"permission": "allow"`, and one `mcp` entry per server (`type: "remote"` with `{env:VAR}` headers, or `type: "local"` with a `command` array). The permission is set only when the file has none. If you wrote your own rules, they stay, and the plugin's allow-all hook approves what they leave as `ask` (a `deny` still wins). Ownership is recorded, so uninstall takes back only what it gave.
-
-**Rules — `AGENTS.md`.** OpenCode 2 ignores the `instructions` key and reads only `AGENTS.md`, so the rules go there for both versions. The sections are shared with Codex: they stay while either one is selected.
-
-**Hooks — the `byrde-agents` plugin.** OpenCode has no command hooks; plugins are its hooks. [`scripts/hooks/opencode/byrde-agents.js`](scripts/hooks/opencode/byrde-agents.js) is copied to `.opencode/plugins/` and implements both plugin APIs from one file (OpenCode 2 `setup(ctx)`, OpenCode 1 `server()`), with no dependencies:
-
-| Hook | OpenCode 2 | OpenCode 1 | What it does |
-|---|---|---|---|
-| Rules re-injection | `tool.hook("execute.after")` | `tool.execute.after` | Every `BYRDE_RULES_REINJECT_EVERY` tool calls (default 12), appends the lead rule to the tool result the model reads |
-| Rules through compaction | `session.hook("compaction")` | `experimental.session.compacting` | Gives the lead rule to the compaction request, so the summary that replaces the history keeps it |
-| Allow-all | `permission.hook("evaluate")` | `permission.ask` | Turns `ask` into `allow` |
-| Model routing | `session.hook("context")` | — | With the [model router](#model-router) set up, lists the routed tasks in the main agent's system prompt so it delegates by itself |
-
-Its settings live in `.opencode/byrde-agents.json`: the rules folder and allow-all (from `init.sh`). Re-run `init.sh` after updating `.agents` to refresh the copied plugin; `doctor.sh` warns when it is out of date.
-
-OpenCode also reads `.claude/skills/`. With Claude Code selected too, it finds each practice skill in two places.
 
 ### Rules re-injection
 
@@ -175,7 +152,6 @@ Optional setup (run separately when you want them, see [Setup Tools](#setup-tool
 - `.agents/scripts/setup/setup-jira.sh` — pin a Jira site + project
 - `.agents/scripts/setup/setup-google-analytics.sh` — pin a GA4 property
 - `.agents/scripts/setup/setup-figma.sh` — the Figma tool skill
-- `.agents/scripts/setup/setup-model-router.sh` — route OpenCode tasks to the best-suited model
 
 **Uninstall.** Every setup script takes an `uninstall` subcommand that reverses exactly what its install wrote:
 
@@ -185,7 +161,6 @@ Optional setup (run separately when you want them, see [Setup Tools](#setup-tool
 .agents/scripts/setup/setup-jira.sh uninstall    # remove the jira skill + Atlassian MCP server
 .agents/scripts/setup/setup-google-analytics.sh uninstall  # remove the google-analytics skill + MCP server
 .agents/scripts/setup/setup-figma.sh uninstall    # remove Figma skills (incl. figma-use) + MCP server
-.agents/scripts/setup/setup-model-router.sh uninstall  # remove the route subagents, commands, cache and skill (keeps your config)
 ```
 
 ## Setup Tools
@@ -320,53 +295,6 @@ It establishes Application Default Credentials with the `analytics.readonly` sco
 
 No secrets on disk: `analytics-mcp` finds the credentials in gcloud's ADC store, so the MCP config carries only `GOOGLE_PROJECT_ID`.
 
-### Model router
-
-Routes each kind of task to the model that suits it best, in OpenCode 2. Tasks and [practice skills](#practice-skills) match one to one: the skill is the method, the task picks the model that runs it. You and the agent decide what matters for each task (reasoning, coding, speed, cost, …). The router scores every model your providers offer against public benchmarks and assigns one model per task. Scoring runs only when you ask for it, never on each request.
-
-**Requires:** OpenCode 2 selected by `init.sh`, `jq`, `python3`, `curl`, and an [Artificial Analysis](https://artificialanalysis.ai/) API key (free tier) in `ARTIFICIAL_ANALYSIS_API_KEY`.
-
-```bash
-cd /your/project
-.agents/scripts/setup/setup-model-router.sh                     # starter config + model-router skill
-.agents/scripts/setup/setup-model-router.sh evaluate            # score the models, assign one per task
-.agents/scripts/setup/setup-model-router.sh evaluate --offline  # re-score from the last download (after changing weights)
-.agents/scripts/setup/setup-model-router.sh show                # print the current assignments
-.agents/scripts/setup/setup-model-router.sh uninstall           # remove the subagents, commands, cache and skill
-```
-
-**Routing is implicit.** Each task becomes an OpenCode subagent, `.opencode/agents/route-<task>.md`, pinned to its model and described by when to use it. The main agent sees those descriptions in its subagent tool. The `byrde-agents` plugin also adds a routing table to its system prompt. So a request that matches a task goes to that task's model without being named. The child session runs on the pinned model, while the main session keeps its own. `/route-<task>` commands force a task by hand (set `"commands": false` to skip them). The subagents have no prompt of their own, so they keep OpenCode's default system prompt.
-
-**Skills and tasks stay in step, both ways.** Install starts with one task per practice skill. Every install and `evaluate` re-runs the sync. A new practice skill gets a task: curated weights for the shipped skills, seeded ones (flagged for tuning) for others. A task with no practice skill is reported, and the `model-router` skill helps you write the skill or drop the task. To leave a skill unrouted, list it in `skipSkills`. `doctor.sh` warns when the two drift apart. A routed subagent follows its skill: the routing table tells the main agent to delegate instead of invoking the skill itself.
-
-**Configure with the agent.** The `model-router` skill runs the conversation: which tasks deserve their own model, which dimensions matter for each and by how much, hard limits, and the provider order. It edits `.opencode/model-router.json`:
-
-| Key | Meaning |
-|---|---|
-| `providers` | OpenCode provider IDs to evaluate, in priority order. Only their models are scored. When several providers serve the same model, the first one listed wins. |
-| `tasks` | Per task: `skill`, `description`, `when` (the delegation trigger), `profile`, optional `weights` that override the profile's, `require` and `minCoverage` |
-| `skipSkills` | Practice skills that deliberately get no task |
-| `dimensions` | Benchmark metrics and their weights, e.g. `coding`: `coding_index`, `livecodebench`, `scicode` |
-| `profiles` | Dimension weights per kind of work, shared by tasks: `deep` (plan, architect, design, review), `build` (develop, test, debug), `fast` (quick-edit), `write` (docs) |
-| `requirements` | Hard limits for every task: `tools`, `minContext`, `input` (e.g. `["image"]`) |
-| `aliases` | Map a model the benchmarks list under another name, or `null` to skip it |
-| `exclude` | Glob patterns for models never to pick |
-| `evaluation` | Written by `evaluate`: assignments, per-model dimension scores, runner-ups, unmatched models |
-
-**How a model is scored.**
-- **Identity.** The same model under different providers is recognised through the `canonical_model_id` in the models.dev catalogue OpenCode uses. For example, `github-copilot/claude-sonnet-5.5` and `openrouter/anthropic/claude-sonnet-5.5` are both `anthropic/claude-sonnet-5-5`.
-- **Benchmark match.** That ID is matched to an Artificial Analysis entry. A model with no match is listed, not guessed; settle it with `aliases`.
-- **Metrics.** Each metric becomes a percentile against every model Artificial Analysis lists, so adding a provider doesn't shift the other scores. Price and latency count lower as better.
-- **Profiles.** Tasks that need the same thing share a weight profile, so they run on the same model. Otherwise a gap of a few thousandths between two frontier models, which is benchmark noise, would split them. A task overrides its profile only where its needs really differ: debug weighs long context more, for logs and traces.
-- **Dimensions and tasks.** A dimension is the weighted mean of the metrics the model has. A task score is the weighted mean of its profile's dimensions, with the task's own weights on top, and a dimension with no data counts as the median (0.5), so missing data neither helps nor sinks a model. Each assignment reports its coverage: the share of the weight that rests on real data.
-- **Effort.** Reasoning effort is scored per variant. AA's `-high` and `-low` entries map to OpenCode's `#high` and `#low`, and the winning effort is pinned in the subagent's model.
-
-**Commit** `.opencode/model-router.json`, `.opencode/agents/` and `.opencode/commands/` so the team shares the routing. Raw API responses are cached in `.opencode/.model-router/`, which ignores itself. A teammate who lacks a provider in the list gets a subagent pinned to a model they cannot call. `doctor.sh` flags that, and flags an evaluation older than 45 days.
-
-**No secrets on disk.** The API key is read from the environment and sent on curl's stdin. OpenCode's model list includes provider settings, API keys among them; only model IDs, variants, capabilities and limits are kept from it.
-
-Benchmark data: [Artificial Analysis](https://artificialanalysis.ai/). Their free API requires attribution, so reports and generated files credit it.
-
 ### Doctor
 
 Diagnoses the health of all MCP servers and skill installations configured by the setup scripts.
@@ -376,7 +304,7 @@ cd /your/project
 .agents/scripts/doctor.sh
 ```
 
-Reports, for each selected harness, whether its rules, skills and hooks are installed, and checks the workspace map. Then, for each tool that is set up (recorded in `.manifest.local.yml`), it reports the skill, the MCP configuration per harness, authentication, and server reachability: GitHub (source control and projects), Figma (`figma`, `figma-use`), Google Analytics and Jira. For the model router, it checks the config, the age of the evaluation, that each subagent is pinned to its assigned model, and that the assigned models are usable on this machine. A tool you never installed, or uninstalled, is left out of the report.
+Reports, for each selected harness, whether its rules, skills and hooks are installed, and checks the workspace map. Then, for each tool that is set up (recorded in `.manifest.local.yml`), it reports the skill, the MCP configuration per harness, authentication, and server reachability: GitHub (source control and projects), Figma (`figma`, `figma-use`), Google Analytics and Jira. A tool you never installed, or uninstalled, is left out of the report.
 
 ### Tests
 
@@ -389,7 +317,7 @@ Offline suites cover the installer itself, and live tests verify that the hooks 
 
 | Suite | Covers |
 |---|---|
-| `test_harness_adapters.sh` | Rules, skills, MCP servers and hooks rendered for each harness, the OpenCode plugin, and `init.sh` end to end |
+| `test_harness_adapters.sh` | Rules, skills, MCP servers and hooks rendered for each harness, and `init.sh` end to end |
 | `test_hook_wiring.sh` | Hook settings point at scripts that exist and answer in a shape the CLI accepts |
 | `test_mcp_registration.sh` | GitHub MCP registration and approval in Claude Code |
 | `test_gh_account_scope.sh` | Which GitHub account a workspace's token comes from |

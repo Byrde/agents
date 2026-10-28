@@ -116,7 +116,7 @@ check_mcp() {
 rule_installed() {
   local h="$1" name="$2" path
   case "$h" in
-    codex | opencode) grep -qF "<!-- $HARNESS_MARK:rule $name -->" "$PROJECT_ROOT/AGENTS.md" 2>/dev/null ;;
+    codex) grep -qF "<!-- $HARNESS_MARK:rule $name -->" "$PROJECT_ROOT/AGENTS.md" 2>/dev/null ;;
     antigravity) [[ -f "$PROJECT_ROOT/.agents/rules/$name.md" || -f "$PROJECT_ROOT/.agent/rules/$name.md" ]] ;;
     *) path="$(harness_rule_path "$h" "$name")"; [[ -f "$PROJECT_ROOT/$path" ]] ;;
   esac
@@ -163,27 +163,6 @@ check_harnesses() {
         pass "$(harness_label "$h"): hooks in .claude/settings.json"
       else
         warn "$(harness_label "$h"): rules re-injection hook missing — run init.sh"
-      fi
-    elif [[ "$h" == "opencode" ]]; then
-      if harness_hooks_has "$PROJECT_ROOT" "$h"; then
-        pass "$(harness_label "$h"): plugin in $(harness_hook_file "$h")"
-      else
-        warn "$(harness_label "$h"): plugin missing from $(harness_hook_file "$h") — run init.sh"
-      fi
-      if [[ -f "$PROJECT_ROOT/.opencode/$HARNESS_MARK.json" ]] \
-         && cmp -s "$PROJECT_ROOT/$(harness_hook_file "$h")" "$HARNESS_OPENCODE_PLUGIN_SRC"; then
-        pass "$(harness_label "$h"): plugin current, settings in .opencode/$HARNESS_MARK.json"
-      else
-        warn "$(harness_label "$h"): plugin out of date or settings missing — re-run init.sh"
-      fi
-      local perm
-      perm="$(jq -c '.permission // empty' "$PROJECT_ROOT/.opencode/opencode.json" 2>/dev/null)"
-      if [[ "$perm" == '"allow"' ]]; then
-        pass "$(harness_label "$h"): permission \"allow\" in .opencode/opencode.json"
-      elif [[ -n "$perm" ]]; then
-        skip "$(harness_label "$h"): your own permission rules are kept; the plugin approves what they leave as ask"
-      else
-        warn "$(harness_label "$h"): no permission setting — re-run init.sh"
       fi
     elif harness_supports_hooks "$h"; then
       if harness_hooks_has "$PROJECT_ROOT" "$h"; then
@@ -421,91 +400,6 @@ check_jira() {
   esac
 }
 
-# Days after which an evaluation is stale: models ship every few weeks.
-ROUTER_STALE_DAYS=45
-
-check_model_router() {
-  manifest_has model-router || return 0
-
-  echo ""
-  echo "Model router (OpenCode)"
-  echo "-----------------------"
-
-  local config="$WORKSPACE_ROOT/.opencode/model-router.json"
-  if [[ -f "$SKILLS_DIR/model-router/SKILL.md" ]]; then
-    pass "Skill: skills/model-router/SKILL.md"
-  else
-    fail "Skill: model-router in manifest but SKILL.md missing — re-run setup-model-router.sh"
-  fi
-  if ! jq -e . "$config" >/dev/null 2>&1; then
-    fail "Config: .opencode/model-router.json missing or not valid JSON — re-run setup-model-router.sh"
-    return 0
-  fi
-  pass "Config: .opencode/model-router.json ($(jq '.tasks | length' "$config") tasks)"
-
-  # Two-way: each practice skill has a task, each task a skill.
-  local sync_out sync_rc=0
-  sync_out="$(python3 "$SCRIPT_DIR/lib/model_router.py" sync "$config" "$AGENTS_ROOT/skills" --check 2>&1)" || sync_rc=$?
-  if [[ "$sync_rc" -eq 0 ]]; then
-    pass "Skills ↔ tasks: every practice skill has a task, and every task a skill"
-  else
-    warn "Skills ↔ tasks out of step — re-run setup-model-router.sh, or ask the agent (model-router skill):"
-    printf '%s\n' "$sync_out" | sed 's/^ */      /'
-  fi
-
-  local at
-  at="$(jq -r '.evaluation.at // empty' "$config")"
-  if [[ -z "$at" ]]; then
-    warn "Evaluation: none yet — run setup-model-router.sh evaluate"
-    return 0
-  fi
-  local age
-  age="$(python3 -c 'import sys,datetime; print((datetime.date.today()-datetime.date.fromisoformat(sys.argv[1])).days)' "$at" 2>/dev/null || echo 0)"
-  if [[ "$age" -gt "$ROUTER_STALE_DAYS" ]]; then
-    warn "Evaluation: $at, $age days old — new models may beat these picks; re-run setup-model-router.sh evaluate"
-  else
-    pass "Evaluation: $at ($age days old)"
-  fi
-
-  # Each assigned task needs its subagent, pinned to the assigned model.
-  local task model file drift=0
-  while IFS=$'\t' read -r task model; do
-    [[ -n "$task" ]] || continue
-    file=".opencode/agents/route-$task.md"
-    if ! jq -e --arg f "$file" '(.evaluation.generated // []) | index($f)' "$config" >/dev/null; then
-      warn "Subagent: $file is not the router's (a file of yours sits there) — task $task is not routed"
-      drift=1
-    elif ! grep -qxF "model: \"$model\"" "$WORKSPACE_ROOT/$file" 2>/dev/null; then
-      fail "Subagent: $file missing or not pinned to $model — run setup-model-router.sh evaluate --offline"
-      drift=1
-    fi
-  done < <(jq -r '.evaluation.assignments // {} | to_entries[] | select(.value.model) | [.key, .value.model] | @tsv' "$config")
-  [[ "$drift" -eq 1 ]] || pass "Subagents: one per assigned task, each pinned to its model"
-
-  # A teammate without one of the committed providers gets a subagent pinned
-  # to a model they cannot call.
-  if ! has_cmd opencode; then
-    skip "Models: opencode not on PATH — cannot check the assigned models are usable here"
-    return 0
-  fi
-  local avail missing=""
-  avail="$(cd "$WORKSPACE_ROOT" && perl -e 'alarm shift; exec @ARGV' 60 opencode api --standalone GET /api/model 2>/dev/null \
-    | jq -r '(.data // .)[] | "\(.providerID)/\(.id)"' 2>/dev/null || true)"
-  if [[ -z "$avail" ]]; then
-    skip "Models: could not list OpenCode's models"
-    return 0
-  fi
-  while IFS= read -r model; do
-    [[ -n "$model" ]] || continue
-    grep -qxF "${model%%#*}" <<<"$avail" || missing="$missing ${model%%#*}"
-  done < <(jq -r '[.evaluation.assignments // {} | .[] | .model // empty] | unique[]' "$config")
-  if [[ -n "$missing" ]]; then
-    warn "Models: not usable on this machine:$missing — connect the provider, or re-evaluate"
-  else
-    pass "Models: every assigned model is usable here"
-  fi
-}
-
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 main() {
@@ -521,7 +415,6 @@ main() {
       echo "  Figma      (setup-figma.sh)"
       echo "  Analytics  (setup-google-analytics.sh)"
       echo "  Jira       (setup-jira.sh)"
-      echo "  Model router (setup-model-router.sh; OpenCode)"
       exit 0
       ;;
   esac
@@ -547,7 +440,6 @@ main() {
   check_figma
   check_google_analytics
   check_jira
-  check_model_router
 
   # Summary
   echo ""

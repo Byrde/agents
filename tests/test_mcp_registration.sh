@@ -18,7 +18,7 @@
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/harness.sh"
 
 # These cover Claude Code's registration and approval; pin the harness so the
-# default selection (OpenCode) does not decide what gets written.
+# default selection does not decide what gets written.
 export BYRDE_HARNESSES="claude"
 
 MCP_LIB="$REPO_ROOT/scripts/lib/mcp.sh"

@@ -40,7 +40,7 @@
 # Does not modify $HOME.
 #
 # Usage:
-#   cd /path/to/project && /path/to/init.sh                          # install (asks; default: opencode)
+#   cd /path/to/project && /path/to/init.sh                          # install (asks; default: claude)
 #   cd /path/to/project && /path/to/init.sh --harness claude,codex   # install, no question
 #   cd /path/to/project && /path/to/init.sh uninstall                # remove what install wrote
 #
@@ -465,7 +465,7 @@ manage_editor_gitignore() {
     lines="$lines$(harness_gitignore_entries "$project_root" "$h" "$RULES_DIR")"$'\n'
   done
   lines="$lines.worktrees/"$'\n'"$map"
-  # Codex and OpenCode can both name AGENTS.md; list each path once.
+  # List each path once.
   lines="$(printf '%s\n' "$lines" | awk 'NF && !seen[$0]++')"
   touch "$gi"
   _strip_byrde_gitignore "$gi"
@@ -531,12 +531,6 @@ print_summary() {
     echo ""
     echo "  Antigravity gets no hooks: its PostToolUse cannot add context."
   fi
-  if harness_has opencode; then
-    echo ""
-    echo "  OpenCode: settings and MCP in .opencode/opencode.json; hooks are the"
-    echo "  byrde-agents plugin (rules re-injection, rules kept through compaction,"
-    echo "  allow-all). Works with OpenCode 1.18.29+ and 2.x."
-  fi
   echo ""
   echo "  Optional next steps (they install for the same harnesses):"
   echo "    • .agents/scripts/setup/setup-github-project.sh  (pin a GitHub project board)"
@@ -557,7 +551,7 @@ print_summary() {
 HARNESS_ARG=""
 
 # Decide which harnesses to install for: --harness > $BYRDE_HARNESSES > ask (on a
-# terminal) > the saved choice > the default (opencode only). Exports BYRDE_HARNESSES so every
+# terminal) > the saved choice > the default (claude only). Exports BYRDE_HARNESSES so every
 # later step — and the libs — agree on the answer for this run.
 choose_harnesses() {
   echo "── Step 1/5: Harnesses ────────────────────────────────────────────"
@@ -816,8 +810,6 @@ enable_allow_all_tools() {
     if harness_has "$h"; then
       harness_hooks_install "$project_root" "$h"
       echo "  ✓ allow-all + rules re-injection hooks → $(harness_hook_file "$h") ($(harness_label "$h"))"
-      [[ "$h" == "opencode" ]] && \
-        echo "    settings → .opencode/opencode.json (permission: allow, unless you set your own)"
     else
       harness_hooks_remove "$project_root" "$h"
     fi
@@ -958,7 +950,7 @@ main() {
       echo "Options:"
       echo "  --harness LIST   Harnesses to install and adapt assets for, comma-separated."
       echo "                   Names: $HARNESS_ALL, or 'all'."
-      echo "                   Numbers 1-6 select by position. Also --harness=LIST, --harnesses."
+      echo "                   Numbers 1-5 select by position. Also --harness=LIST, --harnesses."
       echo "                   Without it, a terminal run asks (Enter keeps the saved"
       echo "                   choice, or '$HARNESS_DEFAULT' on a first run); a non-interactive run"
       echo "                   uses the saved choice, or '$HARNESS_DEFAULT'. Fewer harnesses than"

@@ -8,7 +8,6 @@
 #   codex        OpenAI Codex
 #   copilot      GitHub Copilot (VS Code agent mode, CLI, coding agent)
 #   antigravity  Google Antigravity
-#   opencode     OpenCode (1.x and 2.x)
 #
 # The scripts never write a harness path themselves. They call the adapters
 # below, once per selected harness, so a new harness is one more case arm here.
@@ -20,12 +19,6 @@
 #   skills  .claude/skills/       .agents/skills/    .agents/skills/      .agents/skills/                     .agents/skills/
 #   mcp     .mcp.json             .cursor/mcp.json   .codex/config.toml   .vscode/mcp.json                    .agents/mcp_config.json
 #   hooks   .claude/settings.json .cursor/hooks.json .codex/hooks.json    .github/hooks/byrde-agents.json     (none — see below)
-#
-#   OpenCode: rules in AGENTS.md (shared with Codex), skills in .agents/skills/,
-#   settings + MCP in .opencode/opencode.json, hooks as a plugin in
-#   .opencode/plugins/byrde-agents.js with its settings in .opencode/byrde-agents.json.
-#   OpenCode 2 ignores the `instructions` key, so AGENTS.md is the one place
-#   both major versions read rules from.
 #
 # `.agents/` IS THE SHARED FOLDER. Cursor, Codex, Copilot and Antigravity all
 # read `.agents/skills/` natively, and Antigravity also reads `.agents/rules/`.
@@ -51,8 +44,8 @@
 #
 # Requires jq. Compatible with Bash 3.2 (macOS): no associative arrays.
 
-HARNESS_ALL="claude cursor codex copilot antigravity opencode"
-HARNESS_DEFAULT="opencode"
+HARNESS_ALL="claude cursor codex copilot antigravity"
+HARNESS_DEFAULT="claude"
 
 _HARNESS_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _HARNESS_AGENTS_ROOT="$(cd "$_HARNESS_LIB_DIR/../.." && pwd)"
@@ -72,7 +65,6 @@ harness_label() {
     codex)       echo "OpenAI Codex" ;;
     copilot)     echo "GitHub Copilot" ;;
     antigravity) echo "Google Antigravity" ;;
-    opencode)    echo "OpenCode" ;;
     *)           echo "$1" ;;
   esac
 }
@@ -114,13 +106,16 @@ harness_parse() {
   echo "${out# }"
 }
 
-# The harnesses recorded in the workspace map, or nothing. The map sits next to
-# the .agents checkout (see lib/workspace.sh) when the caller has not loaded it.
+# The known harnesses recorded in the workspace map, or nothing. The map sits
+# next to the .agents checkout (see lib/workspace.sh) when the caller has not
+# loaded it. Ids this version no longer knows (an old "opencode") are dropped.
 harness_saved() {
-  local map="${WORKSPACE_FILE:-$(cd "$_HARNESS_AGENTS_ROOT/.." && pwd)/.workspace.agents.json}"
+  local map="${WORKSPACE_FILE:-$(cd "$_HARNESS_AGENTS_ROOT/.." && pwd)/.workspace.agents.json}" raw
   [[ -n "$map" && -f "$map" ]] || return 0
   command -v jq >/dev/null 2>&1 || return 0
-  jq -r '(.harnesses // []) | join(" ")' "$map" 2>/dev/null || true
+  raw="$(jq -r '(.harnesses // []) | join(" ")' "$map" 2>/dev/null || true)"
+  [[ -n "$raw" ]] && harness_parse "$raw" 2>/dev/null
+  return 0
 }
 
 # The harnesses to install for: $BYRDE_HARNESSES > the workspace map > default.
@@ -261,15 +256,15 @@ harness_rule_path() {
     cursor)      echo ".cursor/rules/$name.mdc" ;;
     copilot)     echo ".github/instructions/$name.instructions.md" ;;
     antigravity) echo ".agents/rules/$name.md" ;;
-    codex | opencode) echo "" ;;
+    codex)       echo "" ;;
   esac
 }
 
-# AGENTS.md carries the rules for Codex and OpenCode alike. A section stays
-# while either of them is selected; HARNESS_PURGE=1 (uninstall) removes it anyway.
+# AGENTS.md carries the rules for Codex. A section stays while Codex is
+# selected; HARNESS_PURGE=1 (uninstall) removes it anyway.
 _harness_agents_md_wanted() {
   [[ "${HARNESS_PURGE:-}" == "1" ]] && return 1
-  harness_has codex || harness_has opencode
+  harness_has codex
 }
 
 _harness_codex_open()  { echo "<!-- $HARNESS_MARK:rule $1 -->"; }
@@ -308,9 +303,9 @@ harness_rule_install() {
       mkdir -p "$(dirname "$dest")"
       printf -- '---\ntrigger: always_on\ndescription: %s\n---\n\n%s\n' "$desc" "$body" >"$dest"
       ;;
-    codex | opencode)
-      # Codex reads one AGENTS.md per directory and nothing else, and OpenCode 2
-      # reads only AGENTS.md, so each rule is a fenced section inside it.
+    codex)
+      # Codex reads one AGENTS.md per directory and nothing else, so each rule
+      # is a fenced section inside it.
       # Anything outside the fences is yours.
       _harness_block_put "$root/AGENTS.md" "$(_harness_codex_open "$name")" \
         "$(_harness_codex_close "$name")" "$body"
@@ -325,7 +320,7 @@ harness_rule_remove() {
     cursor)      rm -f "$root/.cursor/rules/$name.mdc" "$root/.cursor/rules/$name.md"; rmdir "$root/.cursor/rules" 2>/dev/null || true ;;
     copilot)     rm -f "$root/.github/instructions/$name.instructions.md"; rmdir "$root/.github/instructions" "$root/.github" 2>/dev/null || true ;;
     antigravity) rm -f "$root/.agent/rules/$name.md"; rmdir "$root/.agent/rules" "$root/.agent" 2>/dev/null || true ;;
-    codex | opencode)
+    codex)
       _harness_agents_md_wanted && return 0
       [[ -f "$root/AGENTS.md" ]] && _harness_block_put "$root/AGENTS.md" \
         "$(_harness_codex_open "$name")" "$(_harness_codex_close "$name")" ""
@@ -338,7 +333,7 @@ harness_rule_remove() {
 harness_rule_where() {
   local h="$1" name="$2"
   case "$h" in
-    codex | opencode) echo "AGENTS.md (section $name)" ;;
+    codex)       echo "AGENTS.md (section $name)" ;;
     antigravity) echo ".agents/rules/$name.md (native)" ;;
     *)           harness_rule_path "$h" "$name" ;;
   esac
@@ -413,7 +408,6 @@ harness_mcp_file() {
     codex)       echo ".codex/config.toml" ;;
     copilot)     echo ".vscode/mcp.json" ;;
     antigravity) echo ".agents/mcp_config.json" ;;
-    opencode)    echo ".opencode/opencode.json" ;;
   esac
 }
 
@@ -423,16 +417,7 @@ _harness_mcp_render() {
   jq -c --arg h "$h" '
     . as $s
     | (if $s.bearerEnv then {Authorization: ("Bearer ${env:" + $s.bearerEnv + "}")} else null end) as $envHdr
-    | if $h == "opencode" then
-        # {env:VAR} is substituted by OpenCode when it reads the file.
-        if $s.type == "stdio" then
-          {type: "local", command: ([$s.command] + ($s.args // []))}
-          + (if $s.env then {environment: $s.env} else {} end)
-        else
-          {type: "remote", url: $s.url}
-          + (if $s.bearerEnv then {headers: {Authorization: ("Bearer {env:" + $s.bearerEnv + "}")}} else {} end)
-        end
-      elif $s.type == "stdio" then
+    | if $s.type == "stdio" then
         {command: $s.command}
         + (if $s.args then {args: $s.args} else {} end)
         + (if $s.env then {env: $s.env} else {} end)
@@ -498,12 +483,6 @@ harness_mcp_put() {
       _harness_jq_edit "$file" '.servers = (.servers // {}) | .servers[$n] = $e' \
         --arg n "$name" --argjson e "$entry"
       ;;
-    opencode)
-      entry="$(_harness_mcp_render "$h" "$spec")"
-      _harness_jq_edit "$file" '
-        .["$schema"] = (.["$schema"] // "https://opencode.ai/config.json")
-        | .mcp = (.mcp // {}) | .mcp[$n] = $e' --arg n "$name" --argjson e "$entry"
-      ;;
     claude | cursor)
       entry="$(_harness_mcp_render "$h" "$spec")"
       _harness_jq_edit "$file" '.mcpServers = (.mcpServers // {}) | .mcpServers[$n] = $e' \
@@ -527,11 +506,6 @@ harness_mcp_remove() {
       _harness_jq_edit "$file" 'del(.servers[$n]) | if .servers == {} then del(.servers) else . end' --arg n "$name"
       _harness_prune_json "$file" "$root"
       ;;
-    opencode)
-      jq -e --arg n "$name" '.mcp[$n]' "$file" >/dev/null 2>&1 || return 0
-      _harness_jq_edit "$file" 'del(.mcp[$n]) | if .mcp == {} then del(.mcp) else . end' --arg n "$name"
-      _harness_opencode_prune "$root"
-      ;;
     *)
       jq -e --arg n "$name" '.mcpServers[$n]' "$file" >/dev/null 2>&1 || return 0
       _harness_jq_edit "$file" 'del(.mcpServers[$n]) | if .mcpServers == {} then del(.mcpServers) else . end' --arg n "$name"
@@ -549,9 +523,8 @@ harness_mcp_has() {
   [[ -f "$file" ]] || return 1
   case "$h" in
     codex)   grep -qxF "$(_harness_codex_mcp_open "$name")" "$file" ;;
-    copilot)  jq -e --arg n "$name" '.servers[$n]' "$file" >/dev/null 2>&1 ;;
-    opencode) jq -e --arg n "$name" '.mcp[$n]' "$file" >/dev/null 2>&1 ;;
-    *)        jq -e --arg n "$name" '.mcpServers[$n]' "$file" >/dev/null 2>&1 ;;
+    copilot) jq -e --arg n "$name" '.servers[$n]' "$file" >/dev/null 2>&1 ;;
+    *)       jq -e --arg n "$name" '.mcpServers[$n]' "$file" >/dev/null 2>&1 ;;
   esac
 }
 
@@ -572,13 +545,12 @@ harness_hook_file() {
     cursor)  echo ".cursor/hooks.json" ;;
     codex)   echo ".codex/hooks.json" ;;
     copilot) echo ".github/hooks/$HARNESS_MARK.json" ;;
-    opencode) echo ".opencode/plugins/$HARNESS_MARK.js" ;;
     *)       echo "" ;;
   esac
 }
 
 harness_supports_hooks() {
-  case "$1" in claude | cursor | codex | copilot | opencode) return 0 ;; esac
+  case "$1" in claude | cursor | codex | copilot) return 0 ;; esac
   return 1
 }
 
@@ -597,13 +569,9 @@ harness_allow_cmd() {
   esac
 }
 
-# Install both hooks for cursor / codex / copilot / opencode.
+# Install both hooks for cursor / codex / copilot.
 harness_hooks_install() {
   local root="$1" h="$2" file reinject allow
-  if [[ "$h" == "opencode" ]]; then
-    _harness_opencode_install "$root"
-    return
-  fi
   file="$root/$(harness_hook_file "$h")"
   reinject="$(harness_reinject_cmd "$h")"
   allow="$(harness_allow_cmd "$h")"
@@ -643,10 +611,6 @@ harness_hooks_install() {
 
 harness_hooks_remove() {
   local root="$1" h="$2" file
-  if [[ "$h" == "opencode" ]]; then
-    _harness_opencode_remove "$root"
-    return 0
-  fi
   file="$root/$(harness_hook_file "$h")"
   [[ -n "$file" && -f "$file" ]] || return 0
   case "$h" in
@@ -684,80 +648,7 @@ harness_hooks_has() {
   local root="$1" h="$2" file
   file="$root/$(harness_hook_file "$h")"
   [[ -n "$file" && -f "$file" ]] || return 1
-  [[ "$h" == "opencode" ]] && return 0
   grep -qF "$HARNESS_HOOK_SCRIPT" "$file"
-}
-
-# ─── OpenCode: settings + plugin ─────────────────────────────────────────────
-#
-# Three files, all under .opencode/ so a host's own opencode.json is never
-# touched:
-#
-#   .opencode/opencode.json         settings: $schema, "permission": "allow",
-#                                   and the MCP servers (merged — keys that are
-#                                   not ours are kept)
-#   .opencode/plugins/byrde-agents.js  the hooks (copied from scripts/hooks/opencode/)
-#   .opencode/byrde-agents.json     the plugin's settings: where the rules are,
-#                                   and allow-all
-#
-# "permission" is only set when the file has none. If somebody chose their own
-# rules, those stay, and the plugin's allow-all hook is the only approval added.
-# Ownership is recorded as ownsPermission in byrde-agents.json, so removal takes
-# back only what was given.
-
-HARNESS_OPENCODE_PLUGIN_SRC="$_HARNESS_AGENTS_ROOT/scripts/hooks/opencode/$HARNESS_MARK.js"
-
-_harness_opencode_settings() { echo "$1/.opencode/$HARNESS_MARK.json"; }
-
-_harness_opencode_install() {
-  local root="$1" cfg settings owns="false"
-  cfg="$root/.opencode/opencode.json"
-  settings="$(_harness_opencode_settings "$root")"
-  mkdir -p "$root/.opencode/plugins"
-  cp "$HARNESS_OPENCODE_PLUGIN_SRC" "$root/.opencode/plugins/$HARNESS_MARK.js"
-
-  # Keep the ownership flag of an earlier install: on a re-run the "allow" in
-  # the file is ours, not the user's.
-  [[ -f "$settings" ]] && owns="$(jq -r '.ownsPermission // false' "$settings" 2>/dev/null || echo false)"
-  if [[ ! -f "$cfg" ]] || ! jq -e 'has("permission")' "$cfg" >/dev/null 2>&1; then
-    owns="true"
-  fi
-  _harness_jq_edit "$cfg" '
-    .["$schema"] = (.["$schema"] // "https://opencode.ai/config.json")
-    | if $owns then .permission = "allow" else . end
-  ' --argjson owns "$owns"
-
-  _harness_jq_edit "$settings" '
-    .rulesDir = $rules | .allowAll = true | .ownsPermission = $owns
-  ' --arg rules "$_HARNESS_AGENTS_ROOT/rules" --argjson owns "$owns"
-}
-
-_harness_opencode_remove() {
-  local root="$1" cfg settings owns="false"
-  cfg="$root/.opencode/opencode.json"
-  settings="$(_harness_opencode_settings "$root")"
-  [[ -f "$settings" ]] && owns="$(jq -r '.ownsPermission // false' "$settings" 2>/dev/null || echo false)"
-  rm -f "$root/.opencode/plugins/$HARNESS_MARK.js"
-  rmdir "$root/.opencode/plugins" 2>/dev/null || true
-  if [[ "$owns" == "true" && -f "$cfg" ]]; then
-    _harness_jq_edit "$cfg" 'if .permission == "allow" then del(.permission) else . end'
-  fi
-  if [[ -f "$settings" ]]; then
-    _harness_jq_edit "$settings" 'del(.rulesDir, .allowAll, .ownsPermission)'
-    _harness_prune_json "$settings" "$root"
-  fi
-  _harness_opencode_prune "$root"
-}
-
-# Drop .opencode/opencode.json once only our $schema is left, and .opencode/
-# itself when that leaves it empty.
-_harness_opencode_prune() {
-  local root="$1" cfg="$1/.opencode/opencode.json"
-  if [[ -f "$cfg" ]] && [[ "$(jq -c 'del(.["$schema"])' "$cfg" 2>/dev/null)" == "{}" ]]; then
-    rm -f "$cfg"
-  fi
-  rmdir "$root/.opencode" 2>/dev/null || true
-  return 0
 }
 
 # ─── Sync: selected in, unselected out ───────────────────────────────────────
@@ -858,10 +749,6 @@ harness_gitignore_entries() {
       fi
       ;;
     antigravity) printf '%s\n' '.agent/' ;;
-    opencode)
-      printf '%s\n' ".opencode/opencode.json" ".opencode/plugins/$HARNESS_MARK.js" ".opencode/$HARNESS_MARK.json"
-      _harness_agents_md_all_ours "$root" && echo 'AGENTS.md'
-      ;;
   esac
   return 0
 }

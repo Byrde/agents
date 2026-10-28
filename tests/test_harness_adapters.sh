@@ -46,12 +46,17 @@ test_selection_prefers_env_then_map_then_default() {
   load_lib
   WORKSPACE_FILE="$SANDBOX/.workspace.agents.json"
   unset BYRDE_HARNESSES
-  assert_eq "opencode" "$(harness_selected)" "with nothing chosen, only OpenCode should be installed"
+  assert_eq "claude" "$(harness_selected)" "with nothing chosen, only Claude Code should be installed"
   echo '{"mode":"mono","repos":[]}' >"$WORKSPACE_FILE"
   harness_save "codex antigravity"
   assert_eq "codex antigravity" "$(harness_selected)" "the saved choice is not read back"
-  assert_eq "claude cursor copilot opencode" "$(harness_unselected)" "unselected is not the complement"
+  assert_eq "claude cursor copilot" "$(harness_unselected)" "unselected is not the complement"
   assert_eq "copilot" "$(BYRDE_HARNESSES=copilot harness_selected)" "the env override does not win"
+  # A map saved by an older version may name a harness that is gone.
+  harness_save "opencode codex"
+  assert_eq "codex" "$(harness_selected)" "an unknown saved harness was not dropped"
+  harness_save "opencode"
+  assert_eq "claude" "$(harness_selected)" "a saved list of only unknown harnesses did not fall back to the default"
 }
 
 test_workspace_refresh_keeps_the_harness_choice() {
@@ -99,8 +104,8 @@ test_antigravity_reads_the_shared_rules_in_place() {
 
 test_codex_sections_keep_the_host_text_and_do_not_grow() {
   load_lib
-  # Neither Codex nor OpenCode selected, so nothing else still needs the
-  # sections and removing them is what init would do.
+  # Codex is not selected, so nothing still needs the sections and
+  # removing them is what init would do.
   export BYRDE_HARNESSES="claude"
   local src="$SANDBOX/src/demo.md" root="$SANDBOX/p"
   make_rule "$src"; mkdir -p "$root"
@@ -116,8 +121,8 @@ test_codex_sections_keep_the_host_text_and_do_not_grow() {
 
 test_codex_removes_an_agents_md_that_was_all_ours() {
   load_lib
-  # Neither Codex nor OpenCode selected, so nothing else still needs the
-  # sections and removing them is what init would do.
+  # Codex is not selected, so nothing still needs the sections and
+  # removing them is what init would do.
   export BYRDE_HARNESSES="claude"
   local src="$SANDBOX/src/demo.md" root="$SANDBOX/p"
   make_rule "$src"; mkdir -p "$root"
@@ -274,130 +279,6 @@ test_the_reinjection_hook_answers_each_harness_in_its_shape() {
     "Copilot reads a top-level additionalContext"
   assert_contains "$(fire_as codex | jq -r '.hookSpecificOutput.additionalContext')" \
     "project-rules-reinjected" "Codex reads hookSpecificOutput.additionalContext"
-}
-
-# ─── OpenCode ────────────────────────────────────────────────────────────────
-
-test_opencode_mcp_uses_its_own_schema() {
-  command -v jq >/dev/null 2>&1 || skip "jq is not on PATH"
-  load_lib
-  local root="$SANDBOX/p" cfg="$SANDBOX/p/.opencode/opencode.json"
-  mkdir -p "$root/.opencode"
-  echo '{"model":"x/y"}' >"$cfg"
-  harness_mcp_put "$root" opencode github "$GITHUB_SPEC"
-  harness_mcp_put "$root" opencode localsrv "$STDIO_SPEC"
-  assert_json "$cfg" '.model' "x/y" "the host's own settings were lost"
-  assert_json "$cfg" '.mcp.github.type' "remote" "a URL server is not a remote server"
-  assert_json "$cfg" '.mcp.github.headers.Authorization' 'Bearer {env:GH_TOKEN}' \
-    "OpenCode substitutes {env:VAR}, not \${env:VAR}"
-  assert_json "$cfg" '.mcp.localsrv.command | join(" ")' "/usr/bin/python3 -m srv" \
-    "a local server's command and args are one array"
-  assert_json "$cfg" '.mcp.localsrv.environment.K' "v" "a local server's env goes in environment"
-  harness_mcp_remove "$root" opencode github
-  harness_mcp_remove "$root" opencode localsrv
-  assert_json "$cfg" 'has("mcp")' "false" "an emptied mcp block was left behind"
-  assert_json "$cfg" '.model' "x/y" "removal took the host's settings with it"
-}
-
-test_opencode_settings_allow_all_only_when_unset() {
-  command -v jq >/dev/null 2>&1 || skip "jq is not on PATH"
-  load_lib
-  local root="$SANDBOX/p" cfg="$SANDBOX/p/.opencode/opencode.json"
-  mkdir -p "$root"
-  harness_hooks_install "$root" opencode
-  harness_hooks_install "$root" opencode
-  assert_json "$cfg" '.permission' "allow" "an unset permission was not opened up"
-  assert_json "$root/.opencode/byrde-agents.json" '.ownsPermission' "true" \
-    "a re-run forgot that the permission is ours"
-  assert_file "$root/.opencode/plugins/byrde-agents.js" "the plugin was not installed"
-  harness_hooks_remove "$root" opencode
-  [ -e "$root/.opencode" ] && fail "removal left .opencode/ behind: $(find "$root/.opencode")"
-
-  mkdir -p "$root/.opencode"
-  echo '{"permission":{"bash":"ask"}}' >"$cfg"
-  harness_hooks_install "$root" opencode
-  assert_json "$cfg" '.permission.bash' "ask" "the user's own permission rules were overwritten"
-  harness_hooks_remove "$root" opencode
-  assert_json "$cfg" '.permission.bash' "ask" "removal took the user's permission rules"
-}
-
-test_agents_md_stays_while_codex_or_opencode_wants_it() {
-  load_lib
-  local src="$SANDBOX/src/demo.md" root="$SANDBOX/p"
-  make_rule "$src"; mkdir -p "$root"
-  export BYRDE_HARNESSES="opencode"
-  harness_rule_install "$root" opencode "$src"
-  # init drops Codex (unselected) — the section is OpenCode's too.
-  harness_rule_remove "$root" codex demo
-  assert_contains "$(cat "$root/AGENTS.md")" "RULE_BODY_MARKER" \
-    "dropping Codex removed the rules OpenCode reads"
-  harness_rule_purge "$root" demo
-  assert_no_file "$root/AGENTS.md" "an uninstall left the shared sections behind"
-}
-
-# run_plugin <script> — run JS against the plugin under Bun (or Node).
-run_plugin() {
-  local dir="$SANDBOX/oc/.opencode"
-  mkdir -p "$dir/plugins" "$SANDBOX/rules"
-  cp "$REPO_ROOT/scripts/hooks/opencode/byrde-agents.js" "$dir/plugins/byrde-agents.mjs"
-  printf -- '---\ndescription: d\n---\n\nGLOBAL_RULE_MARKER\n' >"$SANDBOX/rules/global.md"
-  printf 'other\n' >"$SANDBOX/rules/development.md"
-  jq -n --arg r "$SANDBOX/rules" '{rulesDir: $r, allowAll: true}' >"$dir/byrde-agents.json"
-  printf '%s\n' "import plugin from \"$dir/plugins/byrde-agents.mjs\"" "$1" >"$SANDBOX/run.mjs"
-  if command -v bun >/dev/null 2>&1; then
-    BYRDE_RULES_REINJECT_EVERY=3 bun "$SANDBOX/run.mjs"
-  else
-    BYRDE_RULES_REINJECT_EVERY=3 node "$SANDBOX/run.mjs"
-  fi
-}
-
-test_opencode_plugin_v1_hooks() {
-  command -v jq >/dev/null 2>&1 || skip "jq is not on PATH"
-  command -v bun >/dev/null 2>&1 || command -v node >/dev/null 2>&1 || skip "neither bun nor node is on PATH"
-  local out
-  out="$(run_plugin '
-const h = await plugin.server({})
-const outs = []
-for (let i = 1; i <= 3; i++) { const o = { title: "", output: "tool said " + i, metadata: {} }; await h["tool.execute.after"]({ tool: "read", sessionID: "s", callID: String(i), args: {} }, o); outs.push(o.output) }
-const mcp = { content: [{ type: "text", text: "x" }] }
-for (let i = 0; i < 3; i++) await h["tool.execute.after"]({ tool: "mcp_x", sessionID: "m", callID: "c", args: {} }, mcp)
-const perm = { status: "ask" }; await h["permission.ask"]({}, perm)
-const comp = { context: [] }; await h["experimental.session.compacting"]({ sessionID: "s" }, comp)
-console.log(JSON.stringify({ outs, mcp: mcp.content.length, perm: perm.status, comp: comp.context.join("") }))
-')" || fail "the plugin did not run: $out"
-  local first third
-  first="$(printf '%s' "$out" | jq -r '.outs[0]')"; third="$(printf '%s' "$out" | jq -r '.outs[2]')"
-  assert_eq "tool said 1" "$first" "the plugin injected before the cadence boundary"
-  assert_contains "$third" "GLOBAL_RULE_MARKER" "the third tool result does not carry the lead rule"
-  assert_contains "$third" "development.md" "the other rules are not named"
-  assert_not_contains "$third" "description: d" "the rule's frontmatter leaked into the injection"
-  assert_eq "2" "$(printf '%s' "$out" | jq -r '.mcp')" "an MCP tool result got no injection"
-  assert_eq "allow" "$(printf '%s' "$out" | jq -r '.perm')" "permission.ask was not approved"
-  assert_contains "$(printf '%s' "$out" | jq -r '.comp')" "GLOBAL_RULE_MARKER" "compaction does not carry the rules"
-}
-
-test_opencode_plugin_v2_hooks() {
-  command -v jq >/dev/null 2>&1 || skip "jq is not on PATH"
-  command -v bun >/dev/null 2>&1 || command -v node >/dev/null 2>&1 || skip "neither bun nor node is on PATH"
-  local out
-  out="$(run_plugin '
-const hooks = {}
-const ctx = {
-  tool: { hook: async (n, f) => { hooks["tool." + n] = f } },
-  permission: { hook: async (n, f) => { hooks["permission." + n] = f } },
-  session: { hook: async (n, f) => { hooks["session." + n] = f } },
-}
-await plugin.setup(ctx)
-const results = []
-for (let i = 1; i <= 3; i++) { const e = { status: "completed", sessionID: "s", tool: "read", result: { content: [{ type: "text", text: "r" + i }] } }; hooks["tool.execute.after"](e); results.push(e.result.content.length) }
-const asked = { effect: "ask" }; hooks["permission.evaluate"](asked)
-const comp = { system: [] }; hooks["session.compaction"](comp)
-console.log(JSON.stringify({ results, effect: asked.effect, comp: comp.system.map((p) => p.text).join("") }))
-')" || fail "the plugin did not run: $out"
-  assert_eq "[1,1,2]" "$(printf '%s' "$out" | jq -c '.results')" \
-    "the rules were not appended to the third tool result only"
-  assert_eq "allow" "$(printf '%s' "$out" | jq -r '.effect')" "permission evaluate was not approved"
-  assert_contains "$(printf '%s' "$out" | jq -r '.comp')" "GLOBAL_RULE_MARKER" "compaction does not carry the rules"
 }
 
 # ─── init.sh end to end ──────────────────────────────────────────────────────

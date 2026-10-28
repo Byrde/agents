@@ -11,7 +11,6 @@
 # Capability keys (per-capability granularity):
 #   github-source-control  github-projects     google-analytics
 #   jira                   figma               figma-use
-#   model-router
 #
 # Format — deliberately simple so it parses with grep/sed (no yq, Bash 3.2 ok):
 #
