@@ -28,18 +28,26 @@ Inputs:
 
 Scoring:
 
-  metric     one number from Artificial Analysis, turned into a percentile
-             against every model AA lists, so adding a provider does not move
-             the other scores. Lower-is-better metrics (price, latency) are
-             flipped. Cost is the deployment's own price when OpenCode lists
-             one (a free model scores best), else the AA list price.
+  metric     one number from Artificial Analysis, scaled against every model
+             AA lists, so adding a provider does not move the other scores.
+             A quality metric is the score divided by the best score: within
+             5% means within 5% of the best.
+  cost       the estimated cost of one answer: a fixed context and answer
+             size, plus the thinking tokens, at the model's token prices.
+             Thinking tokens are the time to the first answer token multiplied
+             by the output speed, so a higher reasoning effort costs more. The
+             prices are the deployment's own when OpenCode lists them (a free
+             model costs nothing), else the AA list prices.
   dimension  a weighted mean of the metrics the model has.
-  task       a weighted mean of the dimensions in the skill's profile. A
-             dimension with no data counts as the median (0.5). Every profile
-             weighs cost.
+  profile    quality weights and a margin. A dimension with no data counts as
+             0.5, half the best score: a model is not rewarded for a gap in
+             its benchmarks.
 
-  The best canonical model wins. On a tie, the deployment listed first in the
-  models file wins.
+  Selection is quality first. The candidates whose quality is within the
+  profile's margin of the best one form the pool. In the pool, the cheapest
+  answer wins; a candidate with no cost estimate comes last. On a tie, the
+  faster output wins, then the better quality, then the deployment listed
+  first in the models file.
 
 Python 3.9, standard library only.
 """
@@ -57,53 +65,55 @@ ATTRIBUTION = "Artificial Analysis (https://artificialanalysis.ai/)"
 BUILTIN_PROVIDER = "opencode"
 
 MIN_COVERAGE = 0.5
-UNMEASURED = 0.5  # the median: what a dimension with no data counts as
+UNMEASURED = 0.5  # half the best score: what a dimension with no data counts as
 
 # ─── Metrics ─────────────────────────────────────────────────────────────────
 #
-# name → (paths into an AA model entry, higher is better). The first path with
+# name → paths into an AA model entry; higher is better. The first path with
 # a value is used: AA retires benchmark versions, and newer models only carry
 # the newer one.
 
 METRICS = {
-    "intelligence_index": (["evaluations.artificial_analysis_intelligence_index"], True),
-    "coding_index": (["evaluations.artificial_analysis_coding_index"], True),
-    "gpqa": (["evaluations.gpqa"], True),
-    "hle": (["evaluations.hle"], True),
-    "livecodebench": (["evaluations.livecodebench"], True),
-    "scicode": (["evaluations.scicode"], True),
-    "ifbench": (["evaluations.ifbench"], True),
-    "lcr": (["evaluations.lcr"], True),
-    "aime": (["evaluations.aime_25", "evaluations.aime"], True),
-    "terminalbench": (
-        ["evaluations.terminalbench_v4_0", "evaluations.terminalbench_v2_1", "evaluations.terminalbench_hard"],
-        True,
-    ),
-    "tau2": (["evaluations.tau2"], True),
-    "price": (["pricing.price_1m_blended_3_to_1"], False),
-    "output_speed": (["median_output_tokens_per_second"], True),
-    "latency": (["median_time_to_first_answer_token", "median_time_to_first_token_seconds"], False),
+    "intelligence_index": ["evaluations.artificial_analysis_intelligence_index"],
+    "coding_index": ["evaluations.artificial_analysis_coding_index"],
+    "scicode": ["evaluations.scicode"],
+    "livecodebench": ["evaluations.livecodebench"],
+    "terminalbench": ["evaluations.terminalbench_v4_0", "evaluations.terminalbench_v2_1", "evaluations.terminalbench_hard"],
+    "tau2": ["evaluations.tau2"],
+    "tau_banking": ["evaluations.tau_banking"],
+    "hle": ["evaluations.hle"],
+    "gpqa": ["evaluations.gpqa"],
+    "aime": ["evaluations.aime_25", "evaluations.aime"],
+    "lcr": ["evaluations.lcr"],
 }
 
+# Each dimension uses the benchmarks AA publishes for current models. A sparse
+# benchmark (coding index, τ²-bench, GPQA) counts when a model has it.
+# AA has no instruction-following or hallucination data for current models,
+# so neither is a dimension.
 DIMENSIONS = {
     "intelligence": {"intelligence_index": 1},
-    "coding": {"coding_index": 0.5, "livecodebench": 0.25, "scicode": 0.25},
-    "agentic": {"terminalbench": 0.6, "tau2": 0.4},
-    "reasoning": {"gpqa": 0.35, "hle": 0.35, "aime": 0.3},
+    "coding": {"coding_index": 0.5, "scicode": 0.3, "livecodebench": 0.2},
+    "agentic": {"terminalbench": 0.7, "tau2": 0.15, "tau_banking": 0.15},
+    "reasoning": {"hle": 0.5, "gpqa": 0.25, "aime": 0.25},
     "long-context": {"lcr": 1},
-    "instruction-following": {"ifbench": 1},
-    "cost": {"price": 1},
-    "speed": {"output_speed": 0.6, "latency": 0.4},
 }
 
+# The size of one answer, for the cost estimate: an agent turn reads a lot of
+# context and writes a short answer, plus whatever it thinks.
+ANSWER_INPUT_TOKENS = 10000
+ANSWER_OUTPUT_TOKENS = 1000
+
 # What a kind of work needs from a model. Skills with the same needs share a
-# profile, so they land on the same model instead of whichever one a
-# benchmark-noise margin favours.
+# profile, so they land on the same model. The margin is how far below the
+# best quality a model can be and still win on cost. 5% is about the noise
+# between two benchmark runs. Quick edits need a model that is good enough,
+# not one near the best, so "fast" takes half the best quality.
 PROFILES = {
-    "deep": {"reasoning": 0.35, "intelligence": 0.25, "long-context": 0.15, "instruction-following": 0.1, "cost": 0.15},
-    "build": {"coding": 0.35, "agentic": 0.3, "reasoning": 0.1, "cost": 0.25},
-    "fast": {"speed": 0.3, "cost": 0.4, "coding": 0.3},
-    "write": {"instruction-following": 0.4, "intelligence": 0.25, "cost": 0.25, "speed": 0.1},
+    "deep": {"quality": {"reasoning": 0.35, "intelligence": 0.35, "long-context": 0.2, "agentic": 0.1}, "margin": 0.05},
+    "build": {"quality": {"coding": 0.4, "agentic": 0.4, "intelligence": 0.2}, "margin": 0.05},
+    "fast": {"quality": {"coding": 0.5, "intelligence": 0.5}, "margin": 0.5},
+    "write": {"quality": {"intelligence": 0.6, "long-context": 0.4}, "margin": 0.05},
 }
 
 # The shipped practice skills: their profile, and the description OpenCode
@@ -275,15 +285,10 @@ class AAIndex(object):
             self.by_tokens.setdefault(token_key(base), set()).add(base)
             self.by_loose.setdefault(token_key(loose_slug(base)), set()).add(base)
         self.populations = {}
-        for paths, _ in METRICS.values():
+        for paths in METRICS.values():
             for p in paths:
-                vals = [v for v in (dig(e, p) for e in entries) if v is not None and self._valid(p, v)]
-                self.populations[p] = sorted(vals)
+                self.populations[p] = sorted(v for v in (dig(e, p) for e in entries) if v is not None)
 
-    @staticmethod
-    def _valid(path, v):
-        # AA reports 0 for an unmeasured price or speed; a real one is positive.
-        return v > 0 if not path.startswith("evaluations.") else True
 
     def match(self, canonical):
         creator = canonical.split("/")[0].lower() if "/" in canonical else ""
@@ -298,30 +303,44 @@ class AAIndex(object):
                 return hits[0]
         return None
 
-    def percentile(self, path, value, higher):
-        pop = self.populations.get(path) or []
-        if not pop:
-            return None
-        below = sum(1 for v in pop if v < value)
-        equal = sum(1 for v in pop if v == value)
-        p = (below + 0.5 * equal) / len(pop)
-        return p if higher else 1.0 - p
-
-    def metric(self, entry, name, price=None):
-        paths, higher = METRICS[name]
-        if name == "price" and price is not None:
-            # The deployment's own price, placed among AA's list prices.
-            pop = self.populations.get(paths[0]) or []
-            if not pop:
-                return None
-            if price <= 0:
-                return 1.0
-            return self.percentile(paths[0], price, higher)
-        for p in paths:
+    def metric(self, entry, name):
+        for p in METRICS[name]:
             v = dig(entry, p)
-            if v is not None and self._valid(p, v):
-                return self.percentile(p, v, higher)
+            if v is not None:
+                return self.relative(p, v)
         return None
+
+    def relative(self, path, value):
+        """The score as a share of the best score AA lists for the metric."""
+        pop = self.populations.get(path) or []
+        top = pop[-1] if pop else 0
+        return min(1.0, value / top) if top > 0 else None
+
+
+def thinking_tokens(entry):
+    """Estimated tokens before the first answer token, or None without speed data."""
+    tps = dig(entry, "median_output_tokens_per_second")
+    wait = dig(entry, "median_time_to_first_answer_token") or dig(entry, "median_time_to_first_token_seconds")
+    if not tps or tps <= 0 or wait is None or wait < 0:
+        return None
+    return wait * tps
+
+
+def cost_per_answer(entry, prices=None):
+    """Estimated dollars for one answer. prices: (input, output) per million
+    tokens from the deployment, or None for the AA list prices."""
+    thinking = thinking_tokens(entry)
+    if thinking is None:
+        return None
+    if prices is None:
+        blended = dig(entry, "pricing.price_1m_blended_3_to_1")
+        pin = dig(entry, "pricing.price_1m_input_tokens") or blended
+        pout = dig(entry, "pricing.price_1m_output_tokens") or blended
+        if not pin or not pout:
+            return None  # AA reports 0 for an unknown price
+        prices = (pin, pout)
+    pin, pout = prices
+    return (ANSWER_INPUT_TOKENS * pin + (ANSWER_OUTPUT_TOKENS + thinking) * pout) / 1e6
 
 
 # ─── Scoring ─────────────────────────────────────────────────────────────────
@@ -337,20 +356,20 @@ def weighted(parts):
     return sum(w * v for w, v in have) / got, got / total
 
 
-def deployment_price(model):
-    """Blended 3:1 price per million tokens from OpenCode's cost list, or None."""
+def deployment_prices(model):
+    """(input, output) per million tokens from OpenCode's cost list, or None."""
     cost = model.get("cost")
     if isinstance(cost, list):
         cost = cost[0] if cost else None
     if not isinstance(cost, dict) or "input" not in cost or "output" not in cost:
         return None
-    return (3 * float(cost["input"]) + float(cost["output"])) / 4
+    return float(cost["input"]), float(cost["output"])
 
 
-def dimension_scores(index, entry, price):
+def dimension_scores(index, entry):
     out = {}
     for name, metrics in DIMENSIONS.items():
-        out[name] = weighted([(float(w), index.metric(entry, m, price)) for m, w in metrics.items()])
+        out[name] = weighted([(float(w), index.metric(entry, m)) for m, w in metrics.items()])
     return out
 
 
@@ -404,35 +423,48 @@ def evaluate(skills, models, catalog, aa):
             # the suffix-less AA entry (or the only one there is).
             entry = efforts.get(None) or efforts[sorted(efforts, key=lambda k: k or "")[0]]
             picks = [(None, entry)]
-        price = deployment_price(m)
+        prices = deployment_prices(m)
         for eff, entry in picks:
             candidates.append({
                 "ref": ref + ("#" + eff if eff else ""),
                 "canonical": canonical,
                 "pos": pos,
                 "benchmark": entry.get("slug"),
-                "dims": dimension_scores(index, entry, price),
+                "cost": cost_per_answer(entry, prices),
+                "speed": dig(entry, "median_output_tokens_per_second") or 0,
+                "dims": dimension_scores(index, entry),
             })
 
     assignments = {}
     for name in sorted(skills):
         profile = skill_profile(name)
+        prof = PROFILES[profile]
         scored = []
         for c in candidates:
-            score, cov = task_score(c["dims"], PROFILES[profile])
-            if score is None or cov < MIN_COVERAGE:
+            quality, cov = task_score(c["dims"], prof["quality"])
+            if quality is None or cov < MIN_COVERAGE:
                 continue
-            scored.append((round(score, 6), c, cov))
-        scored.sort(key=lambda t: (-t[0], t[1]["pos"], t[1]["ref"]))
+            scored.append({"c": c, "quality": round(quality, 6), "coverage": cov})
         if not scored:
             assignments[name] = {"model": None, "profile": profile, "reason": "no scored model meets the coverage floor"}
             continue
-        score, best, cov = scored[0]
-        a = {"model": best["ref"], "profile": profile, "benchmark": best["benchmark"],
-             "score": rounded(score), "coverage": rounded(cov, 2)}
-        runner = next((t for t in scored if t[1]["canonical"] != best["canonical"]), None)
-        if runner:
-            a["runnerUp"] = {"model": runner[1]["ref"], "score": rounded(runner[0])}
+        floor = max(s["quality"] for s in scored) * (1 - prof["margin"])
+        for s in scored:
+            s["inMargin"] = s["quality"] >= floor
+        # The pool, cheapest first; then everything else, best quality first.
+        def order(s):
+            c = s["c"]
+            if not s["inMargin"]:
+                return (1, 0, 0, -s["quality"], c["pos"], c["ref"])
+            return (0, c["cost"] is None, c["cost"] or 0, -c["speed"], -s["quality"], c["pos"], c["ref"])
+        scored.sort(key=order)
+        best = scored[0]
+        a = {"model": best["c"]["ref"], "profile": profile, "benchmark": best["c"]["benchmark"],
+             "quality": rounded(best["quality"]), "coverage": rounded(best["coverage"], 2),
+             "costPerAnswer": rounded(best["c"]["cost"], 4), "margin": prof["margin"],
+             "top": [{"model": s["c"]["ref"], "quality": rounded(s["quality"]),
+                      "costPerAnswer": rounded(s["c"]["cost"], 4), "inMargin": s["inMargin"]}
+                     for s in scored[:3]]}
         assignments[name] = a
     return assignments, sorted(unmatched.items())
 
@@ -479,6 +511,14 @@ def render(skills, assignments, root, previous):
     return sorted(written), notes
 
 
+def money(x):
+    if x is None:
+        return "cost unknown"
+    if x == 0:
+        return "free"
+    return "~$%.3f/answer" % x if x < 0.1 else "~$%.2f/answer" % x
+
+
 def report(skills, assignments, previous, mode, unmatched):
     lines = []
     width = max([len(s) for s in skills] + [4])
@@ -491,12 +531,13 @@ def report(skills, assignments, previous, mode, unmatched):
         if not model:
             lines.append("  %-*s  inherit%s" % (width, name, change))
             continue
-        lines.append("  %-*s  [%s] %s  score %.3f  coverage %.2f%s"
-                     % (width, name, a["profile"], model, a["score"], a["coverage"], change))
-        ru = a.get("runnerUp")
-        if ru:
-            lines.append("  %-*s    runner-up %s  %.3f" % (width, "", ru["model"], ru["score"]))
+        lines.append("  %-*s  [%s] %s%s" % (width, name, a["profile"], model, change))
+        for i, t in enumerate(a.get("top") or []):
+            note = "" if t["inMargin"] else "   more than %d%% below the best quality" % round(a["margin"] * 100)
+            lines.append("  %-*s    %d. %-42s quality %.3f  %s%s"
+                         % (width, "", i + 1, t["model"], t["quality"], money(t["costPerAnswer"]), note))
     if mode == "scored":
+        lines.append("  Quality first: within a profile's margin of the best quality, the cheapest answer wins.")
         if unmatched:
             lines.append("  ? %d model(s) have no Artificial Analysis match and were not scored:" % len(unmatched))
             for canonical, refs in unmatched[:12]:

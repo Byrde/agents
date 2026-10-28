@@ -20,7 +20,8 @@ make_host() {
 }
 
 # OpenCode's /api/model answer. $1: "builtin" (only OpenCode's own provider),
-# "fuelix" (plus Fuel iX), or "zen-copy" (Fuel iX, and a free Zen copy of flash).
+# "fuelix" (plus Fuel iX), "zen-copy" (Fuel iX, and a free Zen copy of flash), or
+# "zen-weak" (Fuel iX, and a free Zen model that is well below Opus).
 write_models() {
   jq -n --arg kind "$1" '
     def m($p; $id; $variants; $cost): {providerID: $p, id: $id, modelID: $id,
@@ -29,30 +30,35 @@ write_models() {
       status: "active", enabled: true, settings: {apiKey: "SECRET-MUST-NOT-LEAK"}};
     [m("opencode"; "big-pickle"; []; [{input: 0, output: 0}])]
     + (if $kind == "builtin" then [] else [
-        m("fuelix-anthropic"; "claude-opus-5-5"; ["low", "high"]; []),
+        m("fuelix-anthropic"; "claude-opus-5-5"; ["low", "high", "max"]; []),
         m("fuelix"; "gemini-3.8-flash"; []; [])] end)
     + (if $kind == "zen-copy" then [m("opencode"; "gemini-3.8-flash"; []; [{input: 0, output: 0}])] else [] end)
+    + (if $kind == "zen-weak" then [m("opencode"; "glm-5.3-flash"; []; [{input: 0, output: 0}])] else [] end)
   ' >"$SANDBOX/models-$1.json"
   echo "$SANDBOX/models-$1.json"
 }
 
 # Artificial Analysis: Opus is strong and dear, Flash is weaker, cheap and fast,
-# and filler entries give the percentiles a population.
+# and 100 filler entries give the percentiles a realistic population. Opus at max effort is
+# one point better than at high, but thinks for 400 s instead of 15 s.
 write_aa() {
   jq -n '
-    def e($slug; $creator; $score; $price; $speed): {slug: $slug, name: $slug,
+    def e($slug; $name; $creator; $score; $price; $speed; $ttfa): {slug: $slug, name: $name,
       model_creator: {slug: $creator}, release_date: "2026-01-01",
       evaluations: {artificial_analysis_intelligence_index: $score, artificial_analysis_coding_index: $score,
         gpqa: ($score / 100), hle: ($score / 100), aime_25: ($score / 100), livecodebench: ($score / 100),
         scicode: ($score / 100), ifbench: ($score / 100), lcr: ($score / 100),
         terminalbench_v4_0: ($score / 100), tau2: ($score / 100)},
-      pricing: {price_1m_blended_3_to_1: $price},
-      median_output_tokens_per_second: $speed, median_time_to_first_token_seconds: (100 / $speed)};
+      pricing: {price_1m_blended_3_to_1: $price, price_1m_input_tokens: $price, price_1m_output_tokens: ($price * 4)},
+      median_output_tokens_per_second: $speed, median_time_to_first_token_seconds: $ttfa,
+      median_time_to_first_answer_token: $ttfa};
     {data: ([
-      e("claude-opus-5-5-high"; "anthropic"; 90; 30; 50),
-      e("claude-opus-5-5-low"; "anthropic"; 80; 30; 60),
-      e("gemini-3-8-flash"; "google"; 60; 0.5; 300)]
-      + [range(0; 10) as $i | e("filler-\($i)"; "x"; (40 + $i * 4); (1 + $i * 3); (40 + $i * 20))])}
+      e("claude-opus-5-5"; "Claude Opus 5.5 (Max)"; "anthropic"; 91; 30; 50; 400),
+      e("claude-opus-5-5-high"; "claude-opus-5-5-high"; "anthropic"; 90; 30; 50; 15),
+      e("claude-opus-5-5-low"; "claude-opus-5-5-low"; "anthropic"; 80; 30; 60; 2),
+      e("glm-5-3-flash"; "glm-5-3-flash"; "zai"; 70; 1; 150; 5),
+      e("gemini-3-8-flash"; "gemini-3-8-flash"; "google"; 60; 0.5; 300; 1)]
+      + [range(0; 100) as $i | e("filler-\($i)"; "filler-\($i)"; "x"; (40 + ($i % 37)); (1 + ($i % 30)); (40 + ($i % 50) * 4); (1 + ($i % 20)))])}
   ' >"$SANDBOX/aa.json"
   echo "$SANDBOX/aa.json"
 }
@@ -141,6 +147,32 @@ test_configured_providers_are_scored_per_skill() {
   assert_not_contains "$(cat "$HOST/.opencode/.byrde/models.json")" "SECRET-MUST-NOT-LEAK" \
     "provider settings were written to the cache"
   assert_contains "$out" "Artificial Analysis" "the benchmark data is not credited"
+}
+
+test_a_higher_effort_must_earn_its_cost() {
+  setup
+  AA_FILE="$(write_aa)" run_init "$HOST" "$(write_models fuelix)" >/dev/null 2>&1 || fail "init failed"
+  assert_eq "fuelix-anthropic/claude-opus-5-5#high" "$(agent_model plan)" \
+    "max effort won on one point of quality, at about 25 times the thinking"
+}
+
+test_a_free_model_well_below_the_best_does_not_win_on_price() {
+  setup
+  AA_FILE="$(write_aa)" run_init "$HOST" "$(write_models zen-weak)" >/dev/null 2>&1 || fail "init failed"
+  assert_eq "fuelix-anthropic/claude-opus-5-5#high" "$(agent_model develop)" \
+    "a free model far below the best quality won develop on price"
+}
+
+test_the_report_ranks_the_top_three_with_their_cost() {
+  setup
+  local out
+  out="$(AA_FILE="$(write_aa)" run_init "$HOST" "$(write_models fuelix)" 2>&1)" || fail "init failed: $out"
+  local block; block="$(printf '%s\n' "$out" | sed -n '/^  plan /,/^  [a-z]/p')"
+  assert_contains "$block" "1. fuelix-anthropic/claude-opus-5-5#high" "the pick is not ranked first"
+  assert_contains "$block" "2. " "the report does not show a second candidate"
+  assert_contains "$block" "3. " "the report does not show a third candidate"
+  assert_contains "$block" "/answer" "the report does not show the estimated cost per answer"
+  assert_contains "$block" "quality" "the report does not show the quality score"
 }
 
 test_a_free_zen_copy_wins_on_cost_once_a_provider_is_configured() {
