@@ -1,6 +1,6 @@
 # .agents
 
-A library of self-contained, opinionated agent skills and rules for software development, adapted on install to Claude Code, Cursor, OpenAI Codex, GitHub Copilot and Google Antigravity. OpenCode is not supported here: it gets its own init and setup scripts. Drop it into any repository as a submodule. Two kinds of skills compose freely via shared verb+noun vocabulary ([`skills/CAPABILITIES.md`](skills/CAPABILITIES.md)): **practice skills** (the *what* — `plan`, `architect`, `design`, `develop`, `test`, `debug`, `review`, `quick-edit`, `docs`) ship with the repo. **Tool skills** (the *how* — `github-projects`, `jira`, `google-analytics`, `figma`, the vendored `figma-use`) are installed per-project by setup scripts. Some capabilities are always-on **rules** instead of opt-in skills — notably `workspace` (multi-repo routing) and `github-source-control` (branches/PRs/review) — installed automatically by `init.sh`.
+A library of self-contained, opinionated agent skills and rules for software development, adapted on install to Claude Code, Cursor, OpenAI Codex, GitHub Copilot and Google Antigravity. OpenCode has its own installer, which turns the practice skills into agents (see [OpenCode](#opencode)). Drop it into any repository as a submodule. Two kinds of skills compose freely via shared verb+noun vocabulary ([`skills/CAPABILITIES.md`](skills/CAPABILITIES.md)): **practice skills** (the *what* — `plan`, `architect`, `design`, `develop`, `test`, `debug`, `review`, `quick-edit`, `docs`) ship with the repo. **Tool skills** (the *how* — `github-projects`, `jira`, `google-analytics`, `figma`, the vendored `figma-use`) are installed per-project by setup scripts. Some capabilities are always-on **rules** instead of opt-in skills — notably `workspace` (multi-repo routing) and `github-source-control` (branches/PRs/review) — installed automatically by `init.sh`.
 
 ## What's included
 
@@ -163,6 +163,85 @@ Optional setup (run separately when you want them, see [Setup Tools](#setup-tool
 .agents/scripts/setup/setup-figma.sh uninstall    # remove Figma skills (incl. figma-use) + MCP server
 ```
 
+## OpenCode
+
+OpenCode 2 has its own installer in [`scripts/opencode/`](scripts/opencode/). It does not use `init.sh` or the harness adapters. The practice skills become **agents**, and each agent runs on the model that suits its kind of work.
+
+```bash
+cd /your/project
+.agents/scripts/opencode/setup-fuelix.sh              # optional: add Fuel iX models as a provider
+.agents/scripts/opencode/init.sh                      # install, then score the models
+.agents/scripts/opencode/init.sh evaluate             # re-score after a provider change
+.agents/scripts/opencode/init.sh uninstall            # remove what init wrote
+```
+
+**Requires:** OpenCode 2, `jq`, `python3`, `curl`, `git`. For scoring, an [Artificial Analysis](https://artificialanalysis.ai/) API key (free tier) in `ARTIFICIAL_ANALYSIS_API_KEY`.
+
+### What the OpenCode init writes
+
+| File | Content |
+|---|---|
+| `.opencode/agents/<skill>.md` | One agent per practice skill, `mode: all`: switch to it with Tab, or let the main agent delegate to it. `model:` is the scored pick. With no pick, the agent inherits the session's model. |
+| `.opencode/opencode.json` | Merged, never replaced. `permissions` allows every tool call and denies each practice skill as a *skill*, because it is an agent now. `mcp.servers.github` is the GitHub MCP server. |
+| `.opencode/plugins/byrde-agents.js` | The plugin. See [The plugin](#the-plugin). |
+| `.opencode/byrde-agents.json` | The plugin's settings, and the last evaluation. |
+| `AGENTS.md` | One fenced section per rule in `.agents/rules/`. Your text outside the fences stays. |
+| `memory/` | Project memory: git-tracked and shared with the team. |
+| `.workspace.agents.json` | The workspace map, shared with `init.sh`. |
+| `.gitignore` | A `byrde-agents opencode` block for the generated files. |
+
+The agent files have no body. In OpenCode, a body replaces the default system prompt, and the agent then loses OpenCode's guidance on how to use its tools. The plugin adds the skill's method to the prompt instead.
+
+The GitHub MCP server reads `GITHUB_PERSONAL_ACCESS_TOKEN`. Export it before you start OpenCode: `export GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)"`. The server has `oauth: false`. Without it, a missing token makes OpenCode wait for an OAuth flow that GitHub cannot complete, and `opencode run` hangs.
+
+### Model scoring
+
+Every run of `init.sh` and `init.sh evaluate` scores the models again:
+
+1. It lists the models that OpenCode can use in this project (`opencode api GET /api/model`).
+2. It matches each model to an Artificial Analysis benchmark entry. A model with no match is reported and not scored.
+3. It scores each model against the profile of each practice skill, and pins the best one in the agent file.
+
+| Profile | Skills | Weights |
+|---|---|---|
+| `deep` | plan, architect, design, review | reasoning, intelligence, long context, instruction following, cost |
+| `build` | develop, test, debug | coding, agentic, reasoning, cost |
+| `fast` | quick-edit | speed, cost, coding |
+| `write` | docs | instruction following, intelligence, cost, speed |
+
+Every profile weighs **cost**. The cost is the deployment's own price when OpenCode lists one, so a free model gets the best cost score. Otherwise it is the Artificial Analysis list price.
+
+The agents **inherit** the session's model in these cases:
+
+- The only provider is OpenCode's built-in one. Its free models count only when you configure another provider.
+- `ARTIFICIAL_ANALYSIS_API_KEY` is not set and no earlier download is cached. With a cache, init reuses it and says so.
+- No model meets the coverage floor for that skill.
+
+Benchmark data: [Artificial Analysis](https://artificialanalysis.ai/). Their free API requires attribution, so the report credits it.
+
+### The plugin
+
+The plugin uses three OpenCode 2 hooks:
+
+| Hook | What it does |
+|---|---|
+| `session.hook("context")` | For a practice agent, adds that skill's `SKILL.md` to the system prompt. For every agent, adds where memory lives and the `memory/MEMORY.md` index. |
+| `tool.hook("execute.after")` | Every `BYRDE_RULES_REINJECT_EVERY` tool calls (default 12, `0` turns it off), appends the lead rule to the tool result. |
+
+Allow-all is a `permissions` rule in `opencode.json`, not a hook.
+
+### Fuel iX
+
+`setup-fuelix.sh` lists the models that Fuel iX serves and asks which ones to add. `--models a,b,c` skips the question. Each family goes to the provider for its API:
+
+| Provider | Models | Package |
+|---|---|---|
+| `fuelix-anthropic` | `claude-*` | `@ai-sdk/anthropic` |
+| `fuelix-openai` | `gpt-*`, `o<digit>*` | `@ai-sdk/openai` (Responses API) |
+| `fuelix` | all others | `@ai-sdk/openai-compatible` (Chat Completions) |
+
+The three providers belong to the script. A re-run replaces their models with the new choice, then re-runs the evaluation. The key stays in `FUELIX_API_KEY`: the config names it, and OpenCode reads it at run time.
+
 ## Setup Tools
 
 ### GitHub
@@ -323,6 +402,7 @@ Offline suites cover the installer itself, and live tests verify that the hooks 
 | `test_gh_account_scope.sh` | Which GitHub account a workspace's token comes from |
 | `test_workspace_trust.sh` | The Claude Code workspace-trust grant and its revocation |
 | `test_figma_setup.sh` | `setup-figma.sh` |
+| `test_opencode.sh` | The OpenCode installer, the model scoring, `setup-fuelix.sh` and the plugin |
 | `test_hooks_live.sh` | Live: the hooks inside a real `claude` session (calls the API) |
 
 The live tests start the `claude` CLI in a sandbox project, drive it through a tool-calling loop, and read the hook events out of the `stream-json` transcript. They call the API, so the run needs `claude` on `PATH` and logged in, and it costs a few cents. See [tests/README.md](tests/README.md).

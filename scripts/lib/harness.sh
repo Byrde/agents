@@ -228,13 +228,14 @@ _harness_block_put() {
   tmp="$(mktemp)"
   # Blank lines are held back until the next line is known: the ones right
   # before a block are its separator and go with it, and trailing ones are
-  # dropped. Otherwise every re-run would leave one more blank line behind.
+  # dropped, as are leading ones. Otherwise every re-run would leave one more
+  # blank line behind.
   awk -v o="$open" -v c="$close" '
     $0 == o { skip = 1; blanks = 0; next }
     skip && $0 == c { skip = 0; next }
     skip { next }
-    /^[[:space:]]*$/ { blanks++; next }
-    { while (blanks > 0) { print ""; blanks-- } print }
+    /^[[:space:]]*$/ { if (started) blanks++; next }
+    { while (blanks > 0) { print ""; blanks-- } started = 1; print }
   ' "$path" >"$tmp"
   if [[ -n "$content" ]]; then
     { [[ -s "$tmp" ]] && echo ""; printf '%s\n%s\n%s\n' "$open" "$content" "$close"; } >>"$tmp"
