@@ -114,12 +114,36 @@ test_rules_permissions_mcp_plugin_and_memory_are_installed() {
   assert_json "$cfg" '.mcp.servers.github.headers.Authorization' 'Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}' \
     "the GitHub token is not read from the environment"
   assert_file "$HOST/.opencode/plugins/byrde-agents.js" "the plugin was not installed"
-  assert_json "$HOST/.opencode/byrde-agents.json" '.memoryDir' "$(cd "$HOST" && pwd)/memory" "the plugin does not know where memory is"
+  assert_json "$HOST/.opencode/byrde-agents.json" '.memoryDir' "$(cd "$HOST" && pwd -P)/memory" "the plugin does not know where memory is"
   [ -d "$HOST/memory" ] || fail "memory/ was not created"
   assert_file "$HOST/.workspace.agents.json" "no workspace map"
   local gi; gi="$(cat "$HOST/.gitignore")"
   assert_contains "$gi" ".opencode/agents/develop.md" "the generated agents are not ignored"
   assert_not_contains "$gi" "memory" "memory/ is ignored, but it is shared"
+}
+
+test_init_installs_in_the_project_it_runs_from() {
+  setup
+  # The checkout sits outside the project, so its parent is not the project.
+  local tools="$SANDBOX/tools" proj="$SANDBOX/proj"
+  mkdir -p "$tools" "$proj/src"
+  rsync -a --exclude .git --exclude .worktrees "$REPO_ROOT/" "$tools/agents/"
+  git -C "$proj" init -q
+  local out
+  out="$(cd "$proj/src" && BYRDE_OC_MODELS_FILE="$(write_models builtin)" BYRDE_CATALOG_FILE="$SANDBOX/catalog.json" \
+    ARTIFICIAL_ANALYSIS_API_KEY= "$tools/agents/scripts/opencode/init.sh" </dev/null 2>&1)" || fail "init failed: $out"
+  assert_file "$proj/.opencode/agents/develop.md" "init did not install in the repo it ran from"
+  assert_file "$proj/AGENTS.md" "the rules are not in the project"
+  assert_file "$proj/.workspace.agents.json" "the workspace map is not in the project"
+  [ ! -e "$tools/.opencode" ] || fail "init installed in the parent of the checkout"
+  [ ! -e "$tools/AGENTS.md" ] || fail "init wrote AGENTS.md in the parent of the checkout"
+  jq -n '{data: [{id: "claude-opus-5-5"}]}' >"$SANDBOX/fuelix.json"
+  out="$(cd "$proj" && BYRDE_FUELIX_MODELS_FILE="$SANDBOX/fuelix.json" FUELIX_API_KEY=k \
+    BYRDE_OC_MODELS_FILE="$SANDBOX/models-builtin.json" BYRDE_CATALOG_FILE="$SANDBOX/catalog.json" \
+    "$tools/agents/scripts/opencode/setup-fuelix.sh" --models claude-opus-5-5 </dev/null 2>&1)"
+  [ ! -e "$tools/.opencode" ] || fail "setup-fuelix.sh wrote to the parent of the checkout: $out"
+  assert_json "$proj/.opencode/opencode.json" '.providers["fuelix-anthropic"] != null' "true" \
+    "setup-fuelix.sh did not write to the project it ran from"
 }
 
 test_a_rerun_changes_nothing() {

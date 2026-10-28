@@ -47,6 +47,8 @@ AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 . "$SCRIPT_DIR/lib/layout.sh"
 # shellcheck source=../lib/workspace.sh
 . "$SCRIPT_DIR/lib/workspace.sh"
+# shellcheck source=lib/root.sh
+. "$OC_DIR/lib/root.sh"
 # harness.sh (through mcp.sh) gives the fenced-block and frontmatter helpers.
 # shellcheck source=../lib/mcp.sh
 . "$SCRIPT_DIR/lib/mcp.sh"
@@ -448,6 +450,7 @@ main() {
       ;;
   esac
   resolve_layout
+  use_run_root
   set_paths
   case "${1:-}" in
     "") install ;;

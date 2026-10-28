@@ -34,6 +34,8 @@ AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 . "$SCRIPT_DIR/lib/layout.sh"
 # shellcheck source=../lib/workspace.sh
 . "$SCRIPT_DIR/lib/workspace.sh"
+# shellcheck source=lib/root.sh
+. "$OC_DIR/lib/root.sh"
 
 FUELIX_URL="${BYRDE_FUELIX_URL:-https://api.fuelix.ai/v1}"
 PROVIDERS='["fuelix-anthropic","fuelix-openai","fuelix"]'
@@ -194,6 +196,7 @@ main() {
 
   require_cmd jq
   resolve_layout
+  use_run_root
   CFG="$WORKSPACE_ROOT/.opencode/opencode.json"
 
   case "${1:-}" in
