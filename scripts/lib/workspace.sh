@@ -24,9 +24,9 @@
 # the human-authored `purpose` and `githubAccount`, and the `harnesses` chosen at
 # init, are preserved across refreshes.
 #
-# `githubAccount` pins which GitHub account this workspace's MCP token belongs
-# to, for somebody who works across several client organisations. Absent means
-# the machine-active `gh` account. Read by scripts/mcp/gh-mcp-headers.sh.
+# `githubAccount` pins which GitHub account this workspace's gh calls run as,
+# for somebody who works across several client organisations. Absent means
+# the machine-active `gh` account. Read by scripts/gh/gh.sh.
 #
 # Source AFTER lib/layout.sh (so AGENTS_ROOT / WORKSPACE_ROOT / SIBLING_REPOS are
 # available). Requires jq. Compatible with Bash 3.2 (macOS).
@@ -163,8 +163,7 @@ workspace_summary() {
   ' "$WORKSPACE_FILE" 2>/dev/null || echo "  (unreadable map)"
 }
 
-# True (0) if any repo in the map has a github.com remote — used by init.sh to
-# decide whether to auto-register the account-wide GitHub MCP server.
+# True (0) if any repo in the map has a github.com remote.
 workspace_has_github_remote() {
   [[ -f "$WORKSPACE_FILE" ]] || return 1
   command -v jq >/dev/null 2>&1 || return 1

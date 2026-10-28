@@ -12,7 +12,7 @@ Always on. `init.sh` renders each one into every selected harness (see [Harnesse
 |---|---|
 | [`global`](rules/global.md) | Project-wide baseline. The lead rule: re-injected in full during long sessions (see [Rules re-injection](#rules-re-injection)) |
 | [`development`](rules/development.md) | Architectural standards — Lite DDD modular monolith by default |
-| [`github-source-control`](rules/github-source-control.md) | Branches, pull requests and code review through the account-wide GitHub MCP server |
+| [`github-source-control`](rules/github-source-control.md) | Branches, pull requests and code review through the `gh` CLI, as the workspace's GitHub account |
 | [`workspace`](rules/workspace.md) | Finds which repository a task belongs to in a multi-repo workspace, and works inside it |
 | [`memory`](rules/memory.md) | When to write memory, and what belongs in it (pairs with Claude Code's built-in auto-memory) |
 | [`technical-writing`](rules/technical-writing.md) | ASD-STE100 Simplified Technical English for docs, work items and specs |
@@ -73,7 +73,7 @@ git commit -m "Add .agents submodule"
 
 ## Init
 
-One-command bootstrap that installs rules, skills, MCP servers and hooks, adapted to each agent harness you choose:
+One-command bootstrap that installs rules, skills and hooks, adapted to each agent harness you choose:
 
 ```bash
 cd /your/project
@@ -90,7 +90,7 @@ cd /your/project
 | Parameter | Meaning |
 |---|---|
 | `--harness LIST` | Harnesses to install and adapt assets for, comma-separated. Names: `claude`, `cursor`, `codex`, `copilot`, `antigravity`, or `all`. Numbers select by position in `claude cursor codex copilot antigravity` (1–5). Also spelled `--harness=LIST` or `--harnesses LIST`. Skips the question. |
-| `uninstall` (alias `remove`) | Removes rules, skills, the GitHub MCP server, hooks and settings from **every** harness, not only the selected ones. Tool skills from `setup-*.sh` stay; uninstall those with their own scripts. |
+| `uninstall` (alias `remove`) | Removes rules, skills, hooks and settings from **every** harness, not only the selected ones. Tool skills from `setup-*.sh` stay; uninstall those with their own scripts. |
 | `-h`, `--help`, `help` | Prints usage. |
 
 | Environment variable | Meaning |
@@ -109,8 +109,10 @@ The choice is saved as `harnesses` in `.workspace.agents.json`. Re-runs and ever
 2. **Workspace map** — generates `.workspace.agents.json` at the project root, auto-detecting mono vs multi-repo (see [Single-Repo or Multi-Repo Workspace](#single-repo-or-multi-repo-workspace)). Gitignored
 3. **Rules** — renders each `.agents/rules/*.md` into each harness's format (see [Harnesses](#harnesses))
 4. **Skills** — makes `.agents/skills/` visible to each harness
-5. **Auto-memory** (Claude Code only) — sets `autoMemoryEnabled: true` in `.claude/settings.json` (turning on Claude Code's built-in auto-memory, the default) and pins `autoMemoryDirectory` to the absolute path of `./memory` in `.claude/settings.local.json` (project-local storage, git-tracked and shared with the team).
-6. **Hooks** — writes two hooks for each harness that has them: an allow-all pre-tool hook that approves every tool call, and a post-tool hook that re-injects the rules (see below)
+5. **Workspace trust** (Claude Code only) — trusts the workspace, so Claude Code reads `.claude/settings.json` (see [Workspace trust](#workspace-trust-claude-code))
+6. **GitHub** — removes the GitHub MCP server that an older install registered. GitHub goes through the `gh` CLI (see [GitHub](#github))
+7. **Auto-memory** (Claude Code only) — sets `autoMemoryEnabled: true` in `.claude/settings.json` (turning on Claude Code's built-in auto-memory, the default) and pins `autoMemoryDirectory` to the absolute path of `./memory` in `.claude/settings.local.json` (project-local storage, git-tracked and shared with the team).
+8. **Hooks** — writes two hooks for each harness that has them: an allow-all pre-tool hook that approves every tool call, and a post-tool hook that re-injects the rules (see below)
 
 ### Harnesses
 
@@ -129,10 +131,10 @@ Every asset has one source, and each harness gets it in its own files and format
 Things to know:
 
 - **Codex** loads `.codex/` only in a trusted project, and asks you to trust each hook once (`/hooks`). Your own text in `AGENTS.md` is kept. Only the `<!-- byrde-agents:rule … -->` sections are rewritten. Cursor, Copilot and Antigravity read `AGENTS.md` as well, so selecting Codex with them loads the rules twice in those tools.
-- **Tokens.** Only Claude Code can fetch the GitHub token live (`headersHelper`). Cursor, Codex and Copilot read it from `GITHUB_PERSONAL_ACCESS_TOKEN`. Antigravity cannot read the environment, so servers that need a token are skipped for it rather than written with a secret.
+- **Tokens.** Antigravity cannot read the environment in its MCP config, so a tool's MCP server that needs a token is skipped for it, not written with a secret.
 - **Antigravity hooks**: none. Its `PostToolUse` cannot add context.
 - **Copilot**: `.vscode/mcp.json` is for VS Code. Copilot CLI reads `.mcp.json`, which exists when Claude Code is selected too. The coding agent takes MCP config from repository settings, not from a file.
-- **Claude Code only**: auto-memory, `permissions.defaultMode`, the MCP approval, and workspace trust. They are removed when Claude Code is dropped.
+- **Claude Code only**: auto-memory, `permissions.defaultMode`, and workspace trust (see [Workspace trust](#workspace-trust-claude-code)). They are removed when Claude Code is dropped.
 
 ### Rules re-injection
 
@@ -146,11 +148,19 @@ Set the cadence with `BYRDE_RULES_REINJECT_EVERY` (default `12`, `0` disables).
 
 One trap worth knowing if you write your own hook: `PostToolUse` **ignores stdout**. The model only reads `hookSpecificOutput.additionalContext`, so the hook answers with JSON. `UserPromptSubmit` is the opposite — there, stdout *is* the injection. Both shapes are handled, so an install wired the old way keeps working until you re-run `init.sh`.
 
+### Workspace trust (Claude Code)
+
+Claude Code ignores a project's `.claude/settings.json` until the workspace is trusted. The hooks and the permission mode that init writes there then never load. Claude Code names two remedies: accept the trust dialog once, or set `projects["<root>"].hasTrustDialogAccepted` in `~/.claude.json`.
+
+`init.sh` takes the second remedy whenever Claude Code is a selected harness, because the first cannot happen in a non-interactive session. Trust makes Claude Code honor this project's settings generally. That widens what the installer does, so init announces it, and `init.sh uninstall` gives it back. Uninstall gives back **only what init granted**. If you accepted the trust dialog yourself, an uninstall leaves your decision alone. The grant is recorded as `workspace-trust` in `.manifest.local.yml`.
+
+`init.sh` never creates `~/.claude.json`, and never rewrites it when it cannot be parsed. That file holds every project on the machine and the account block, so init leaves a corrupt one untouched.
+
 ### Optional setup
 
 Run these separately when you want them (see [Setup Tools](#setup-tools)):
 
-- `.agents/scripts/setup/setup-github-project.sh` — pin a GitHub project board (source-control + MCP are set up by `init.sh`)
+- `.agents/scripts/setup/setup-github-project.sh` — pin a GitHub project board (source control is set up by `init.sh`)
 - `.agents/scripts/setup/setup-jira.sh` — pin a Jira site + project
 - `.agents/scripts/setup/setup-google-analytics.sh` — pin a GA4 property
 - `.agents/scripts/setup/setup-figma.sh` — the Figma tool skill
@@ -184,7 +194,7 @@ cd /your/project
 | File | Content |
 |---|---|
 | `.opencode/agents/<skill>.md` | One agent per practice skill, `mode: all`: switch to it with Tab, or let the main agent delegate to it. `model:` is the scored pick. With no pick, the agent inherits the session's model. |
-| `.opencode/opencode.json` | Merged, never replaced. `permissions` allows every tool call and denies each practice skill as a *skill*, because it is an agent now. `mcp.servers.github` is the GitHub MCP server. |
+| `.opencode/opencode.json` | Merged, never replaced. `permissions` allows every tool call and denies each practice skill as a *skill*, because it is an agent now. An old GitHub MCP server is removed. |
 | `.opencode/plugins/byrde-agents.js` | The plugin. See [The plugin](#the-plugin). |
 | `.opencode/byrde-agents.json` | The plugin's settings, and the last evaluation. |
 | `AGENTS.md` | One fenced section per rule in `.agents/rules/`. Your text outside the fences stays. |
@@ -194,7 +204,7 @@ cd /your/project
 
 The agent files have no body. In OpenCode, a body replaces the default system prompt, and the agent then loses OpenCode's guidance on how to use its tools. The plugin adds the skill's method to the prompt instead.
 
-The GitHub MCP server reads `GITHUB_PERSONAL_ACCESS_TOKEN`. Export it before you start OpenCode: `export GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)"`. The server has `oauth: false`. Without it, a missing token makes OpenCode wait for an OAuth flow that GitHub cannot complete, and `opencode run` hangs.
+GitHub goes through the `gh` CLI, as in the other harnesses (see [GitHub](#github)).
 
 ### Model scoring
 
@@ -267,53 +277,31 @@ The three providers belong to the script. A re-run replaces their models with th
 
 ### GitHub
 
-GitHub splits into two pieces with very different shapes:
+GitHub has two parts, and both use the `gh` CLI. No MCP server is involved.
 
-**Source control** (branches, PRs, review, merge) needs **no repo configuration**. The GitHub MCP server is account-wide — it works across every repo you can access — so there's nothing repo-specific to pin. `init.sh` handles it automatically: it installs the always-on `github-source-control` **rule** and registers the account-wide GitHub MCP for each selected harness whenever the workspace map has a `github.com` remote. The rule resolves the *target* repo per task from `.workspace.agents.json` — no single-repo pin, works across the whole workspace.
+**Source control** (branches, pull requests, review, merge) needs no setup. `init.sh` installs the always-on `github-source-control` **rule**. The rule tells the agent to run `gh` through [`scripts/gh/gh.sh`](scripts/gh/gh.sh), and to resolve the target repo for each task from `.workspace.agents.json`. Log in once with `gh auth login`. For a SAML-SSO organization, authorize your `gh` login for the organization.
 
-Auth: GitHub's OAuth doesn't support dynamic client registration, so the MCP authenticates with a token in an `Authorization` header — GitHub's documented fallback. How the token gets there depends on the editor:
+The wrapper finds `gh` and `jq` by absolute path when `PATH` does not have them. An editor started from Finder or the Dock gets a `PATH` without Homebrew.
 
-- **Claude Code** — zero setup. `init.sh` configures a `headersHelper` (`.agents/scripts/mcp/gh-mcp-headers.sh`) that Claude Code runs on each connection to pull the token live from `gh auth token`. Nothing is stored on disk and there's no env var to set. Log in with `gh auth login`. For SAML-SSO orgs, ensure your `gh` login is authorized for the org.
-- **Cursor, Copilot, Codex** — have no `headersHelper`, so they read the token from the environment: an `Authorization: Bearer ${env:GITHUB_PERSONAL_ACCESS_TOKEN}` header (Cursor, VS Code), or `bearer_token_env_var` (Codex). Export that var: `export GITHUB_PERSONAL_ACCESS_TOKEN="$(gh auth token)"`.
-- **Antigravity** — cannot read the environment in its MCP config, so the GitHub server is not registered for it.
-
-(The helper falls back to `$GITHUB_PERSONAL_ACCESS_TOKEN` if `gh` isn't available, so a PAT works everywhere too. It resolves `gh` and `jq` by absolute path rather than through `PATH`, because an editor launched from Finder or the Dock inherits a `PATH` that holds no Homebrew.)
+An older install registered a GitHub MCP server. `init.sh` and the OpenCode init remove it on the next run. They remove only a server named `github` that points at `https://api.githubcopilot.com/mcp/`, and its approval in `.claude/settings.json`.
 
 ### Which GitHub account a workspace uses
 
-`gh auth token` returns whichever account is **active on the machine**. If you work across several client organizations, each with its own GitHub account, that means the last account you switched to leaks into every workspace — and a valid token for the wrong account looks exactly like success.
+A bare `gh` runs as the account that is **active on the machine**. If you work for several client organizations, each with its own GitHub account, the last account you switched to then acts in every workspace. A valid token for the wrong account looks exactly like success.
 
-So a workspace can name its account. Resolution order:
+So a workspace can name its account. The wrapper resolves it in this order:
 
 1. `$BYRDE_GH_ACCOUNT` — explicit override
 2. `githubAccount` in `.workspace.agents.json` — this workspace's account
 3. the machine-active `gh` account — the default
 
-Ranks 1 and 2 are **binding**. If a workspace names an account and no token for it is available, the helper fails and says which account it needed. It does not fall back, because falling back is the leak. Rank 3 keeps a single-account setup working with no configuration.
+Ranks 1 and 2 are **binding**. The wrapper puts the token of that account in `GH_TOKEN` for the one call. If no token for it is available, the wrapper fails and names the account. It does not fall back, because falling back is the leak. Rank 3 runs `gh` unchanged, so a single-account setup needs no configuration.
 
 ```json
 { "mode": "multi", "contextRoot": ".", "repos": [ … ], "githubAccount": "your-client-login" }
 ```
 
-`init.sh` preserves `githubAccount` when it refreshes the map, the same way it preserves `purpose`.
-
-Claude Code also needs the server **approved**, not only registered: a server declared in a project `.mcp.json` stays untrusted until it is listed in `enabledMcpjsonServers`, and an unapproved server never loads. `init.sh` writes that approval into `.claude/settings.json` alongside the registration. Skipping it is how you get `Incompatible auth server: does not support dynamic client registration` — the editor never reaches the header path above and falls back to the OAuth handshake this section explains GitHub cannot complete. The message blames auth while the token is fine.
-
-**And the approval only counts once the workspace is trusted.** Claude Code skips a project's settings wholesale until then, so the approval is inert and the token helper is never run:
-
-```
-MCP server 'github': headersHelper not run — this workspace has no persisted trust;
-accept the trust dialog here once interactively, or set
-projects["<root>"].hasTrustDialogAccepted in ~/.claude.json.
-```
-
-`init.sh` takes the second remedy, because the first cannot happen in a non-interactive session. It sets `hasTrustDialogAccepted` for this workspace, and only when the workspace has a GitHub remote — so a folder that needs no MCP is not trusted as a side effect.
-
-Trust is **not** MCP-specific: it makes Claude Code honor this project's `.claude/settings.json` generally. That is a real widening of what the installer does, so it is announced on install and `init.sh uninstall` gives it back. It gives back **only what init granted** — if you accepted the trust dialog yourself, an uninstall leaves your decision alone. The grant is recorded as `workspace-trust` in `.manifest.local.yml`.
-
-`init.sh` never creates `~/.claude.json`, and never rewrites it when it cannot be parsed. That file holds every project on the machine and the account block, so a corrupt one is left untouched and the MCP stays unregistered.
-
-To diagnose any of this, ask the tool rather than guessing — `claude mcp get github` names the cause and the remedy.
+The wrapper reads the nearest `.workspace.agents.json` at or above the working directory. A call from inside one repo of a multi-repo workspace therefore finds the map at the context root. `init.sh` preserves `githubAccount` when it refreshes the map, the same way it preserves `purpose`.
 
 **Projects** (work items, milestones, board state) is the one piece that needs a pin — a project board (owner + board number) can't be auto-detected — so it stays an explicit, opt-in step:
 
@@ -325,7 +313,7 @@ cd /your/workspace
 .agents/scripts/setup/setup-github-project.sh uninstall  # remove the github-projects skill
 ```
 
-It walks you through your account, owner, the repo the board mainly tracks, and the board ID. It then writes `skills/github-projects/SKILL.md`, made visible to each selected harness. It also ensures the GitHub MCP is registered. The MCP itself is shared with source-control and is managed by `init.sh` — `setup-github-project.sh uninstall` leaves it in place.
+It walks you through your account, owner, the repo the board mainly tracks, and the board ID. It then writes `skills/github-projects/SKILL.md`, made visible to each selected harness. The skill runs every issue, milestone and board operation through the same `gh` wrapper.
 
 ### Figma
 
@@ -397,14 +385,14 @@ No secrets on disk: `analytics-mcp` finds the credentials in gcloud's ADC store,
 
 ## Doctor
 
-Diagnoses the health of all MCP servers and skill installations configured by the setup scripts.
+Diagnoses the health of what `init.sh` and the setup scripts configured.
 
 ```bash
 cd /your/project
 .agents/scripts/doctor.sh
 ```
 
-Reports, for each selected harness, whether its rules, skills and hooks are installed, and checks the workspace map. Then, for each tool that is set up (recorded in `.manifest.local.yml`), it reports the skill, the MCP configuration per harness, authentication, and server reachability: GitHub (source control and projects), Figma (`figma`, `figma-use`), Google Analytics and Jira. A tool you never installed, or uninstalled, is left out of the report.
+Reports, for each selected harness, whether its rules, skills and hooks are installed, and checks the workspace map. Then, for each tool that is set up (recorded in `.manifest.local.yml`), it reports the skill, the MCP configuration per harness, authentication, and server reachability. For GitHub (source control and projects), it checks the `gh` login as the workspace's account, and warns about an old GitHub MCP server. The other tools are Figma (`figma`, `figma-use`), Google Analytics and Jira. A tool you never installed, or uninstalled, is left out of the report.
 
 ## Tests
 
@@ -419,8 +407,8 @@ Offline suites cover the installer itself, and live tests verify that the hooks 
 |---|---|
 | `test_harness_adapters.sh` | Rules, skills, MCP servers and hooks rendered for each harness, and `init.sh` end to end |
 | `test_hook_wiring.sh` | Hook settings point at scripts that exist and answer in a shape the CLI accepts |
-| `test_mcp_registration.sh` | GitHub MCP registration and approval in Claude Code |
-| `test_gh_account_scope.sh` | Which GitHub account a workspace's token comes from |
+| `test_github_cli.sh` | GitHub through `gh`: no MCP server, and the old one is removed |
+| `test_gh_account_scope.sh` | Which GitHub account the `gh` wrapper runs as |
 | `test_workspace_trust.sh` | The Claude Code workspace-trust grant and its revocation |
 | `test_figma_setup.sh` | `setup-figma.sh` |
 | `test_opencode.sh` | The OpenCode installer, the model scoring, `setup-fuelix.sh` and the plugin |

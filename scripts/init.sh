@@ -3,7 +3,7 @@
 #
 # Asks which agent harnesses to install for — Claude Code, Cursor, OpenAI Codex,
 # GitHub Copilot, Google Antigravity — and adapts every asset (rules, skills,
-# the GitHub MCP server, hooks) to each one's own files and formats (see
+# hooks) to each one's own files and formats (see
 # lib/harness.sh for where each lands). Turns ON Claude Code's
 # built-in auto-memory (the default). Optional setup steps (the GitHub
 # projects, Jira, Google Analytics and Figma tool skills) are run separately
@@ -489,8 +489,8 @@ print_intro() {
   echo "$bar"
   echo "  $PROG_NAME · Byrde Agents  v$TOOL_VERSION"
   echo ""
-  echo "  Bootstrap a project with Byrde Agents — installs rules, skills, MCP"
-  echo "  servers and hooks, adapted to each agent harness you choose."
+  echo "  Bootstrap a project with Byrde Agents — installs rules, skills and"
+  echo "  hooks, adapted to each agent harness you choose."
   echo ""
   printf '  %-16s %s\n' "Project Root" "$project_root"
   printf '  %-16s %s\n' "Agents Root" "$AGENTS_ROOT"
@@ -537,7 +537,7 @@ print_summary() {
   echo "    • .agents/scripts/setup/setup-jira.sh            (pin a Jira site + project)"
   echo "    • .agents/scripts/setup/setup-google-analytics.sh (pin a GA4 property)"
   echo "    • .agents/scripts/setup/setup-figma.sh           (Figma tool skill)"
-  echo "    (GitHub source-control + MCP were just set up automatically.)"
+  echo "    (GitHub source control needs no setup: it uses the gh CLI.)"
   echo ""
   echo "  Change harnesses: .agents/scripts/init.sh --harness <list>"
   echo "  Verify with: .agents/scripts/doctor.sh"
@@ -659,33 +659,31 @@ generate_workspace_map() {
   echo ""
 }
 
-# Register the account-wide GitHub MCP server when the workspace has GitHub repos.
-# The always-on github-source-control rule (installed by copy_rules) drives it;
-# the server is OAuth'd through the editor and carries no secrets. No-op (with a
-# note) when there are no github.com remotes in the map, or when jq is missing.
-register_github_mcp() {
-  echo "── GitHub MCP ─────────────────────────────────────────────────────"
+# GitHub goes through the gh CLI (scripts/gh/gh.sh), so there is no server to
+# register. Retire the GitHub MCP server that older installs wrote.
+retire_github_mcp() {
+  echo "── GitHub ─────────────────────────────────────────────────────────"
   echo ""
   if ! command -v jq >/dev/null 2>&1; then
-    echo "  ⚠ jq missing — skipping GitHub MCP registration"
+    echo "  ⚠ jq missing — cannot check for an old GitHub MCP server"
     echo ""
     return 0
   fi
-  if workspace_has_github_remote; then
-    # Before the merge, not after: Claude Code skips this project's settings
-    # entirely while the workspace is untrusted, so the approval mcp_merge_github
-    # writes would be inert and its own warning would fire on a fresh install.
-    # Best-effort: a machine with no ~/.claude.json yet must not abort the install.
-    if harness_has claude; then grant_workspace_trust "$WORKSPACE_ROOT" || true; fi
-    mcp_merge_github "$WORKSPACE_ROOT"
-    echo "    account-wide (works across all your repos). Claude Code fetches the"
-    echo "    token live from 'gh auth token' on each connect (headersHelper) —"
-    echo "    nothing on disk, no env var to set; just be logged in: gh auth login."
-    echo "    (The other harnesses have no headersHelper — export"
-    echo "    GITHUB_PERSONAL_ACCESS_TOKEN=\"\$(gh auth token)\" for them.)"
-  else
-    echo "  (no github.com remotes in the workspace map — skipping GitHub MCP)"
-  fi
+  mcp_retire_github "$WORKSPACE_ROOT"
+  echo "  ✓ GitHub through the gh CLI: .agents/scripts/gh/gh.sh runs gh as this"
+  echo "    workspace's account. Log in once with: gh auth login"
+  echo ""
+}
+
+# Claude Code ignores this project's .claude/settings.json — the hooks and the
+# permission mode init writes there — until the workspace is trusted.
+# Best-effort: a machine with no ~/.claude.json yet must not abort the install.
+trust_workspace() {
+  harness_has claude || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  echo "── Workspace trust ────────────────────────────────────────────────"
+  echo ""
+  grant_workspace_trust "$WORKSPACE_ROOT" || true
   echo ""
 }
 
@@ -908,11 +906,10 @@ uninstall() {
   del_auto_memory_dir_local "$project_root"
   restore_editor_gitignore "$project_root"
   # The workspace + github-source-control rules are removed by remove_rules (they
-  # ship in .agents/rules/); drop the generated map and the GitHub MCP too.
+  # ship in .agents/rules/); drop the generated map and any old GitHub MCP server.
   [[ -f "$WORKSPACE_FILE" ]] && { rm -f "$WORKSPACE_FILE"; echo "  ✓ removed ${WORKSPACE_FILE##*/}"; }
   if command -v jq >/dev/null 2>&1; then
-    echo "── Removing GitHub MCP ──"
-    mcp_remove_github "$WORKSPACE_ROOT"
+    mcp_retire_github "$WORKSPACE_ROOT"
     revoke_workspace_trust "$WORKSPACE_ROOT"
   fi
   echo ""
@@ -955,7 +952,7 @@ main() {
       echo "                   choice, or '$HARNESS_DEFAULT' on a first run); a non-interactive run"
       echo "                   uses the saved choice, or '$HARNESS_DEFAULT'. Fewer harnesses than"
       echo "                   last time removes what the dropped ones had."
-      echo "  uninstall        Remove rules, skills, MCP, hooks and settings from every"
+      echo "  uninstall        Remove rules, skills, hooks and settings from every"
       echo "                   harness (alias: remove). Tool skills from setup-*.sh stay."
       echo ""
       echo "Environment:"
@@ -991,7 +988,8 @@ main() {
   copy_rules "$project_root"
   copy_skills "$project_root"
   migrate_github_source_control "$project_root"
-  register_github_mcp
+  trust_workspace
+  retire_github_mcp
   if harness_has claude; then
     enable_auto_memory "$project_root"
   else

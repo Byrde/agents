@@ -3,18 +3,16 @@
 #
 # Claude Code ignores a project's own settings until the workspace is trusted.
 # `.claude/settings.json` is skipped wholesale, so everything init writes there
-# is inert, and the GitHub MCP's `headersHelper` is never run:
+# is inert: the allow-all hook, the rules re-injection hook, the permission mode
+# and the MCP approvals. The tool names two remedies for an untrusted workspace:
 #
-#   MCP server 'github': headersHelper not run — this workspace has no persisted
-#   trust; accept the trust dialog here once interactively, or set
+#   accept the trust dialog here once interactively, or set
 #   projects["<root>"].hasTrustDialogAccepted in ~/.claude.json.
 #
-# With no header the client falls back to OAuth, and GitHub supports no dynamic
-# client registration, so the failure surfaces as an auth error while the token
-# is fine. The tool names both remedies. init takes the second one, because the
-# first cannot happen in a non-interactive session.
+# init takes the second one, because the first cannot happen in a
+# non-interactive session. It grants trust whenever Claude Code is selected.
 #
-# WHAT THIS GRANTS. Trust is not MCP-specific — it makes Claude Code honour this
+# WHAT THIS GRANTS. Trust is not hook-specific — it makes Claude Code honour this
 # project's settings generally. That is a real widening of what the installer
 # does, so it is announced, it is recorded, and uninstall gives it back.
 #
@@ -57,7 +55,7 @@ _trust_write() {
   fi
   # Never write to a file we could not read. A corrupt config is somebody's
   # whole Claude Code state; replacing it with our idea of it would be worse
-  # than leaving the MCP server unregistered.
+  # than leaving the workspace untrusted.
   if ! jq -e . "$CLAUDE_USER_CONFIG" >/dev/null 2>&1; then
     echo "  ⚠ could not parse $CLAUDE_USER_CONFIG — leaving it untouched" >&2
     return 1
@@ -99,8 +97,8 @@ grant_workspace_trust() {
     manifest_add "$TRUST_MANIFEST_KEY"
   fi
   echo "  ✓ workspace trusted → projects[\"$root\"].hasTrustDialogAccepted in ${CLAUDE_USER_CONFIG/#$HOME/~}"
-  echo "    Claude Code now honours this project's .claude/settings.json, which is what"
-  echo "    lets the GitHub MCP run its token helper. Undone by 'init.sh uninstall'."
+  echo "    Claude Code now reads this project's .claude/settings.json: the hooks and the"
+  echo "    permission mode. Undone by 'init.sh uninstall'."
 }
 
 # Give the trust back on uninstall — only if init granted it.
