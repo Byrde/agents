@@ -200,16 +200,35 @@ Every run of `init.sh` and `init.sh evaluate` scores the models again:
 
 1. It lists the models that OpenCode can use in this project (`opencode api GET /api/model`).
 2. It matches each model to an Artificial Analysis benchmark entry. A model with no match is reported and not scored.
-3. It scores each model against the profile of each practice skill, and pins the best one in the agent file.
+3. It scores the quality of each model against the profile of each practice skill.
+4. It pins the cheapest model whose quality is within the profile's margin of the best one.
 
-| Profile | Skills | Weights |
-|---|---|---|
-| `deep` | plan, architect, design, review | reasoning, intelligence, long context, instruction following, cost |
-| `build` | develop, test, debug | coding, agentic, reasoning, cost |
-| `fast` | quick-edit | speed, cost, coding |
-| `write` | docs | instruction following, intelligence, cost, speed |
+**Quality.** Each benchmark score is divided by the best score that Artificial Analysis lists, so 0.95 means 95% of the best. The benchmarks roll up into dimensions:
 
-Every profile weighs **cost**. The cost is the deployment's own price when OpenCode lists one, so a free model gets the best cost score. Otherwise it is the Artificial Analysis list price.
+| Dimension | Benchmarks |
+|---|---|
+| intelligence | Artificial Analysis intelligence index |
+| coding | coding index, SciCode, LiveCodeBench |
+| agentic | Terminal-Bench, τ²-bench, τ²-bench banking |
+| reasoning | Humanity's Last Exam, GPQA, AIME |
+| long-context | AA-LCR |
+
+A dimension uses the benchmarks that a model has. A dimension with no data counts as 0.5, so a gap in the benchmarks never helps a model. Artificial Analysis publishes no instruction-following or hallucination data for current models, so neither is a dimension.
+
+**Profiles.** Each practice skill maps to one profile:
+
+| Profile | Skills | Quality weights | Margin |
+|---|---|---|---|
+| `deep` | plan, architect, design, review | reasoning 0.35, intelligence 0.35, long-context 0.2, agentic 0.1 | 5% |
+| `build` | develop, test, debug | coding 0.4, agentic 0.4, intelligence 0.2 | 5% |
+| `write` | docs | intelligence 0.6, long-context 0.4 | 5% |
+| `fast` | quick-edit | coding 0.5, intelligence 0.5 | 50% |
+
+5% is about the noise between two benchmark runs. A quick edit needs a model that is good enough, not one near the best, so `fast` accepts half the best quality.
+
+**Cost.** Cost is the estimated price of one answer: 10,000 input tokens, 1,000 output tokens, and the thinking tokens. The thinking tokens are the time to the first answer token multiplied by the output speed. So a higher reasoning effort costs more, even at the same price per token. For example, Opus 5.5 at max effort thinks for about 390 seconds and costs about $0.82 per answer. At xhigh effort it thinks for about 50 seconds and costs about $0.14. The prices are the deployment's own when OpenCode lists them, so a free model costs nothing. Otherwise they are the Artificial Analysis list prices.
+
+The report shows the top three candidates for each agent, with their quality and their cost per answer.
 
 The agents **inherit** the session's model in these cases:
 
