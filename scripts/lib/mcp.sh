@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Byrde Agents — retire the GitHub MCP server (shared lib).
 #
-# GitHub goes through the gh CLI now (scripts/gh/gh.sh), not an MCP server.
+# GitHub goes through the gh CLI now, not an MCP server.
 # Older installs registered the account-wide GitHub MCP server in every harness
 # and approved it in Claude Code's .claude/settings.json. This takes those
 # entries back out, so an existing install does not keep a server that nothing

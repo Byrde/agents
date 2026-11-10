@@ -22,21 +22,21 @@ Any practice skill that mentions one of these operations routes through this ski
 
 ## Access
 
-All operations go through the **`gh` CLI**, run as `.agents/scripts/gh/gh.sh`. Never run a bare `gh`. The wrapper runs `gh` as the GitHub account that this workspace names, and a bare `gh` runs as whichever account is active on the machine. Do not call the GitHub REST API with `curl`. Use `gh api` through the wrapper when no `gh` command does the job.
+All operations go through the **`gh` CLI**, as the GitHub account that is active on the machine. Do not call the GitHub REST API with `curl`. Use `gh api` when no `gh` command does the job.
 
 | Operation | Command |
 |---|---|
-| create work item | `.agents/scripts/gh/gh.sh issue create --repo {{ACCOUNT}}/{{REPOSITORY}} --title "…" --body-file <file> --type Feature` |
-| comment on work item | `.agents/scripts/gh/gh.sh issue comment <number> --repo {{ACCOUNT}}/{{REPOSITORY}} --body-file <file>` |
-| link work item to milestone | `.agents/scripts/gh/gh.sh issue edit <number> --repo {{ACCOUNT}}/{{REPOSITORY}} --milestone "<title>"` |
-| create milestone | `.agents/scripts/gh/gh.sh api repos/{{ACCOUNT}}/{{REPOSITORY}}/milestones -f title="<title>" -f description="…"` |
+| create work item | `gh issue create --repo {{ACCOUNT}}/{{REPOSITORY}} --title "…" --body-file <file> --type Feature` |
+| comment on work item | `gh issue comment <number> --repo {{ACCOUNT}}/{{REPOSITORY}} --body-file <file>` |
+| link work item to milestone | `gh issue edit <number> --repo {{ACCOUNT}}/{{REPOSITORY}} --milestone "<title>"` |
+| create milestone | `gh api repos/{{ACCOUNT}}/{{REPOSITORY}}/milestones -f title="<title>" -f description="…"` |
 | place work item on board, set work item field, transition work item | the `gh project` sequence below |
 
 ### Preflight (first operation of the session)
 
-1. **Login.** Run `.agents/scripts/gh/gh.sh auth status`. If it fails, halt and report.
-2. **Repository.** Verify `{{ACCOUNT}}/{{REPOSITORY}}` is accessible with `.agents/scripts/gh/gh.sh repo view {{ACCOUNT}}/{{REPOSITORY}}`. Halt if not.
-3. **Board.** Verify project board `{{PROJECT_ID}}` is accessible under `{{ACCOUNT}}` with `.agents/scripts/gh/gh.sh project view {{PROJECT_ID}} --owner {{ACCOUNT}}`. Halt if not.
+1. **Login.** Run `gh auth status`. If it fails, halt and report.
+2. **Repository.** Verify `{{ACCOUNT}}/{{REPOSITORY}}` is accessible with `gh repo view {{ACCOUNT}}/{{REPOSITORY}}`. Halt if not.
+3. **Board.** Verify project board `{{PROJECT_ID}}` is accessible under `{{ACCOUNT}}` with `gh project view {{PROJECT_ID}} --owner {{ACCOUNT}}`. Halt if not.
 
 ## Conventions
 
@@ -67,37 +67,37 @@ Every work item must be on board `{{PROJECT_ID}}` with Size and Priority set. Th
 #### 1. Add the issue to the board
 
 ```bash
-.agents/scripts/gh/gh.sh project item-add {{PROJECT_ID}} --owner {{ACCOUNT}} --url <issue-url>
+gh project item-add {{PROJECT_ID}} --owner {{ACCOUNT}} --url <issue-url>
 ```
 
 #### 2. Resolve the project's GraphQL node ID (once per session)
 
 ```bash
-.agents/scripts/gh/gh.sh project list --owner {{ACCOUNT}} --format json
+gh project list --owner {{ACCOUNT}} --format json
 # Find the entry with "number": {{PROJECT_ID}} and copy its "id" (e.g. PVT_kwDO...).
 ```
 
 #### 3. Resolve the project item ID for this issue
 
 ```bash
-.agents/scripts/gh/gh.sh project item-list {{PROJECT_ID}} --owner {{ACCOUNT}} --format json
+gh project item-list {{PROJECT_ID}} --owner {{ACCOUNT}} --format json
 # Find the entry matching the issue and copy its "id" (e.g. PVTI_...).
 ```
 
 #### 4. Resolve field and option IDs (once per session)
 
 ```bash
-.agents/scripts/gh/gh.sh project field-list {{PROJECT_ID}} --owner {{ACCOUNT}} --format json
+gh project field-list {{PROJECT_ID}} --owner {{ACCOUNT}} --format json
 # Find the Priority field, the Size field, and the option IDs for the values you want.
 ```
 
 #### 5. Set the fields
 
 ```bash
-.agents/scripts/gh/gh.sh project item-edit --id <item-id> --project-id <project-node-id> \
+gh project item-edit --id <item-id> --project-id <project-node-id> \
   --field-id <priority-field-id> --single-select-option-id <option-id>
 
-.agents/scripts/gh/gh.sh project item-edit --id <item-id> --project-id <project-node-id> \
+gh project item-edit --id <item-id> --project-id <project-node-id> \
   --field-id <size-field-id> --single-select-option-id <option-id>
 ```
 
@@ -106,7 +106,7 @@ A work item that is not on the board with Size and Priority set is considered in
 ### Work item lifecycle
 
 - Move to **In Progress** when active implementation starts.
-- Move to the post-PR status (often **In review** or **Ready to Test** — resolve the actual status set with `.agents/scripts/gh/gh.sh project field-list {{PROJECT_ID}} --owner {{ACCOUNT}} --format json` once per session) when implementation is complete and a PR is open. The same status survives QA approval.
+- Move to the post-PR status (often **In review** or **Ready to Test** — resolve the actual status set with `gh project field-list {{PROJECT_ID}} --owner {{ACCOUNT}} --format json` once per session) when implementation is complete and a PR is open. The same status survives QA approval.
 - **Do not manually move to Done.** PR-merge automation moves the card to Done when the PR is merged. Manual transitions before merge bypass that gate.
 
 ### Milestones

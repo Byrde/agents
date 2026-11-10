@@ -16,17 +16,12 @@
 #       { "name": "...", "path": "<rel>", "remote": "...", "owner": "...",
 #         "stack": ["scala","docker"], "purpose": "<human-editable>" }
 #     ],
-#     "githubAccount": "<gh login>",     # optional, human-authored
 #     "harnesses": ["claude","cursor"]    # chosen at init; setup scripts follow it
 #   }
 #
 # Auto-detected fields (path/remote/owner/stack) are refreshed on regeneration;
-# the human-authored `purpose` and `githubAccount`, and the `harnesses` chosen at
-# init, are preserved across refreshes.
-#
-# `githubAccount` pins which GitHub account this workspace's gh calls run as,
-# for somebody who works across several client organisations. Absent means
-# the machine-active `gh` account. Read by scripts/gh/gh.sh.
+# the human-authored `purpose` and the `harnesses` chosen at init are preserved
+# across refreshes.
 #
 # Source AFTER lib/layout.sh (so AGENTS_ROOT / WORKSPACE_ROOT / SIBLING_REPOS are
 # available). Requires jq. Compatible with Bash 3.2 (macOS).
@@ -124,13 +119,10 @@ workspace_generate() {
         )')"
   fi
 
-  # Preserve the human-authored account pin. The writer below emits a fixed set
-  # of top-level keys, so anything not carried over here is silently dropped —
-  # and a pin that disappears on the next `init.sh` is worse than no pin, because
-  # the workspace goes back to the machine-active account without saying so.
-  local account="" harnesses="null"
+  # Preserve the harness choice. The writer below emits a fixed set of
+  # top-level keys, so anything not carried over here is dropped.
+  local harnesses="null"
   if [[ -f "$WORKSPACE_FILE" ]]; then
-    account="$(jq -r '.githubAccount // empty' "$WORKSPACE_FILE" 2>/dev/null || true)"
     harnesses="$(jq -c '.harnesses // null' "$WORKSPACE_FILE" 2>/dev/null || echo null)"
     [[ -n "$harnesses" ]] || harnesses="null"
   fi
@@ -138,19 +130,10 @@ workspace_generate() {
   local stamp
   stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "")"
   jq -n --arg mode "$mode" --arg stamp "$stamp" --argjson repos "$merged" \
-        --arg account "$account" --argjson harnesses "$harnesses" '
+        --argjson harnesses "$harnesses" '
     { mode: $mode, contextRoot: ".", generated: $stamp, repos: $repos }
-    | if $account != "" then .githubAccount = $account else . end
     | if $harnesses != null then .harnesses = $harnesses else . end' \
     >"$WORKSPACE_FILE"
-}
-
-# Echo this workspace's pinned GitHub account, or nothing. The headers helper
-# reads the map directly (it runs standalone, outside this library).
-workspace_github_account() {
-  [[ -f "$WORKSPACE_FILE" ]] || return 0
-  command -v jq >/dev/null 2>&1 || return 0
-  jq -r '.githubAccount // empty' "$WORKSPACE_FILE" 2>/dev/null || true
 }
 
 # Print a compact human summary of the current map (for setup/doctor output).

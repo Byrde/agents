@@ -200,7 +200,7 @@ write_settings() {
   # GitHub goes through the gh CLI. Retire the server that older installs wrote.
   if jq -e --arg url "$GITHUB_MCP_URL" '.mcp.servers.github.url == $url' "$CFG" >/dev/null 2>&1; then
     json_edit "$CFG" "$JQ_DROP_GITHUB" --arg url "$GITHUB_MCP_URL"
-    echo "  ✓ removed the old GitHub MCP server: GitHub goes through .agents/scripts/gh/gh.sh"
+    echo "  ✓ removed the old GitHub MCP server: GitHub goes through the gh CLI"
   fi
   echo ""
 }

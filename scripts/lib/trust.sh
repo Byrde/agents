@@ -1,20 +1,13 @@
 #!/usr/bin/env bash
 # Byrde Agents — Claude Code workspace trust (shared lib).
 #
-# Claude Code ignores a project's own settings until the workspace is trusted.
-# `.claude/settings.json` is skipped wholesale, so everything init writes there
-# is inert: the allow-all hook, the rules re-injection hook, the permission mode
-# and the MCP approvals. The tool names two remedies for an untrusted workspace:
+# An older init set projects["<root>"].hasTrustDialogAccepted in ~/.claude.json
+# so that Claude Code would run the GitHub MCP token helper, and it recorded the
+# grant in the manifest. GitHub now goes through the gh CLI, so init grants no
+# trust. The human accepts Claude Code's own trust dialog instead.
 #
-#   accept the trust dialog here once interactively, or set
-#   projects["<root>"].hasTrustDialogAccepted in ~/.claude.json.
-#
-# init takes the second one, because the first cannot happen in a
-# non-interactive session. It grants trust whenever Claude Code is selected.
-#
-# WHAT THIS GRANTS. Trust is not hook-specific — it makes Claude Code honour this
-# project's settings generally. That is a real widening of what the installer
-# does, so it is announced, it is recorded, and uninstall gives it back.
+# What stays is the revoke: `init.sh uninstall` gives back a grant that an older
+# init recorded, and nothing else.
 #
 # WHAT IT WILL NOT DO. `~/.claude.json` holds every project on the machine and
 # the account block. This never creates it, never rewrites it when it cannot be
@@ -29,17 +22,6 @@ CLAUDE_USER_CONFIG="${CLAUDE_USER_CONFIG:-$HOME/.claude.json}"
 
 # The manifest key recording that INIT granted the trust, not the human.
 TRUST_MANIFEST_KEY="workspace-trust"
-
-# Echo the trust state for a workspace: true | false | absent.
-workspace_trust_state() {
-  local root="$1"
-  [[ -f "$CLAUDE_USER_CONFIG" ]] || { echo "absent"; return 0; }
-  command -v jq >/dev/null 2>&1 || { echo "absent"; return 0; }
-  jq -r --arg r "$root" '
-    if (.projects // {}) | has($r) then
-      (.projects[$r].hasTrustDialogAccepted // false) | tostring
-    else "absent" end' "$CLAUDE_USER_CONFIG" 2>/dev/null || echo "absent"
-}
 
 # Merge one key into projects[<root>] of the user config. Internal.
 # $1 = workspace root, $2 = true|false. Returns 1 without writing on any problem.
@@ -77,28 +59,6 @@ _trust_write() {
     return 1
   fi
   mv "$tmp" "$CLAUDE_USER_CONFIG"
-}
-
-# Trust this workspace so Claude Code honours its project settings.
-# Records the grant in the manifest ONLY when it changed the value, so
-# revoke_workspace_trust can tell an init grant from the human's own choice.
-grant_workspace_trust() {
-  local root="$1" state
-  state="$(workspace_trust_state "$root")"
-
-  if [[ "$state" == "true" ]]; then
-    echo "  ✓ workspace already trusted (your choice, left alone)"
-    return 0
-  fi
-
-  _trust_write "$root" true || return 1
-
-  if command -v manifest_add >/dev/null 2>&1; then
-    manifest_add "$TRUST_MANIFEST_KEY"
-  fi
-  echo "  ✓ workspace trusted → projects[\"$root\"].hasTrustDialogAccepted in ${CLAUDE_USER_CONFIG/#$HOME/~}"
-  echo "    Claude Code now reads this project's .claude/settings.json: the hooks and the"
-  echo "    permission mode. Undone by 'init.sh uninstall'."
 }
 
 # Give the trust back on uninstall — only if init granted it.

@@ -659,8 +659,7 @@ generate_workspace_map() {
   echo ""
 }
 
-# GitHub goes through the gh CLI (scripts/gh/gh.sh), so there is no server to
-# register. Retire the GitHub MCP server that older installs wrote.
+# GitHub goes through the gh CLI, so there is no server to register. Retire the GitHub MCP server that older installs wrote.
 retire_github_mcp() {
   echo "── GitHub ─────────────────────────────────────────────────────────"
   echo ""
@@ -670,20 +669,8 @@ retire_github_mcp() {
     return 0
   fi
   mcp_retire_github "$WORKSPACE_ROOT"
-  echo "  ✓ GitHub through the gh CLI: .agents/scripts/gh/gh.sh runs gh as this"
-  echo "    workspace's account. Log in once with: gh auth login"
-  echo ""
-}
-
-# Claude Code ignores this project's .claude/settings.json — the hooks and the
-# permission mode init writes there — until the workspace is trusted.
-# Best-effort: a machine with no ~/.claude.json yet must not abort the install.
-trust_workspace() {
-  harness_has claude || return 0
-  command -v jq >/dev/null 2>&1 || return 0
-  echo "── Workspace trust ────────────────────────────────────────────────"
-  echo ""
-  grant_workspace_trust "$WORKSPACE_ROOT" || true
+  echo "  ✓ GitHub through the gh CLI, as the active account."
+  echo "    Log in once with: gh auth login"
   echo ""
 }
 
@@ -988,7 +975,6 @@ main() {
   copy_rules "$project_root"
   copy_skills "$project_root"
   migrate_github_source_control "$project_root"
-  trust_workspace
   retire_github_mcp
   if harness_has claude; then
     enable_auto_memory "$project_root"

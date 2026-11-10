@@ -109,10 +109,9 @@ The choice is saved as `harnesses` in `.workspace.agents.json`. Re-runs and ever
 2. **Workspace map** — generates `.workspace.agents.json` at the project root, auto-detecting mono vs multi-repo (see [Single-Repo or Multi-Repo Workspace](#single-repo-or-multi-repo-workspace)). Gitignored
 3. **Rules** — renders each `.agents/rules/*.md` into each harness's format (see [Harnesses](#harnesses))
 4. **Skills** — makes `.agents/skills/` visible to each harness
-5. **Workspace trust** (Claude Code only) — trusts the workspace, so Claude Code reads `.claude/settings.json` (see [Workspace trust](#workspace-trust-claude-code))
-6. **GitHub** — removes the GitHub MCP server that an older install registered. GitHub goes through the `gh` CLI (see [GitHub](#github))
-7. **Auto-memory** (Claude Code only) — sets `autoMemoryEnabled: true` in `.claude/settings.json` (turning on Claude Code's built-in auto-memory, the default) and pins `autoMemoryDirectory` to the absolute path of `./memory` in `.claude/settings.local.json` (project-local storage, git-tracked and shared with the team).
-8. **Hooks** — writes two hooks for each harness that has them: an allow-all pre-tool hook that approves every tool call, and a post-tool hook that re-injects the rules (see below)
+5. **GitHub — removes the GitHub MCP server that an older install registered. GitHub goes through the `gh` CLI (see [GitHub](#github))
+6. **Auto-memory** (Claude Code only) — sets `autoMemoryEnabled: true` in `.claude/settings.json` (turning on Claude Code's built-in auto-memory, the default) and pins `autoMemoryDirectory` to the absolute path of `./memory` in `.claude/settings.local.json` (project-local storage, git-tracked and shared with the team).
+7. **Hooks** — writes two hooks for each harness that has them: an allow-all pre-tool hook that approves every tool call, and a post-tool hook that re-injects the rules (see below)
 
 ### Harnesses
 
@@ -134,7 +133,7 @@ Things to know:
 - **Tokens.** Antigravity cannot read the environment in its MCP config, so a tool's MCP server that needs a token is skipped for it, not written with a secret.
 - **Antigravity hooks**: none. Its `PostToolUse` cannot add context.
 - **Copilot**: `.vscode/mcp.json` is for VS Code. Copilot CLI reads `.mcp.json`, which exists when Claude Code is selected too. The coding agent takes MCP config from repository settings, not from a file.
-- **Claude Code only**: auto-memory, `permissions.defaultMode`, and workspace trust (see [Workspace trust](#workspace-trust-claude-code)). They are removed when Claude Code is dropped.
+- **Claude Code only**: auto-memory and `permissions.defaultMode`. They are removed when Claude Code is dropped. Claude Code reads them only in a trusted workspace (see [Workspace trust](#workspace-trust-claude-code)).
 
 ### Rules re-injection
 
@@ -150,11 +149,9 @@ One trap worth knowing if you write your own hook: `PostToolUse` **ignores stdou
 
 ### Workspace trust (Claude Code)
 
-Claude Code ignores a project's `.claude/settings.json` until the workspace is trusted. The hooks and the permission mode that init writes there then never load. Claude Code names two remedies: accept the trust dialog once, or set `projects["<root>"].hasTrustDialogAccepted` in `~/.claude.json`.
+Claude Code ignores a project's `.claude/settings.json` until the workspace is trusted. The hooks and the permission mode that init writes there load only after you accept Claude Code's trust dialog. `init.sh` grants no trust.
 
-`init.sh` takes the second remedy whenever Claude Code is a selected harness, because the first cannot happen in a non-interactive session. Trust makes Claude Code honor this project's settings generally. That widens what the installer does, so init announces it, and `init.sh uninstall` gives it back. Uninstall gives back **only what init granted**. If you accepted the trust dialog yourself, an uninstall leaves your decision alone. The grant is recorded as `workspace-trust` in `.manifest.local.yml`.
-
-`init.sh` never creates `~/.claude.json`, and never rewrites it when it cannot be parsed. That file holds every project on the machine and the account block, so init leaves a corrupt one untouched.
+An older `init.sh` set `projects["<root>"].hasTrustDialogAccepted` in `~/.claude.json` and recorded the grant as `workspace-trust` in `.manifest.local.yml`. `init.sh uninstall` gives back only that recorded grant. If you accepted the trust dialog yourself, an uninstall leaves your decision alone. Uninstall never creates `~/.claude.json`, and never rewrites it when it cannot be parsed.
 
 ### Optional setup
 
@@ -279,29 +276,9 @@ The three providers belong to the script. A re-run replaces their models with th
 
 GitHub has two parts, and both use the `gh` CLI. No MCP server is involved.
 
-**Source control** (branches, pull requests, review, merge) needs no setup. `init.sh` installs the always-on `github-source-control` **rule**. The rule tells the agent to run `gh` through [`scripts/gh/gh.sh`](scripts/gh/gh.sh), and to resolve the target repo for each task from `.workspace.agents.json`. Log in once with `gh auth login`. For a SAML-SSO organization, authorize your `gh` login for the organization.
-
-The wrapper finds `gh` and `jq` by absolute path when `PATH` does not have them. An editor started from Finder or the Dock gets a `PATH` without Homebrew.
+**Source control** (branches, pull requests, review, merge) needs no setup. `init.sh` installs the always-on `github-source-control` **rule**. The rule tells the agent to run `gh`, and to resolve the target repo for each task from `.workspace.agents.json`. `gh` runs as the account that is active on the machine. Log in once with `gh auth login`, and run `gh auth switch` to change the account. For a SAML-SSO organization, authorize your `gh` login for the organization.
 
 An older install registered a GitHub MCP server. `init.sh` and the OpenCode init remove it on the next run. They remove only a server named `github` that points at `https://api.githubcopilot.com/mcp/`, and its approval in `.claude/settings.json`.
-
-### Which GitHub account a workspace uses
-
-A bare `gh` runs as the account that is **active on the machine**. If you work for several client organizations, each with its own GitHub account, the last account you switched to then acts in every workspace. A valid token for the wrong account looks exactly like success.
-
-So a workspace can name its account. The wrapper resolves it in this order:
-
-1. `$BYRDE_GH_ACCOUNT` — explicit override
-2. `githubAccount` in `.workspace.agents.json` — this workspace's account
-3. the machine-active `gh` account — the default
-
-Ranks 1 and 2 are **binding**. The wrapper puts the token of that account in `GH_TOKEN` for the one call. If no token for it is available, the wrapper fails and names the account. It does not fall back, because falling back is the leak. Rank 3 runs `gh` unchanged, so a single-account setup needs no configuration.
-
-```json
-{ "mode": "multi", "contextRoot": ".", "repos": [ … ], "githubAccount": "your-client-login" }
-```
-
-The wrapper reads the nearest `.workspace.agents.json` at or above the working directory. A call from inside one repo of a multi-repo workspace therefore finds the map at the context root. `init.sh` preserves `githubAccount` when it refreshes the map, the same way it preserves `purpose`.
 
 **Projects** (work items, milestones, board state) is the one piece that needs a pin — a project board (owner + board number) can't be auto-detected — so it stays an explicit, opt-in step:
 
@@ -408,8 +385,7 @@ Offline suites cover the installer itself, and live tests verify that the hooks 
 | `test_harness_adapters.sh` | Rules, skills, MCP servers and hooks rendered for each harness, and `init.sh` end to end |
 | `test_hook_wiring.sh` | Hook settings point at scripts that exist and answer in a shape the CLI accepts |
 | `test_github_cli.sh` | GitHub through `gh`: no MCP server, and the old one is removed |
-| `test_gh_account_scope.sh` | Which GitHub account the `gh` wrapper runs as |
-| `test_workspace_trust.sh` | The Claude Code workspace-trust grant and its revocation |
+| `test_workspace_trust.sh` | init grants no workspace trust, and uninstall revokes an old grant |
 | `test_figma_setup.sh` | `setup-figma.sh` |
 | `test_opencode.sh` | The OpenCode installer, the model scoring, `setup-fuelix.sh` and the plugin |
 | `test_hooks_live.sh` | Live: the hooks inside a real `claude` session (calls the API) |

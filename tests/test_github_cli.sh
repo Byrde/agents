@@ -92,28 +92,45 @@ test_uninstall_retires_the_old_github_server() {
   assert_json "$host/.mcp.json" '.mcpServers | has("github")' "false" "uninstall left the old GitHub server"
 }
 
-# ─── Trust no longer depends on GitHub ───────────────────────────────────────
+# ─── No workspace trust ──────────────────────────────────────────────────────
+#
+# Trust was granted only so the GitHub MCP token helper could run. With no
+# server, init leaves the trust decision to Claude Code's own dialog.
 
-test_claude_code_is_trusted_without_a_github_remote() {
+test_init_grants_no_workspace_trust() {
   need
-  local host; host="$(make_host "")"
+  local host; host="$(make_host)"
   run_init "$host" --harness claude || fail "init failed"
-  assert_json "$SANDBOX/claude.json" '[(.projects // {})[] | select(.hasTrustDialogAccepted == true)] | length' "1" \
-    "Claude Code ignores .claude/settings.json (the hooks too) until the workspace is trusted"
+  assert_json "$SANDBOX/claude.json" '[(.projects // {})[] | select(.hasTrustDialogAccepted == true)] | length' "0" \
+    "init trusted the workspace, but only the human may accept the trust dialog now"
 }
 
-# ─── The agents are told to use the wrapper ──────────────────────────────────
+# ─── The agents are told to run gh ───────────────────────────────────────────
 
-test_the_rule_routes_github_through_the_wrapper() {
+test_the_rule_routes_github_through_gh() {
   local rule; rule="$(cat "$REPO_ROOT/rules/github-source-control.md")"
-  assert_contains "$rule" ".agents/scripts/gh/gh.sh" "the rule does not name the gh wrapper"
+  assert_contains "$rule" "gh pr create" "the rule does not tell the agent to run gh"
+  assert_not_contains "$rule" "gh.sh" "the rule still names the removed gh wrapper"
   assert_not_contains "$rule" "MCP" "the rule still mentions an MCP server"
 }
 
-test_github_projects_uses_the_wrapper() {
+test_github_projects_routes_github_through_gh() {
   local t; t="$(cat "$REPO_ROOT/tools/github-projects.md.template")"
-  assert_contains "$t" ".agents/scripts/gh/gh.sh" "github-projects does not name the gh wrapper"
+  assert_contains "$t" "gh issue create" "github-projects does not tell the agent to run gh"
+  assert_not_contains "$t" "gh.sh" "github-projects still names the removed gh wrapper"
   assert_not_contains "$t" "MCP" "github-projects still mentions an MCP server"
+}
+
+# ─── No account binding ──────────────────────────────────────────────────────
+#
+# gh runs as the machine-active account. Nothing reads githubAccount any more.
+
+test_no_account_binding_is_left() {
+  assert_no_file "$REPO_ROOT/scripts/gh/gh.sh" "the gh wrapper still ships"
+  local f
+  for f in scripts/lib/workspace.sh scripts/doctor.sh README.md; do
+    assert_not_contains "$(cat "$REPO_ROOT/$f")" "githubAccount" "$f still reads githubAccount"
+  done
 }
 
 run_tests

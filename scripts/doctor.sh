@@ -241,31 +241,18 @@ check_github() {
     fi
   done
 
-  # gh CLI, run the way the agents run it: as this workspace's account.
+  # gh CLI, run the way the agents run it: as the machine-active account.
   if ! has_cmd gh; then
     fail "gh CLI not installed"
     return
   fi
   pass "gh CLI available"
 
-  local account
-  account="$(gh_workspace_account)"
-  if out="$(cd "$PROJECT_ROOT" && "$SCRIPT_DIR/gh/gh.sh" api user --jq .login 2>&1)"; then
-    if [[ -n "$account" ]]; then
-      pass "gh auth: logged in as $out (the account this workspace names)"
-    else
-      pass "gh auth: logged in as $out (the active account)"
-    fi
+  if out="$(gh api user --jq .login 2>&1)"; then
+    pass "gh auth: logged in as $out (the active account)"
   else
     fail "gh auth: ${out%%$'\n'*} — run: gh auth login"
   fi
-}
-
-# The account the workspace names, or nothing.
-gh_workspace_account() {
-  [[ -n "${BYRDE_GH_ACCOUNT:-}" ]] && { echo "$BYRDE_GH_ACCOUNT"; return 0; }
-  [[ -f "$WORKSPACE_FILE" ]] || return 0
-  jq -r '.githubAccount // empty' "$WORKSPACE_FILE" 2>/dev/null || true
 }
 
 # ─── Figma checks ────────────────────────────────────────────────────────────

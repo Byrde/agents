@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
-# test_workspace_trust.sh — init grants this workspace Claude Code's trust, and
-# uninstall gives back only what init took.
+# test_workspace_trust.sh — init grants no Claude Code trust, and uninstall
+# gives back only a grant that an older init made.
 #
 # Wiring layer: no session, no API calls, no cost.
 #
-# Claude Code ignores project settings until a workspace is trusted, so the
-# hooks and the permission mode init writes to .claude/settings.json never load.
-# The tool names two remedies — accept the trust dialog once, or set
-# projects["<root>"].hasTrustDialogAccepted in ~/.claude.json — and the
-# installer takes the second one.
+# An older init set projects["<root>"].hasTrustDialogAccepted in ~/.claude.json
+# so the GitHub MCP token helper could run, and recorded the grant in the
+# manifest. GitHub now goes through the gh CLI, so init grants nothing. The
+# revoke stays, so an uninstall still returns what the older init took.
 #
 # The care here is all in what it must NOT do. `~/.claude.json` holds every
 # project on the machine plus the account. Losing a key there is far worse than
-# an untrusted workspace, and revoking a trust decision the human made in
-# the dialog is worse still — hence the manifest marker.
+# a stale trust, and revoking a trust decision the human made in the dialog is
+# worse still — hence the manifest marker.
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/harness.sh"
 
 TRUST_LIB="$REPO_ROOT/scripts/lib/trust.sh"
@@ -57,82 +56,18 @@ run_trust() {
   return 0
 }
 
-# ─── Granting ────────────────────────────────────────────────────────────────
-
-test_grant_trusts_an_untrusted_workspace() {
-  local cfg="$SANDBOX/claude.json" mf="$SANDBOX/manifest.yml"
-  seed_config "$cfg" false
-  run_trust grant_workspace_trust "$cfg" "$mf" >/dev/null
-
-  assert_json "$cfg" '.projects["'"$ROOT"'"].hasTrustDialogAccepted' "true" \
-    "the workspace was not trusted"
-}
-
-test_grant_records_that_init_did_it() {
-  local cfg="$SANDBOX/claude.json" mf="$SANDBOX/manifest.yml"
-  seed_config "$cfg" false
-  run_trust grant_workspace_trust "$cfg" "$mf" >/dev/null
-
-  assert_file "$mf" "no manifest was written"
-  assert_contains "$(cat "$mf")" "workspace-trust" \
-    "init granted trust without recording it, so uninstall cannot give it back"
-}
-
-test_grant_does_not_claim_credit_for_the_humans_choice() {
-  local cfg="$SANDBOX/claude.json" mf="$SANDBOX/manifest.yml"
-  seed_config "$cfg" true          # the human already accepted the dialog
-  run_trust grant_workspace_trust "$cfg" "$mf" >/dev/null
-
-  assert_json "$cfg" '.projects["'"$ROOT"'"].hasTrustDialogAccepted' "true" \
-    "already-trusted must stay trusted"
-  if [ -f "$mf" ]; then
-    assert_not_contains "$(cat "$mf")" "workspace-trust" \
-      "init claimed a grant it did not make — uninstall would revoke the human's choice"
-  fi
-}
-
-test_grant_preserves_every_other_key() {
-  local cfg="$SANDBOX/claude.json" mf="$SANDBOX/manifest.yml"
-  seed_config "$cfg" false
-  run_trust grant_workspace_trust "$cfg" "$mf" >/dev/null
-
-  assert_json "$cfg" '.numStartups' "42" "an account-level key was lost"
-  assert_json "$cfg" '.oauthAccount.emailAddress' "someone@example.com" \
-    "the account block was lost"
-  assert_json "$cfg" '.projects | keys | length' "3" "a project entry was lost"
-  assert_json "$cfg" '.projects["/Users/someone/other-a"].history | join(",")' "keep" \
-    "another project's history was lost"
-  assert_json "$cfg" '.projects["/Users/someone/other-b"].hasTrustDialogAccepted' "false" \
-    "another project's trust was changed"
-  assert_json "$cfg" '.projects["'"$ROOT"'"].history | join(",")' "mine" \
-    "this project's own other keys were dropped"
-}
-
-# ─── Refusing to act on what it cannot read ──────────────────────────────────
-
-test_a_missing_config_is_left_missing() {
-  local cfg="$SANDBOX/absent.json" mf="$SANDBOX/manifest.yml" out
-  out="$(run_trust grant_workspace_trust "$cfg" "$mf")"
-  assert_no_file "$cfg" "the installer invented a user config"
-  assert_contains "$out" "no Claude Code user config" "it did not say why it skipped"
-}
-
-test_a_malformed_config_is_never_rewritten() {
-  local cfg="$SANDBOX/claude.json" mf="$SANDBOX/manifest.yml" out before
-  printf '{ this is not json' >"$cfg"
-  before="$(cat "$cfg")"
-  out="$(run_trust grant_workspace_trust "$cfg" "$mf")"
-  assert_eq "$before" "$(cat "$cfg")" \
-    "a config that could not be parsed was overwritten anyway"
-  assert_contains "$out" "could not" "the refusal was silent"
+# What an older init left: the workspace trusted, and the grant recorded.
+seed_old_grant() {
+  local cfg="$1" mf="$2"
+  seed_config "$cfg" true
+  ( MANIFEST_FILE="$mf"; . "$MANIFEST_LIB"; manifest_add workspace-trust )
 }
 
 # ─── Revoking ────────────────────────────────────────────────────────────────
 
 test_revoke_gives_back_what_init_granted() {
   local cfg="$SANDBOX/claude.json" mf="$SANDBOX/manifest.yml"
-  seed_config "$cfg" false
-  run_trust grant_workspace_trust "$cfg" "$mf" >/dev/null
+  seed_old_grant "$cfg" "$mf"
   run_trust revoke_workspace_trust "$cfg" "$mf" >/dev/null
 
   assert_json "$cfg" '.projects["'"$ROOT"'"].hasTrustDialogAccepted' "false" \
@@ -140,6 +75,22 @@ test_revoke_gives_back_what_init_granted() {
   assert_not_contains "$(cat "$mf" 2>/dev/null || echo)" "workspace-trust" \
     "the marker outlived the grant"
   assert_json "$cfg" '.numStartups' "42" "revoking lost an account-level key"
+  assert_json "$cfg" '.projects | keys | length' "3" "a project entry was lost"
+  assert_json "$cfg" '.projects["/Users/someone/other-a"].hasTrustDialogAccepted' "true" \
+    "another project's trust was changed"
+  assert_json "$cfg" '.projects["'"$ROOT"'"].history | join(",")' "mine" \
+    "this project's own other keys were dropped"
+}
+
+test_revoke_never_rewrites_a_malformed_config() {
+  local cfg="$SANDBOX/claude.json" mf="$SANDBOX/manifest.yml" out before
+  ( MANIFEST_FILE="$mf"; . "$MANIFEST_LIB"; manifest_add workspace-trust )
+  printf '{ this is not json' >"$cfg"
+  before="$(cat "$cfg")"
+  out="$(run_trust revoke_workspace_trust "$cfg" "$mf")"
+  assert_eq "$before" "$(cat "$cfg")" \
+    "a config that could not be parsed was overwritten anyway"
+  assert_contains "$out" "could not" "the refusal was silent"
 }
 
 test_revoke_leaves_the_humans_own_trust_alone() {
@@ -163,9 +114,9 @@ test_the_installer_sources_the_trust_lib() {
     "init.sh does not source lib/trust.sh, so the functions are undefined at run time"
 }
 
-test_the_installer_grants_the_trust() {
-  assert_contains "$(cat "$REPO_ROOT/scripts/init.sh")" 'grant_workspace_trust "$WORKSPACE_ROOT"' \
-    "init.sh never grants workspace trust"
+test_nothing_grants_the_trust() {
+  assert_not_contains "$(cat "$REPO_ROOT/scripts/init.sh" "$REPO_ROOT/scripts/lib/trust.sh")" 'grant_workspace_trust' \
+    "the installer can still grant workspace trust"
 }
 
 test_uninstall_revokes_the_trust() {
