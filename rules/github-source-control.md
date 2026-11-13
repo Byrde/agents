@@ -40,8 +40,9 @@ git worktree add -b <branch> .worktrees/<branch>    # new branch
 git worktree add .worktrees/<branch> <branch>       # existing branch
 ```
 
-Default to this for `feature/` and `bugfix/` work. A `patch/`-class one-liner may stay in
-the main checkout.
+Default to this for `feature/` and `bugfix/` work. A `patch/`-class one-liner, or `solo`
+work while no other work is in progress in the main checkout, may stay in the main
+checkout on its branch.
 
 **The cost is real.** Untracked files, `node_modules` and build artifacts are not shared,
 so install dependencies in the new worktree before building. Environment-shared services

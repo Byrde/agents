@@ -42,3 +42,9 @@ Write a memory when the answer would not be obvious to a reader of the code late
 - Delete a memory that turns out to be wrong. Do not leave it and add a correction
   beside it.
 - Convert a relative date to an absolute one.
+
+## Upkeep
+
+When recall turns up two memories that contradict each other, or a claim that no longer
+holds, fix that one now. When the bank holds many of these, or the index has grown hard
+to scan, suggest the `memory-synthesis` skill to the user.

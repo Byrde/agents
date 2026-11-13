@@ -17,6 +17,7 @@
 #   asset   claude                cursor             codex                copilot                             antigravity
 #   rules   .claude/rules/*.md    .cursor/rules/*.mdc AGENTS.md (block)   .github/instructions/*.instructions.md  .agents/rules/*.md (native)
 #   skills  .claude/skills/       .agents/skills/    .agents/skills/      .agents/skills/                     .agents/skills/
+#   agents  .claude/agents/       —                  —                    —                                   —
 #   mcp     .mcp.json             .cursor/mcp.json   .codex/config.toml   .vscode/mcp.json                    .agents/mcp_config.json
 #   hooks   .claude/settings.json .cursor/hooks.json .codex/hooks.json    .github/hooks/byrde-agents.json     (none — see below)
 #
@@ -35,6 +36,12 @@
 #
 # Each harness gets the body under its own frontmatter (or none, for Claude).
 #
+# PRACTICE SKILLS ARE SUBAGENTS IN CLAUDE CODE. A skill with `category: practice`
+# is installed as .claude/agents/<name>.md, not as a skill: the shared preamble
+# (subagent-preamble.md) followed by the skill's method. The method is then the
+# subagent's system prompt, so it does not fade as the main session grows.
+# Every other harness reads the practice skills as skills.
+#
 # Gaps, on purpose:
 #   - Antigravity hooks: its PostToolUse cannot add context, and IDE hooks are
 #     reported not to fire. No hook is written for it.
@@ -50,6 +57,7 @@ HARNESS_DEFAULT="claude"
 _HARNESS_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _HARNESS_AGENTS_ROOT="$(cd "$_HARNESS_LIB_DIR/../.." && pwd)"
 HARNESS_HOOK_SCRIPT="$_HARNESS_AGENTS_ROOT/scripts/hooks/reinject-rules.sh"
+HARNESS_AGENT_PREAMBLE="$_HARNESS_LIB_DIR/subagent-preamble.md"
 
 # Marker that identifies every block and entry these adapters own. A hook entry
 # is ours when its command carries the marker or runs the re-injection script.
@@ -351,12 +359,60 @@ harness_skills_dir() {
   esac
 }
 
+# Is <src> a practice skill (a directory whose SKILL.md says category: practice)?
+harness_is_practice() {
+  [[ -f "$1/SKILL.md" ]] && [[ "$(_harness_fm "$1/SKILL.md" category)" == "practice" ]]
+}
+
+# Does this harness take practice skills as subagents?
+harness_has_agents() { [[ "$1" == "claude" ]]; }
+
+# Write a practice skill as a Claude Code subagent: its name and description,
+# then the preamble, then the method.
+_harness_agent_install() {
+  local root="$1" src="$2" name desc dest
+  name="$(basename "$src")"
+  desc="$(_harness_fm "$src/SKILL.md" description | sed 's/\*\*MUST be invoked\*\*/**MUST be delegated to**/')"
+  dest="$root/.claude/agents/$name.md"
+  mkdir -p "$(dirname "$dest")"
+  {
+    printf -- '---\nname: %s\ndescription: %s\n---\n\n' "$name" "$desc"
+    printf '<!-- %s:agent — generated from .agents/skills/%s/SKILL.md by init.sh -->\n\n' "$HARNESS_MARK" "$name"
+    cat "$HARNESS_AGENT_PREAMBLE"
+    printf '\n'
+    harness_rule_body "$src/SKILL.md"
+  } >"$dest"
+}
+
+_harness_agent_remove() {
+  rm -f "$1/.claude/agents/$2.md"
+  rmdir "$1/.claude/agents" 2>/dev/null || true
+}
+
+# Where a skill lands for a harness, relative to the root.
+harness_skill_where() {
+  local h="$1" name="$2"
+  if harness_has_agents "$h" && harness_is_practice "$_HARNESS_AGENTS_ROOT/skills/$name"; then
+    echo ".claude/agents/$name.md"
+  else
+    echo "$(harness_skills_dir "$h")/$name"
+  fi
+}
+
 # Mirror a skill directory into a harness's skills dir under <root>. A no-op
-# when the destination is the source itself.
+# when the destination is the source itself. A practice skill becomes a
+# subagent instead, for a harness that takes them.
 harness_skill_install() {
   local root="$1" h="$2" src="$3" name dir
   name="$(basename "$src")"
   dir="$root/$(harness_skills_dir "$h")"
+  if harness_has_agents "$h" && harness_is_practice "$src"; then
+    # An older install copied it as a skill. Two ways in loads it twice.
+    _harness_same_path "$dir/$name" "$src" || rm -rf "${dir:?}/$name"
+    rmdir "$dir" 2>/dev/null || true
+    _harness_agent_install "$root" "$src"
+    return 0
+  fi
   # Older installs mirrored into .cursor/skills/; Cursor now reads .agents/.
   if [[ "$h" == "cursor" ]]; then rm -rf "${root:?}/.cursor/skills/$name"; rmdir "$root/.cursor/skills" 2>/dev/null || true; fi
   _harness_same_path "$dir/$name" "$src" && return 0
@@ -370,6 +426,7 @@ harness_skill_install() {
 harness_skill_remove() {
   local root="$1" h="$2" name="$3" src="${4:-}" dir
   dir="$root/$(harness_skills_dir "$h")"
+  harness_has_agents "$h" && _harness_agent_remove "$root" "$name"
   if [[ "$h" == "cursor" ]]; then rm -rf "${root:?}/.cursor/skills/$name"; rmdir "$root/.cursor/skills" 2>/dev/null || true; fi
   if [[ -n "$src" ]] && _harness_same_path "$dir/$name" "$src"; then
     return 0
@@ -382,11 +439,6 @@ harness_skill_remove() {
   rm -rf "${dir:?}/$name"
   rmdir "$dir" 2>/dev/null || true
   return 0
-}
-
-harness_skill_where() {
-  local h="$1" name="$2"
-  echo "$(harness_skills_dir "$h")/$name"
 }
 
 # ─── MCP servers ─────────────────────────────────────────────────────────────

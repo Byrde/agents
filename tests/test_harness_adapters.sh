@@ -150,6 +150,39 @@ test_only_claude_gets_a_skill_copy_when_agents_is_the_source() {
   return 0
 }
 
+test_claude_gets_a_practice_skill_as_a_subagent() {
+  load_lib
+  local root="$SANDBOX/p" src agent
+  src="$root/.agents/skills/demo"
+  agent="$root/.claude/agents/demo.md"
+  mkdir -p "$src" "$root/.claude/skills/demo"
+  printf -- '---\nname: demo\ndescription: "**MUST be invoked** before a demo."\ncategory: practice\n---\n\n# Demo\nDEMO_METHOD_MARKER\n' >"$src/SKILL.md"
+  harness_skill_install "$root" claude "$src"
+  assert_file "$agent" "Claude Code got no subagent for a practice skill"
+  [ -e "$root/.claude/skills/demo" ] && fail "the old skill copy was not removed"
+  assert_contains "$(cat "$agent")" "name: demo" "the subagent has no name"
+  assert_contains "$(cat "$agent")" "**MUST be delegated to** before a demo." "the description was not rewritten for delegation"
+  assert_contains "$(cat "$agent")" "Needs decision" "the subagent preamble is missing"
+  assert_contains "$(cat "$agent")" "DEMO_METHOD_MARKER" "the method is missing"
+  assert_not_contains "$(cat "$agent")" "category: practice" "the skill frontmatter leaked into the body"
+  assert_eq ".claude/agents/demo.md" "$(_HARNESS_AGENTS_ROOT="$root/.agents" harness_skill_where claude demo)" "the install log names the wrong place"
+  harness_skill_install "$root" cursor "$src"
+  [ -e "$root/.cursor/agents" ] && fail "a harness without subagents got one"
+  harness_skill_remove "$root" claude demo "$src"
+  assert_no_file "$agent" "the subagent survived the removal"
+  assert_file "$src/SKILL.md" "removing the subagent deleted the source"
+}
+
+test_claude_keeps_a_non_practice_skill_as_a_skill() {
+  load_lib
+  local root="$SANDBOX/p" src="$SANDBOX/p/.agents/skills/lite"
+  mkdir -p "$src"
+  printf -- '---\nname: lite\ncategory: mode\n---\n\nbody\n' >"$src/SKILL.md"
+  harness_skill_install "$root" claude "$src"
+  assert_file "$root/.claude/skills/lite/SKILL.md" "a non-practice skill was not copied as a skill"
+  assert_no_file "$root/.claude/agents/lite.md" "a non-practice skill became a subagent"
+}
+
 test_a_staged_skill_is_mirrored_into_agents_skills() {
   load_lib
   local root="$SANDBOX/repo" src="$SANDBOX/repo/.byrde/skills/demo"
@@ -313,6 +346,10 @@ test_init_installs_for_the_chosen_harnesses_and_drops_the_rest() {
   assert_json "$host/.workspace.agents.json" '.harnesses | join(" ")' "$HARNESS_ALL" "the choice was not saved"
   assert_file "$host/.github/instructions/global.instructions.md" "Copilot got no rules"
   assert_file "$host/.codex/hooks.json" "Codex got no hooks"
+  assert_file "$host/.claude/agents/develop.md" "Claude Code got no practice subagents"
+  assert_no_file "$host/.claude/skills/develop/SKILL.md" "Claude Code got develop as a skill too"
+  assert_file "$host/.claude/skills/solo/SKILL.md" "Claude Code did not get solo as a skill"
+  assert_file "$host/.claude/rules/step-back.md" "Claude Code did not get the step-back rule"
 
   run_init "$host" --harness cursor || fail "init --harness cursor failed"
   assert_json "$host/.workspace.agents.json" '.harnesses | join(",")' "cursor" "the new choice was not saved"
@@ -320,6 +357,7 @@ test_init_installs_for_the_chosen_harnesses_and_drops_the_rest() {
   assert_no_file "$host/.github/instructions/global.instructions.md" "a dropped harness kept its rules"
   assert_no_file "$host/.codex/hooks.json" "a dropped harness kept its hooks"
   assert_no_file "$host/.claude/rules/global.md" "Claude Code kept its rules after being dropped"
+  assert_no_file "$host/.claude/agents/develop.md" "Claude Code kept its subagents after being dropped"
 
   # A plain re-run follows the saved choice instead of the default.
   run_init "$host" || fail "init re-run failed"

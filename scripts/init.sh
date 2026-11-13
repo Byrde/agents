@@ -512,6 +512,9 @@ print_summary() {
   for h in $(harness_selected); do
     printf '    ✓ %-20s rules → %s\n' "$(harness_label "$h")" "$(harness_rule_where "$h" "*" | sed 's/section \*/sections/')"
     printf '      %-20s skills → %s/\n' "" "$(harness_skills_dir "$h")"
+    if harness_has_agents "$h"; then
+      printf '      %-20s practice skills → .claude/agents/ (subagents)\n' ""
+    fi
     if harness_supports_hooks "$h"; then
       printf '      %-20s hooks → %s\n' "" "$(harness_hook_file "$h")"
     fi
@@ -725,7 +728,11 @@ copy_skills() {
   done
 
   for h in $(harness_selected); do
-    printf '  practice skills → %-16s (%s)\n' "$(harness_skills_dir "$h")/" "$(harness_label "$h")"
+    if harness_has_agents "$h"; then
+      printf '  practice skills → %-16s (%s, as subagents)\n' ".claude/agents/" "$(harness_label "$h")"
+    else
+      printf '  practice skills → %-16s (%s)\n' "$(harness_skills_dir "$h")/" "$(harness_label "$h")"
+    fi
   done
   echo "  (tool skills are installed by setup-*.sh scripts)"
   echo ""
