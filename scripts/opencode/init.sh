@@ -388,7 +388,7 @@ install() {
   echo ""
   echo "$b"
   echo "  Done. Restart OpenCode to load the agents and the plugin."
-  echo "  Re-score after a provider change:  .agents/scripts/opencode/init.sh evaluate"
+  echo "  Re-score after a provider change: .agents/scripts/opencode/init.sh evaluate"
   echo "  Add Fuel iX models:               .agents/scripts/opencode/setup-fuelix.sh"
   echo "  Undo:                             .agents/scripts/opencode/init.sh uninstall"
   echo "$b"

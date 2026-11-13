@@ -1,0 +1,3 @@
+- [Fuel iX cost proxy](fuelix-cost-proxy.md) — AA list prices stand in for what Fuel iX charges per model
+- [Shipping size](shipping-size.md) — small fixes straight to main, large changes one PR per unit
+- [MCP to CLI](mcp-to-cli.md) — CLIs only (gh, acli, curl + gcloud); Figma is the one MCP exception
