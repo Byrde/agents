@@ -371,4 +371,32 @@ EOF
   assert_not_contains "$(jq -r '.results[2]' <<<"$out")" "description: d" "the rule frontmatter leaked"
 }
 
+# The free API (since 2026-11-04): the intelligence index alone, performance
+# nested, the creator by name. The dimensions with no data must drop out of the
+# profile, not push every model under the coverage floor.
+test_the_scorer_reads_the_free_benchmark_schema() {
+  command -v jq >/dev/null 2>&1 || skip "jq is not on PATH"
+  local aa="$SANDBOX/free.json" out
+  jq -n '
+    def e($slug; $name; $score; $speed; $ttfa): {slug: $slug, name: $name, release_date: "2026-09-22",
+      model_creator: {name: "Anthropic"},
+      evaluations: {artificial_analysis_intelligence_index: $score, artificial_analysis_coding_index: null},
+      pricing: {price_1m_input_tokens: 4, price_1m_output_tokens: 20},
+      performance: {median_output_tokens_per_second: $speed, median_time_to_first_answer_token_seconds: $ttfa}};
+    {data: [e("claude-opus-5-5"; "Claude Opus 5.5 (Max)"; 60; 90; 700),
+            e("claude-opus-5-5-high"; "Claude Opus 5.5 (High)"; 58; 80; 50),
+            e("claude-opus-5-5-low"; "Claude Opus 5.5 (Low)"; 40; 80; 10)]}' >"$aa"
+  out="$(python3 -I - "$REPO_ROOT/scripts/opencode/lib" "$aa" <<'PY'
+import json, sys
+sys.path.insert(0, sys.argv[1])
+import evaluate as ev
+models = [{"providerID": "anthropic", "id": "claude-opus-5-5", "modelID": "claude-opus-5-5",
+           "variants": ["high", "low", "max"], "tools": True}]
+picks, _ = ev.evaluate({"develop": "d"}, models, {}, json.load(open(sys.argv[2])))
+print(picks["develop"]["model"])
+PY
+)" || fail "the scorer failed on the free schema: $out"
+  assert_eq "anthropic/claude-opus-5-5#high" "$out" "the scorer did not score the free schema"
+}
+
 run_tests

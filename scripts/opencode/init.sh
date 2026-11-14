@@ -53,13 +53,14 @@ AGENTS_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # and mcp.sh the URL of the old GitHub MCP server.
 # shellcheck source=../lib/mcp.sh
 . "$SCRIPT_DIR/lib/mcp.sh"
+# shellcheck source=../lib/aa.sh
+. "$SCRIPT_DIR/lib/aa.sh"
 
 SKILLS_SRC="$AGENTS_ROOT/skills"
 RULES_SRC="$AGENTS_ROOT/rules"
 EVALUATE_PY="$OC_DIR/lib/evaluate.py"
 PLUGIN_SRC="$OC_DIR/plugin/byrde-agents.js"
 
-AA_URL="${BYRDE_AA_URL:-https://artificialanalysis.ai/api/v2/data/llms/models}"
 CATALOG_URL="${BYRDE_CATALOG_URL:-https://models.opencode.ai/api.json}"
 OPENCODE_BIN="${BYRDE_OPENCODE_BIN:-opencode}"
 
@@ -291,20 +292,7 @@ fetch_catalog() {
   return 1
 }
 
-fetch_aa() {
-  local out="$1"
-  if [[ -n "${BYRDE_AA_FILE:-}" ]]; then cp "$BYRDE_AA_FILE" "$out"; return 0; fi
-  [[ -n "${ARTIFICIAL_ANALYSIS_API_KEY:-}" ]] || return 1
-  # The header goes in on stdin: never on disk, never in `ps`.
-  if printf 'x-api-key: %s\n' "$ARTIFICIAL_ANALYSIS_API_KEY" \
-       | curl -fsS --max-time 120 -H @- "$AA_URL" -o "$out.tmp" 2>/dev/null; then
-    mv "$out.tmp" "$out"
-    return 0
-  fi
-  rm -f "$out.tmp"
-  echo "  ⚠ the Artificial Analysis API refused the request (check the key)" >&2
-  return 1
-}
+fetch_aa() { aa_fetch "$1"; }
 
 evaluate_agents() {
   echo "── Agents: one per practice skill, each on its best model ──"

@@ -76,6 +76,7 @@ UNMEASURED = 0.5  # half the best score: what a dimension with no data counts as
 METRICS = {
     "intelligence_index": ["evaluations.artificial_analysis_intelligence_index"],
     "coding_index": ["evaluations.artificial_analysis_coding_index"],
+    "agentic_index": ["evaluations.artificial_analysis_agentic_index"],
     "scicode": ["evaluations.scicode"],
     "livecodebench": ["evaluations.livecodebench"],
     "terminalbench": ["evaluations.terminalbench_v4_0", "evaluations.terminalbench_v2_1", "evaluations.terminalbench_hard"],
@@ -90,11 +91,13 @@ METRICS = {
 # Each dimension uses the benchmarks AA publishes for current models. A sparse
 # benchmark (coding index, τ²-bench, GPQA) counts when a model has it.
 # AA has no instruction-following or hallucination data for current models,
-# so neither is a dimension.
+# so neither is a dimension. The free API (since 2026-11-04) carries the
+# intelligence index alone; the coding and agentic indexes need a Pro key. A
+# dimension that no candidate has data for is left out of the profile.
 DIMENSIONS = {
     "intelligence": {"intelligence_index": 1},
     "coding": {"coding_index": 0.5, "scicode": 0.3, "livecodebench": 0.2},
-    "agentic": {"terminalbench": 0.7, "tau2": 0.15, "tau_banking": 0.15},
+    "agentic": {"agentic_index": 1, "terminalbench": 0.7, "tau2": 0.15, "tau_banking": 0.15},
     "reasoning": {"hle": 0.5, "gpqa": 0.25, "aime": 0.25},
     "long-context": {"lcr": 1},
 }
@@ -278,7 +281,7 @@ class AAIndex(object):
             old = slot.get(effort)
             if old is None or (e.get("release_date") or "") > (old.get("release_date") or ""):
                 slot[effort] = e
-            self.creators.setdefault(base, set()).add(((e.get("model_creator") or {}).get("slug") or ""))
+            self.creators.setdefault(base, set()).add(creator_slug(e))
         self.by_tokens = {}
         self.by_loose = {}
         for base in self.by_base:
@@ -317,10 +320,31 @@ class AAIndex(object):
         return min(1.0, value / top) if top > 0 else None
 
 
+def perf(entry, *names):
+    """The first performance figure present. The current API nests them under
+    "performance"; the legacy one had them at the top level."""
+    for name in names:
+        for path in ("performance." + name, name):
+            v = dig(entry, path)
+            if v is not None:
+                return v
+    return None
+
+
+def output_speed(entry):
+    return perf(entry, "median_output_tokens_per_second")
+
+
+def creator_slug(entry):
+    c = entry.get("model_creator") or {}
+    return c.get("slug") or re.sub(r"[^a-z0-9]+", "-", (c.get("name") or "").lower()).strip("-")
+
+
 def thinking_tokens(entry):
     """Estimated tokens before the first answer token, or None without speed data."""
-    tps = dig(entry, "median_output_tokens_per_second")
-    wait = dig(entry, "median_time_to_first_answer_token") or dig(entry, "median_time_to_first_token_seconds")
+    tps = output_speed(entry)
+    wait = perf(entry, "median_time_to_first_answer_token_seconds", "median_time_to_first_answer_token",
+                "median_time_to_first_token_seconds")
     if not tps or tps <= 0 or wait is None or wait < 0:
         return None
     return wait * tps
@@ -431,24 +455,43 @@ def evaluate(skills, models, catalog, aa):
                 "pos": pos,
                 "benchmark": entry.get("slug"),
                 "cost": cost_per_answer(entry, prices),
-                "speed": dig(entry, "median_output_tokens_per_second") or 0,
+                "speed": output_speed(entry) or 0,
                 "dims": dimension_scores(index, entry),
             })
 
+    return pick(skills, candidates), sorted(unmatched.items())
+
+
+def measured_dimensions(candidates):
+    """The dimensions at least one candidate has data for."""
+    return {d for c in candidates for d, (score, _) in c["dims"].items() if score is not None}
+
+
+def pick(skills, candidates):
+    """{skill: assignment}: the model for each skill's profile.
+
+    A candidate is {ref, pos, benchmark, cost, speed, dims}.
+    """
+    measured = measured_dimensions(candidates)
     assignments = {}
     for name in sorted(skills):
         profile = skill_profile(name)
         prof = PROFILES[profile]
+        weights = {d: w for d, w in prof["quality"].items() if d in measured}
         scored = []
         for c in candidates:
-            quality, cov = task_score(c["dims"], prof["quality"])
+            if not weights:
+                break
+            quality, cov = task_score(c["dims"], weights)
             if quality is None or cov < MIN_COVERAGE:
                 continue
             scored.append({"c": c, "quality": round(quality, 6), "coverage": cov})
         if not scored:
-            assignments[name] = {"model": None, "profile": profile, "reason": "no scored model meets the coverage floor"}
+            reason = "no scored model meets the coverage floor" if weights else "no benchmark data for this profile"
+            assignments[name] = {"model": None, "profile": profile, "reason": reason}
             continue
-        floor = max(s["quality"] for s in scored) * (1 - prof["margin"])
+        margin = prof["margin"]
+        floor = max(s["quality"] for s in scored) * (1 - margin)
         for s in scored:
             s["inMargin"] = s["quality"] >= floor
         # The pool, cheapest first; then everything else, best quality first.
@@ -461,12 +504,13 @@ def evaluate(skills, models, catalog, aa):
         best = scored[0]
         a = {"model": best["c"]["ref"], "profile": profile, "benchmark": best["c"]["benchmark"],
              "quality": rounded(best["quality"]), "coverage": rounded(best["coverage"], 2),
-             "costPerAnswer": rounded(best["c"]["cost"], 4), "margin": prof["margin"],
+             "costPerAnswer": rounded(best["c"]["cost"], 4), "margin": margin,
+             "measured": sorted(weights),
              "top": [{"model": s["c"]["ref"], "quality": rounded(s["quality"]),
                       "costPerAnswer": rounded(s["c"]["cost"], 4), "inMargin": s["inMargin"]}
                      for s in scored[:3]]}
         assignments[name] = a
-    return assignments, sorted(unmatched.items())
+    return assignments
 
 
 # ─── Render ──────────────────────────────────────────────────────────────────

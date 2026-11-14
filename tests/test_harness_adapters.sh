@@ -173,6 +173,20 @@ test_claude_gets_a_practice_skill_as_a_subagent() {
   assert_file "$src/SKILL.md" "removing the subagent deleted the source"
 }
 
+test_each_practice_subagent_gets_its_model_and_effort() {
+  load_lib
+  local root="$SANDBOX/p" name src
+  for name in plan develop quick-edit; do
+    src="$root/.agents/skills/$name"
+    mkdir -p "$src"
+    printf -- '---\nname: %s\ndescription: "D."\ncategory: practice\n---\n\nbody\n' "$name" >"$src/SKILL.md"
+    harness_skill_install "$root" claude "$src"
+  done
+  assert_contains "$(cat "$root/.claude/agents/plan.md")" $'model: opus\neffort: high\n---' "plan is not on Opus at high effort"
+  assert_contains "$(cat "$root/.claude/agents/develop.md")" $'model: sonnet\neffort: high\n---' "develop is not on Sonnet at high effort"
+  assert_contains "$(cat "$root/.claude/agents/quick-edit.md")" $'model: haiku\n---' "quick-edit is not on Haiku with the session's effort"
+}
+
 test_claude_keeps_a_non_practice_skill_as_a_skill() {
   load_lib
   local root="$SANDBOX/p" src="$SANDBOX/p/.agents/skills/lite"
@@ -181,6 +195,22 @@ test_claude_keeps_a_non_practice_skill_as_a_skill() {
   harness_skill_install "$root" claude "$src"
   assert_file "$root/.claude/skills/lite/SKILL.md" "a non-practice skill was not copied as a skill"
   assert_no_file "$root/.claude/agents/lite.md" "a non-practice skill became a subagent"
+}
+
+test_claude_keeps_every_tool_skill_as_a_skill() {
+  load_lib
+  WORKSPACE_FILE="$SANDBOX/.workspace.agents.json"
+  BYRDE_HARNESSES=claude
+  local root="$SANDBOX/p" t name
+  for t in "$REPO_ROOT"/tools/*.md.template; do
+    name="$(basename "$t" .md.template)"
+    mkdir -p "$root/.agents/skills/$name"
+    cp "$t" "$root/.agents/skills/$name/SKILL.md"
+    harness_skill_sync "$root" "$root/.agents/skills/$name" >/dev/null
+    assert_file "$root/.claude/skills/$name/SKILL.md" "the $name tool skill was not installed as a skill"
+    assert_no_file "$root/.claude/agents/$name.md" "the $name tool skill became a subagent"
+  done
+  unset BYRDE_HARNESSES
 }
 
 test_a_staged_skill_is_mirrored_into_agents_skills() {

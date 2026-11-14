@@ -2,69 +2,6 @@
 
 A library of self-contained, opinionated agent skills and rules for software development, adapted on install to Claude Code, Cursor, OpenAI Codex, GitHub Copilot and Google Antigravity. In Claude Code, the practice skills install as subagents (see [Practice subagents](#practice-subagents-claude-code)). OpenCode has its own installer, which turns the practice skills into agents (see [OpenCode](#opencode)). Drop it into any repository as a submodule. Two kinds of skills compose freely via shared verb+noun vocabulary ([`skills/CAPABILITIES.md`](skills/CAPABILITIES.md)): **practice skills** (the *what* — `plan`, `architect`, `design`, `develop`, `test`, `debug`, `review`, `quick-edit`, `docs`) ship with the repo. **Tool skills** (the *how* — `github-projects`, `jira`, `google-analytics`, `figma`, the vendored `figma-use`) are installed per-project by setup scripts. Some capabilities are always-on **rules** instead of opt-in skills — notably `workspace` (multi-repo routing) and `github-source-control` (branches/PRs/review) — installed automatically by `init.sh`.
 
-## What's included
-
-### Rules
-
-Always on. `init.sh` renders each one into every selected harness (see [Harnesses](#harnesses)).
-
-| Rule | What it covers |
-|---|---|
-| [`global`](rules/global.md) | Project-wide baseline. Picks the weight of each unit of work (`solo`, `quick-edit` or the dedicated practices), then routes it. The lead rule: re-injected in full during long sessions (see [Rules re-injection](#rules-re-injection)) |
-| [`step-back`](rules/step-back.md) | Stop patching and re-evaluate the design when the work goes in circles: the third attempt, a patch on a patch, a test bent to pass |
-| [`development`](rules/development.md) | Architectural standards — Lite DDD modular monolith by default |
-| [`github-source-control`](rules/github-source-control.md) | Branches, pull requests and code review through the `gh` CLI, as the workspace's GitHub account |
-| [`workspace`](rules/workspace.md) | Finds which repository a task belongs to in a multi-repo workspace, and works inside it |
-| [`memory`](rules/memory.md) | When to write memory, and what belongs in it (pairs with Claude Code's built-in auto-memory) |
-| [`technical-writing`](rules/technical-writing.md) | ASD-STE100 Simplified Technical English for docs, work items and specs |
-
-### Practice skills
-
-Ship with the repo. `init.sh` makes them visible to every selected harness.
-
-| Skill | Invoke it before you… |
-|---|---|
-| [`plan`](skills/plan/SKILL.md) | create, split or re-scope a work item |
-| [`architect`](skills/architect/SKILL.md) | change a module boundary, add a dependency, or decide build-vs-buy |
-| [`design`](skills/design/SKILL.md) | build or change a screen, flow or component |
-| [`develop`](skills/develop/SKILL.md) | make the first edit of a change that will open a pull request (TDD, one slice at a time) |
-| [`test`](skills/test/SKILL.md) | claim an implementation meets its acceptance criteria |
-| [`debug`](skills/debug/SKILL.md) | fix anything reported as broken, even when the fix looks obvious (reproduce, prove, encode as a test) |
-| [`review`](skills/review/SKILL.md) | review code, a diff, a branch or a pull request (findings ranked by severity) |
-| [`quick-edit`](skills/quick-edit/SKILL.md) | make a small, fully specified edit that opens no pull request |
-| [`docs`](skills/docs/SKILL.md) | write or substantially rewrite prose for people: a README, a guide, a changelog |
-
-### Mode, communication and maintenance skills
-
-Ship with the repo. They stay skills in every harness, Claude Code included.
-
-| Skill | Use it when… |
-|---|---|
-| [`solo`](skills/solo/SKILL.md) | the `global` rule's weight check picks it: one pull request, one repository, no new boundary. Shapes, plans, builds test-first, verifies and ships in one pass. Keeps a `project.md` only when the work needs a record, and escalates to the dedicated practices when the work outgrows it |
-| [`explain`](skills/explain/SKILL.md) | you ask for an explanation. Explains a hard thing in an easy way: the point first, no assumed context, a few levels below where you are, one concrete example for the hardest part |
-| [`memory-synthesis`](skills/memory-synthesis/SKILL.md) | you want the memory bank audited: verify each claim, merge fragments, delete what no longer holds, rebuild the index. Shows the change set and asks before it deletes |
-
-### Practice subagents (Claude Code)
-
-In Claude Code, each skill with `category: practice` installs as `.claude/agents/<name>.md`, not as a skill. The file holds the skill's description, the shared preamble ([`scripts/lib/subagent-preamble.md`](scripts/lib/subagent-preamble.md)) and the skill's method. The method is the subagent's system prompt, so it does not fade as the main session grows.
-
-A subagent cannot ask the user. When a step needs a decision, it stops and returns **Needs decision**. The main session asks you, then resumes the subagent with the answer. When a practice hands work to another one, such as `debug` to `develop`, the subagent returns **Handoff**, and the main session delegates. Subagents return **Memory candidates**, and the main session writes them. The `global` rule tells the main session to do all of this.
-
-The other harnesses read the practice skills as skills, from `.agents/skills/`.
-
-### Tool skills
-
-Opt-in, one setup script each (see [Setup Tools](#setup-tools)). Each renders its skill from a template in [`tools/`](tools/) (`figma-use` is vendored from upstream instead) and registers the MCP server it needs, if any.
-
-| Skill | Setup script | Owns | MCP server |
-|---|---|---|---|
-| `github-projects` | `setup-github-project.sh` | Work items, milestones, board state on a GitHub project board | GitHub (shared with source control) |
-| `jira` | `setup-jira.sh` | Work items and the project board in Jira | Atlassian Remote MCP |
-| `google-analytics` | `setup-google-analytics.sh` | GA4 reporting queries | Google `analytics-mcp` |
-| `figma` + `figma-use` | `setup-figma.sh` | Design tokens, components and design work in one Figma file | Figma |
-
-Pick one work-item tracker per project: `github-projects` and `jira` claim the same operations.
-
 ## Usage
 
 Use this repository as a submodule so another project keeps `.agents` at a pinned revision and can update it deliberately.
@@ -79,30 +16,6 @@ git commit -m "Add .agents submodule"
 **Cloning a host repo that already includes this submodule:** use `git clone --recurse-submodules <host-repo-url>`, or after a plain clone run `git submodule update --init --recursive`.
 
 **Updating the submodule:** `git submodule update --remote .agents` follows the submodule's configured remote branch.
-
-### Single-Repo or Multi-Repo Workspace
-
-`.agents` works whether you open your agent in a single repository or in a folder that sits above several repos. `init.sh` detects which and sets it up — no separate step, nothing to declare up front.
-
-- **Single repo (`mono`).** `.agents` is a submodule at the repo root and you work from that root. Tool skills + the manifest stage in the checkout (`.agents/skills/`, `.agents/.manifest.local.yml`).
-
-- **Multi-repo workspace (`multi`).** One `.agents` lives at a folder above several sibling repositories, and you open your agent at that folder to work across all of them. The always-on [workspace rule](#rules) reads a generated map (`.workspace.agents.json` at the context root) to learn what each repo is and routes every task to the right one. (If you instead `cd` into one repo to configure a tool skill scoped to it, that repo's rendered skills + manifest stage in its own `<repo>/.byrde/` so repos never clobber each other.)
-
-`init.sh` auto-detects the flavor (multiple sibling repos ⇒ `multi`, else `mono`), writes `.workspace.agents.json`, and installs the workspace rule. Re-running `init.sh` refreshes the map (and preserves a `mode` you've hand-edited). To force the flavor, set `BYRDE_WORKSPACE_MODE=mono|multi` or edit `mode` in the map.
-
-## Init
-
-One-command bootstrap that installs rules, skills and hooks, adapted to each agent harness you choose:
-
-```bash
-cd /your/project
-.agents/scripts/init.sh                          # Claude Code only (asks first on a terminal)
-.agents/scripts/init.sh --harness claude,cursor  # these harnesses, no question
-.agents/scripts/init.sh --harness all            # every harness
-.agents/scripts/init.sh uninstall                # remove everything init installed
-```
-
-**The default is Claude Code and nothing else.** On a terminal, init shows the harness list with Claude Code ticked, and Enter accepts it. A non-interactive run (CI, a script, piped stdin) installs for Claude Code without asking. Once a choice is saved, it becomes the default for later runs.
 
 ### Init parameters
 
@@ -132,7 +45,97 @@ The choice is saved as `harnesses` in `.workspace.agents.json`. Re-runs and ever
 6. **Auto-memory** (Claude Code only) — sets `autoMemoryEnabled: true` in `.claude/settings.json` (turning on Claude Code's built-in auto-memory, the default) and pins `autoMemoryDirectory` to the absolute path of `./memory` in `.claude/settings.local.json` (project-local storage, git-tracked and shared with the team).
 7. **Hooks** — writes two hooks for each harness that has them: an allow-all pre-tool hook that approves every tool call, and a post-tool hook that re-injects the rules (see below)
 
-### Harnesses
+### Single-Repo or Multi-Repo Workspace
+
+`.agents` works whether you open your agent in a single repository or in a folder that sits above several repos. `init.sh` detects which and sets it up — no separate step, nothing to declare up front.
+
+- **Single repo (`mono`).** `.agents` is a submodule at the repo root and you work from that root. Tool skills + the manifest stage in the checkout (`.agents/skills/`, `.agents/.manifest.local.yml`).
+
+- **Multi-repo workspace (`multi`).** One `.agents` lives at a folder above several sibling repositories, and you open your agent at that folder to work across all of them. The always-on [workspace rule](#rules) reads a generated map (`.workspace.agents.json` at the context root) to learn what each repo is and routes every task to the right one. (If you instead `cd` into one repo to configure a tool skill scoped to it, that repo's rendered skills + manifest stage in its own `<repo>/.byrde/` so repos never clobber each other.)
+
+`init.sh` auto-detects the flavor (multiple sibling repos ⇒ `multi`, else `mono`), writes `.workspace.agents.json`, and installs the workspace rule. Re-running `init.sh` refreshes the map (and preserves a `mode` you've hand-edited). To force the flavor, set `BYRDE_WORKSPACE_MODE=mono|multi` or edit `mode` in the map.
+
+## What's included
+
+### Rules
+
+Always on. `init.sh` renders each one into every selected harness (see [Harnesses](#harnesses)).
+
+| Rule | What it covers |
+|---|---|
+| [`global`](rules/global.md) | Project-wide baseline. Picks the weight of each unit of work (`solo`, `quick-edit` or the dedicated practices), then routes it. The lead rule: re-injected in full during long sessions (see [Rules re-injection](#rules-re-injection)) |
+| [`step-back`](rules/step-back.md) | Stop patching and re-evaluate the design when the work goes in circles: the third attempt, a patch on a patch, a test bent to pass |
+| [`development`](rules/development.md) | Architectural standards — Lite DDD modular monolith by default |
+| [`github-source-control`](rules/github-source-control.md) | Branches, pull requests and code review through the `gh` CLI, as the workspace's GitHub account |
+| [`workspace`](rules/workspace.md) | Finds which repository a task belongs to in a multi-repo workspace, and works inside it |
+| [`memory`](rules/memory.md) | When to write memory, and what belongs in it (pairs with Claude Code's built-in auto-memory) |
+| [`technical-writing`](rules/technical-writing.md) | ASD-STE100 Simplified Technical English for docs, work items and specs |
+
+### Practice skills
+
+Ship with the repo. `init.sh` makes them visible to every selected harness.
+
+| Skill | Invoke it before you… |
+|---|---|
+| [`solo`](skills/solo/SKILL.md) | the `global` rule's weight check picks it: one pull request, one repository, no new boundary. Shapes, plans, builds test-first, verifies and ships in one pass. Keeps a `project.md` only when the work needs a record, and escalates to the dedicated practices when the work outgrows it |
+| [`plan`](skills/plan/SKILL.md) | create, split or re-scope a work item |
+| [`architect`](skills/architect/SKILL.md) | change a module boundary, add a dependency, or decide build-vs-buy |
+| [`design`](skills/design/SKILL.md) | build or change a screen, flow or component |
+| [`develop`](skills/develop/SKILL.md) | make the first edit of a change that will open a pull request (TDD, one slice at a time) |
+| [`test`](skills/test/SKILL.md) | claim an implementation meets its acceptance criteria |
+| [`debug`](skills/debug/SKILL.md) | fix anything reported as broken, even when the fix looks obvious (reproduce, prove, encode as a test) |
+| [`review`](skills/review/SKILL.md) | review code, a diff, a branch or a pull request (findings ranked by severity) |
+| [`quick-edit`](skills/quick-edit/SKILL.md) | make a small, fully specified edit that opens no pull request |
+| [`docs`](skills/docs/SKILL.md) | write or substantially rewrite prose for people: a README, a guide, a changelog |
+
+### Practice subagents (Claude Code)
+
+In Claude Code, each skill with `category: practice` installs as `.claude/agents/<name>.md`, not as a skill. The file holds the skill's description, the shared preamble ([`scripts/lib/subagent-preamble.md`](scripts/lib/subagent-preamble.md)) and the skill's method. The method is the subagent's system prompt, so it does not fade as the main session grows.
+
+A subagent cannot ask the user. When a step needs a decision, it stops and returns **Needs decision**. The main session asks you, then resumes the subagent with the answer. When a practice hands work to another one, such as `debug` to `develop`, the subagent returns **Handoff**, and the main session delegates. Subagents return **Memory candidates**, and the main session writes them. The `global` rule tells the main session to do all of this.
+
+The other harnesses read the practice skills as skills, from `.agents/skills/`.
+
+#### Models for the subagents
+
+Each practice subagent runs on a fixed Claude model and effort. The table is `harness_agent_model` in [`scripts/lib/harness.sh`](scripts/lib/harness.sh), maintained by hand:
+
+| Subagents | Model | Effort |
+|---|---|---|
+| `plan`, `architect`, `design`, `review` | `opus` | `high` |
+| `develop`, `test`, `debug`, `docs` | `sonnet` | `high` |
+| `quick-edit` | `haiku` | the session's |
+
+The aliases follow the newest release of each family, so a new release needs no change. Edit the table to change a family or an effort, then re-run `init.sh`.
+
+### Tool skills
+
+Opt-in, one setup script each (see [Setup Tools](#setup-tools)). Each renders its skill from a template in [`tools/`](tools/) (`figma-use` is vendored from upstream instead) and registers the MCP server it needs, if any.
+
+| Skill | Setup script | Owns | MCP server |
+|---|---|---|---|
+| `github-projects` | `setup-github-project.sh` | Work items, milestones, board state on a GitHub project board | GitHub (shared with source control) |
+| `jira` | `setup-jira.sh` | Work items and the project board in Jira | Atlassian Remote MCP |
+| `google-analytics` | `setup-google-analytics.sh` | GA4 reporting queries | Google `analytics-mcp` |
+| `figma` + `figma-use` | `setup-figma.sh` | Design tokens, components and design work in one Figma file | Figma |
+
+Pick one work-item tracker per project: `github-projects` and `jira` claim the same operations.
+
+## Init
+
+One-command bootstrap that installs rules, skills and hooks, adapted to each agent harness you choose:
+
+```bash
+cd /your/project
+.agents/scripts/init.sh                          # Claude Code only (asks first on a terminal)
+.agents/scripts/init.sh --harness claude,cursor  # these harnesses, no question
+.agents/scripts/init.sh --harness all            # every harness
+.agents/scripts/init.sh uninstall                # remove everything init installed
+```
+
+**The default is Claude Code and nothing else.** On a terminal, init shows the harness list with Claude Code ticked, and Enter accepts it. A non-interactive run (CI, a script, piped stdin) installs for Claude Code without asking. Once a choice is saved, it becomes the default for later runs.
+
+## Harnesses
 
 Every asset has one source, and each harness gets it in its own files and format. The adapters live in [`scripts/lib/harness.sh`](scripts/lib/harness.sh):
 
@@ -154,7 +157,7 @@ Things to know:
 - **Copilot**: `.vscode/mcp.json` is for VS Code. Copilot CLI reads `.mcp.json`, which exists when Claude Code is selected too. The coding agent takes MCP config from repository settings, not from a file.
 - **Claude Code only**: auto-memory and `permissions.defaultMode`. They are removed when Claude Code is dropped. Claude Code reads them only in a trusted workspace (see [Workspace trust](#workspace-trust-claude-code)).
 
-### Rules re-injection
+## Rules re-injection
 
 Rules load once, at session start. Nothing re-asserts them, so they lose to the most recent tool result as a session grows, and compliance decays without anyone noticing.
 
@@ -166,13 +169,13 @@ Set the cadence with `BYRDE_RULES_REINJECT_EVERY` (default `12`, `0` disables).
 
 One trap worth knowing if you write your own hook: `PostToolUse` **ignores stdout**. The model only reads `hookSpecificOutput.additionalContext`, so the hook answers with JSON. `UserPromptSubmit` is the opposite — there, stdout *is* the injection. Both shapes are handled, so an install wired the old way keeps working until you re-run `init.sh`.
 
-### Workspace trust (Claude Code)
+## Workspace trust (Claude Code)
 
 Claude Code ignores a project's `.claude/settings.json` until the workspace is trusted. The hooks and the permission mode that init writes there load only after you accept Claude Code's trust dialog. `init.sh` grants no trust.
 
 An older `init.sh` set `projects["<root>"].hasTrustDialogAccepted` in `~/.claude.json` and recorded the grant as `workspace-trust` in `.manifest.local.yml`. `init.sh uninstall` gives back only that recorded grant. If you accepted the trust dialog yourself, an uninstall leaves your decision alone. Uninstall never creates `~/.claude.json`, and never rewrites it when it cannot be parsed.
 
-### Optional setup
+## Optional setup
 
 Run these separately when you want them (see [Setup Tools](#setup-tools)):
 
@@ -205,7 +208,7 @@ cd /your/project
 
 **Requires:** OpenCode 2, `jq`, `python3`, `curl`, `git`. For scoring, an [Artificial Analysis](https://artificialanalysis.ai/) API key (free tier) in `ARTIFICIAL_ANALYSIS_API_KEY`.
 
-### What the OpenCode init writes
+## What the OpenCode init writes
 
 | File | Content |
 |---|---|
@@ -222,7 +225,7 @@ The agent files have no body. In OpenCode, a body replaces the default system pr
 
 GitHub goes through the `gh` CLI, as in the other harnesses (see [GitHub](#github)).
 
-### Model scoring
+## Model scoring
 
 Every run of `init.sh` and `init.sh evaluate` scores the models again:
 
@@ -231,13 +234,15 @@ Every run of `init.sh` and `init.sh evaluate` scores the models again:
 3. It scores the quality of each model against the profile of each practice skill.
 4. It pins the cheapest model whose quality is within the profile's margin of the best one.
 
+**Data.** The free endpoint, `/api/v2/language/models/free`, replaced the old one on 2026-11-04. It carries the intelligence index alone. The coding and agentic indexes need a Pro key: set `BYRDE_AA_URL` to `https://artificialanalysis.ai/api/v2/language/models`. A dimension that no model has data for is left out of each profile, so free data scores on intelligence.
+
 **Quality.** Each benchmark score is divided by the best score that Artificial Analysis lists, so 0.95 means 95% of the best. The benchmarks roll up into dimensions:
 
 | Dimension | Benchmarks |
 |---|---|
 | intelligence | Artificial Analysis intelligence index |
 | coding | coding index, SciCode, LiveCodeBench |
-| agentic | Terminal-Bench, τ²-bench, τ²-bench banking |
+| agentic | agentic index, Terminal-Bench, τ²-bench, τ²-bench banking |
 | reasoning | Humanity's Last Exam, GPQA, AIME |
 | long-context | AA-LCR |
 
@@ -266,7 +271,7 @@ The agents **inherit** the session's model in these cases:
 
 Benchmark data: [Artificial Analysis](https://artificialanalysis.ai/). Their free API requires attribution, so the report credits it.
 
-### The plugin
+## The plugin
 
 The plugin uses two OpenCode 2 hooks:
 
@@ -277,7 +282,7 @@ The plugin uses two OpenCode 2 hooks:
 
 Allow-all is a `permissions` rule in `opencode.json`, not a hook.
 
-### Fuel iX
+## Fuel iX
 
 `setup-fuelix.sh` lists the models that Fuel iX serves and asks which ones to add. `--models a,b,c` skips the question. Each family goes to the provider for its API:
 

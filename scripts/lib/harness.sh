@@ -367,16 +367,33 @@ harness_is_practice() {
 # Does this harness take practice skills as subagents?
 harness_has_agents() { [[ "$1" == "claude" ]]; }
 
-# Write a practice skill as a Claude Code subagent: its name and description,
-# then the preamble, then the method.
+# The Claude model and effort of each practice subagent: "<model> <effort>".
+# Maintained by hand. The aliases follow the newest release of each family.
+# Deep work runs on Opus, building and writing on Sonnet, quick edits on
+# Haiku. An empty effort leaves the session's own.
+harness_agent_model() {
+  case "$1" in
+    plan | architect | design | review) echo "opus high" ;;
+    develop | test | debug | docs)      echo "sonnet high" ;;
+    quick-edit)                         echo "haiku" ;;
+    *)                                  echo "" ;;
+  esac
+}
+
+# Write a practice skill as a Claude Code subagent: its name, description,
+# model and effort, then the preamble, then the method.
 _harness_agent_install() {
-  local root="$1" src="$2" name desc dest
+  local root="$1" src="$2" name desc dest model effort
   name="$(basename "$src")"
   desc="$(_harness_fm "$src/SKILL.md" description | sed 's/\*\*MUST be invoked\*\*/**MUST be delegated to**/')"
   dest="$root/.claude/agents/$name.md"
+  read -r model effort <<<"$(harness_agent_model "$name")"
   mkdir -p "$(dirname "$dest")"
   {
-    printf -- '---\nname: %s\ndescription: %s\n---\n\n' "$name" "$desc"
+    printf -- '---\nname: %s\ndescription: %s\n' "$name" "$desc"
+    [[ -n "$model" ]] && printf 'model: %s\n' "$model"
+    [[ -n "$model" && -n "$effort" ]] && printf 'effort: %s\n' "$effort"
+    printf -- '---\n\n'
     printf '<!-- %s:agent — generated from .agents/skills/%s/SKILL.md by init.sh -->\n\n' "$HARNESS_MARK" "$name"
     cat "$HARNESS_AGENT_PREAMBLE"
     printf '\n'
