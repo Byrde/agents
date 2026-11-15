@@ -80,7 +80,7 @@ mention the way they would have made them.
 
 7. **Get approval.** Hand over the document with a short list of the calls you made, so they can check those while reading. Iterate until they approve it.
 
-8. **Hand off.** The approved design is the input to the weight check in the `global` rule. If the work fits `solo`, `solo` builds from the design. If not, `plan` turns it into work items. Brief whichever runs next with the design's location: it has not seen this conversation.
+8. **Hand off.** The approved design is the input to the weight check in the `global` rule. If the work fits `solo`, `solo` builds from the design. If not, `plan` turns it into work items. Both run in this conversation and start from the design.
 
 ### Builder check prompt
 
