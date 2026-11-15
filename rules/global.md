@@ -72,6 +72,10 @@ items go untracked, boards unset, reviews unrequested, and nobody notices.
 Where your harness installs the practices as **subagents** (Claude Code:
 `.claude/agents/`), delegate to the subagent of that name. Otherwise, invoke the skill.
 
+**`plan`, `architect` and `design` are interactive.** Their method is a conversation with
+the user, so they are never subagents. Invoke them as skills in this conversation, on
+every harness. When a subagent returns **Handoff** to one of them, run it here.
+
 A subagent sees none of this conversation. Its brief is all it knows.
 
 - **Brief it fully.** Give the request, the decisions already made, the work item

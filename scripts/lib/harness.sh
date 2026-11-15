@@ -40,6 +40,9 @@
 # is installed as .claude/agents/<name>.md, not as a skill: the shared preamble
 # (subagent-preamble.md) followed by the skill's method. The method is then the
 # subagent's system prompt, so it does not fade as the main session grows.
+# Except a practice with `interactive: true` (plan, architect, design): its
+# method is a conversation with the user, and a subagent cannot ask the user
+# anything. It stays a skill, in the main session.
 # Every other harness reads the practice skills as skills.
 #
 # Gaps, on purpose:
@@ -364,6 +367,13 @@ harness_is_practice() {
   [[ -f "$1/SKILL.md" ]] && [[ "$(_harness_fm "$1/SKILL.md" category)" == "practice" ]]
 }
 
+# Does <src> run as a subagent, where a harness takes them? A practice skill
+# that is not interactive. An interactive one talks to the user, so it stays a
+# skill in the main session.
+harness_is_subagent() {
+  harness_is_practice "$1" && [[ "$(_harness_fm "$1/SKILL.md" interactive)" != "true" ]]
+}
+
 # Does this harness take practice skills as subagents?
 harness_has_agents() { [[ "$1" == "claude" ]]; }
 
@@ -373,7 +383,7 @@ harness_has_agents() { [[ "$1" == "claude" ]]; }
 # Haiku. An empty effort leaves the session's own.
 harness_agent_model() {
   case "$1" in
-    plan | architect | design | review) echo "opus high" ;;
+    review)                             echo "opus high" ;;
     develop | test | debug | docs)      echo "sonnet high" ;;
     quick-edit)                         echo "haiku" ;;
     *)                                  echo "" ;;
@@ -409,7 +419,7 @@ _harness_agent_remove() {
 # Where a skill lands for a harness, relative to the root.
 harness_skill_where() {
   local h="$1" name="$2"
-  if harness_has_agents "$h" && harness_is_practice "$_HARNESS_AGENTS_ROOT/skills/$name"; then
+  if harness_has_agents "$h" && harness_is_subagent "$_HARNESS_AGENTS_ROOT/skills/$name"; then
     echo ".claude/agents/$name.md"
   else
     echo "$(harness_skills_dir "$h")/$name"
@@ -418,18 +428,20 @@ harness_skill_where() {
 
 # Mirror a skill directory into a harness's skills dir under <root>. A no-op
 # when the destination is the source itself. A practice skill becomes a
-# subagent instead, for a harness that takes them.
+# subagent instead, for a harness that takes them, unless it is interactive.
 harness_skill_install() {
   local root="$1" h="$2" src="$3" name dir
   name="$(basename "$src")"
   dir="$root/$(harness_skills_dir "$h")"
-  if harness_has_agents "$h" && harness_is_practice "$src"; then
+  if harness_has_agents "$h" && harness_is_subagent "$src"; then
     # An older install copied it as a skill. Two ways in loads it twice.
     _harness_same_path "$dir/$name" "$src" || rm -rf "${dir:?}/$name"
     rmdir "$dir" 2>/dev/null || true
     _harness_agent_install "$root" "$src"
     return 0
   fi
+  # An older install made it a subagent. Two ways in loads it twice.
+  harness_has_agents "$h" && _harness_agent_remove "$root" "$name"
   # Older installs mirrored into .cursor/skills/; Cursor now reads .agents/.
   if [[ "$h" == "cursor" ]]; then rm -rf "${root:?}/.cursor/skills/$name"; rmdir "$root/.cursor/skills" 2>/dev/null || true; fi
   _harness_same_path "$dir/$name" "$src" && return 0

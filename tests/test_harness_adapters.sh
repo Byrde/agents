@@ -176,15 +176,37 @@ test_claude_gets_a_practice_skill_as_a_subagent() {
 test_each_practice_subagent_gets_its_model_and_effort() {
   load_lib
   local root="$SANDBOX/p" name src
-  for name in plan develop quick-edit; do
+  for name in review develop quick-edit; do
     src="$root/.agents/skills/$name"
     mkdir -p "$src"
     printf -- '---\nname: %s\ndescription: "D."\ncategory: practice\n---\n\nbody\n' "$name" >"$src/SKILL.md"
     harness_skill_install "$root" claude "$src"
   done
-  assert_contains "$(cat "$root/.claude/agents/plan.md")" $'model: opus\neffort: high\n---' "plan is not on Opus at high effort"
+  assert_contains "$(cat "$root/.claude/agents/review.md")" $'model: opus\neffort: high\n---' "review is not on Opus at high effort"
   assert_contains "$(cat "$root/.claude/agents/develop.md")" $'model: sonnet\neffort: high\n---' "develop is not on Sonnet at high effort"
   assert_contains "$(cat "$root/.claude/agents/quick-edit.md")" $'model: haiku\n---' "quick-edit is not on Haiku with the session's effort"
+}
+
+test_claude_keeps_an_interactive_practice_skill_as_a_skill() {
+  load_lib
+  local root="$SANDBOX/p" src="$SANDBOX/p/.agents/skills/chat"
+  mkdir -p "$src" "$root/.claude/agents"
+  printf -- '---\nname: chat\ndescription: "D."\ncategory: practice\ninteractive: true\n---\n\nbody\n' >"$src/SKILL.md"
+  printf 'stale\n' >"$root/.claude/agents/chat.md"
+  harness_skill_install "$root" claude "$src"
+  assert_file "$root/.claude/skills/chat/SKILL.md" "an interactive practice was not copied as a skill"
+  assert_no_file "$root/.claude/agents/chat.md" "an interactive practice kept its old subagent"
+  assert_eq ".claude/skills/chat" "$(_HARNESS_AGENTS_ROOT="$root/.agents" harness_skill_where claude chat)" "the install log names the wrong place"
+}
+
+test_the_shipped_interactive_practices_stay_skills() {
+  load_lib
+  local name
+  for name in plan architect design; do
+    harness_is_subagent "$REPO_ROOT/skills/$name" && fail "$name would install as a subagent"
+  done
+  harness_is_subagent "$REPO_ROOT/skills/develop" || fail "develop would not install as a subagent"
+  return 0
 }
 
 test_claude_keeps_a_non_practice_skill_as_a_skill() {

@@ -2,6 +2,7 @@
 name: plan
 description: "**MUST be invoked** before you create, split, restructure or re-scope a work item. NEVER write an issue, epic or acceptance criteria without loading this first. Skipping it leaves work untracked, unsized and off the board, because this skill is what consults the tracker. Decompose a request — vague or detailed — into trackable work, sized and prioritised at the right granularity. Surfaces dependencies and architectural concerns alongside the breakdown. Adapts to the work: a small fix becomes one item, an epic becomes a container plus its slices."
 category: practice
+interactive: true
 ---
 
 # Plan

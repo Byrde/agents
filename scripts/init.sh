@@ -513,7 +513,7 @@ print_summary() {
     printf '    ✓ %-20s rules → %s\n' "$(harness_label "$h")" "$(harness_rule_where "$h" "*" | sed 's/section \*/sections/')"
     printf '      %-20s skills → %s/\n' "" "$(harness_skills_dir "$h")"
     if harness_has_agents "$h"; then
-      printf '      %-20s practice skills → .claude/agents/ (subagents)\n' ""
+      printf '      %-20s practice skills → .claude/agents/ (subagents; interactive ones stay skills)\n' ""
     fi
     if harness_supports_hooks "$h"; then
       printf '      %-20s hooks → %s\n' "" "$(harness_hook_file "$h")"
@@ -729,7 +729,7 @@ copy_skills() {
 
   for h in $(harness_selected); do
     if harness_has_agents "$h"; then
-      printf '  practice skills → %-16s (%s, as subagents)\n' ".claude/agents/" "$(harness_label "$h")"
+      printf '  practice skills → %-16s (%s, as subagents; interactive ones stay skills)\n' ".claude/agents/" "$(harness_label "$h")"
     else
       printf '  practice skills → %-16s (%s)\n' "$(harness_skills_dir "$h")/" "$(harness_label "$h")"
     fi

@@ -102,19 +102,21 @@ Ship with the repo. `init.sh` makes them visible to every selected harness.
 
 ### Practice subagents (Claude Code)
 
-In Claude Code, each skill with `category: practice` installs as `.claude/agents/<name>.md`, not as a skill. The file holds the skill's description, the shared preamble ([`scripts/lib/subagent-preamble.md`](scripts/lib/subagent-preamble.md)) and the skill's method. The method is the subagent's system prompt, so it does not fade as the main session grows.
+In Claude Code, each skill with `category: practice` installs as `.claude/agents/<name>.md`, not as a skill, unless it is interactive (see below). The file holds the skill's description, the shared preamble ([`scripts/lib/subagent-preamble.md`](scripts/lib/subagent-preamble.md)) and the skill's method. The method is the subagent's system prompt, so it does not fade as the main session grows.
 
 A subagent cannot ask the user. When a step needs a decision, it stops and returns **Needs decision**. The main session asks you, then resumes the subagent with the answer. When a practice hands work to another one, such as `debug` to `develop`, the subagent returns **Handoff**, and the main session delegates. Subagents return **Memory candidates**, and the main session writes them. The `global` rule tells the main session to do all of this.
 
-The other harnesses read the practice skills as skills, from `.agents/skills/`.
+**Interactive practices stay in the main session.** `plan`, `architect` and `design` say `interactive: true` in their frontmatter. Their method is a conversation with you: confirm the framing, weigh the options, iterate until you agree. As subagents, every round would go through **Needs decision**. So Claude Code installs them as skills, in `.claude/skills/`, and runs them on the session's model. `init.sh` removes a subagent copy that an older install left. Mark a practice `interactive: true` only when talking to the user is most of its method. A practice that asks once and then works alone stays a subagent.
+
+The other harnesses read the practice skills as skills, from `.agents/skills/`. OpenCode still makes an agent of every practice, interactive or not: you switch to an OpenCode agent with Tab and talk to it directly.
 
 #### Models for the subagents
 
-Each practice subagent runs on a fixed Claude model and effort. The table is `harness_agent_model` in [`scripts/lib/harness.sh`](scripts/lib/harness.sh), maintained by hand:
+Each practice subagent runs on a fixed Claude model and effort. The interactive practices run on the session's model. The table is `harness_agent_model` in [`scripts/lib/harness.sh`](scripts/lib/harness.sh), maintained by hand:
 
 | Subagents | Model | Effort |
 |---|---|---|
-| `plan`, `architect`, `design`, `review` | `opus` | `high` |
+| `review` | `opus` | `high` |
 | `develop`, `test`, `debug`, `docs` | `sonnet` | `high` |
 | `quick-edit` | `haiku` | the session's |
 
