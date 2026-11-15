@@ -8,7 +8,13 @@ trigger: always_on
 This repo ships **practice skills** — `plan`, `architect`, `design`, `develop`, `test`,
 `debug`, `review`, `quick-edit`, `docs` — the team's methods for doing software work,
 and **`solo`**, which runs the same methods at a lighter weight in one pass. Treat them
-as the playbook.
+as the playbook. **`brainstorm`** comes before all of them when the intent is open.
+
+## Settle what to build
+
+If the request leaves open what to make or why, run `brainstorm` first, in this
+conversation, never as a subagent. It ends with an approved design. If everything that
+matters is in the request, skip it.
 
 ## Pick the weight first
 
