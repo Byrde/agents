@@ -1,6 +1,6 @@
 # .agents
 
-A library of self-contained, opinionated agent skills and rules for software development, adapted on install to Claude Code, Cursor, OpenAI Codex, GitHub Copilot and Google Antigravity. In Claude Code, the practice skills install as subagents (see [Practice subagents](#practice-subagents-claude-code)). OpenCode has its own installer, which turns the practice skills into agents (see [OpenCode](#opencode)). Drop it into any repository as a submodule. Two kinds of skills compose freely via shared verb+noun vocabulary ([`skills/CAPABILITIES.md`](skills/CAPABILITIES.md)): **practice skills** (the *what* — `plan`, `architect`, `design`, `develop`, `test`, `debug`, `review`, `quick-edit`, `docs`) ship with the repo. **Tool skills** (the *how* — `github-projects`, `jira`, `google-analytics`, `figma`, the vendored `figma-use`) are installed per-project by setup scripts. **`brainstorm`** runs in the main conversation before any of them, when the request leaves open what to build or why. Some capabilities are always-on **rules** instead of opt-in skills — notably `workspace` (multi-repo routing) and `github-source-control` (branches/PRs/review) — installed automatically by `init.sh`.
+A library of self-contained, opinionated agent skills and rules for software development, adapted on install to Claude Code, Cursor, OpenAI Codex, GitHub Copilot and Google Antigravity. Drop it into any repository as a submodule. Always-on **rules** carry how the team builds: the `global` rule covers building, debugging, verification and documentation in a few lines each. **Practice skills** carry the four processes that need a method of their own: `brainstorm`, `plan`, `design` and `review`. **Tool skills** (`github-projects`, `jira`, `google-analytics`, `figma`, the vendored `figma-use`) are installed per-project by setup scripts. In Claude Code, `review` installs as a subagent (see [Practice subagents](#practice-subagents-claude-code)). OpenCode has its own installer, which turns the practice skills into agents (see [OpenCode](#opencode)).
 
 ## Usage
 
@@ -51,7 +51,7 @@ The choice is saved as `harnesses` in `.workspace.agents.json`. Re-runs and ever
 1. **Harnesses** — resolves the harnesses as described above
 2. **Workspace map** — generates `.workspace.agents.json` at the project root, auto-detecting mono vs multi-repo (see [Single-Repo or Multi-Repo Workspace](#single-repo-or-multi-repo-workspace)). Gitignored
 3. **Rules** — renders each `.agents/rules/*.md` into each harness's format (see [Harnesses](#harnesses))
-4. **Skills** — makes `.agents/skills/` visible to each harness. For Claude Code, the practice skills become subagents in `.claude/agents/`, and an old `.claude/skills/` copy of each is removed
+4. **Skills** — makes `.agents/skills/` visible to each harness. For Claude Code, a practice skill that is not interactive becomes a subagent in `.claude/agents/`, and an old `.claude/skills/` copy of it is removed. Init also removes the subagents and skill copies of the practice skills that are now rules
 5. **GitHub — removes the GitHub MCP server that an older install registered. GitHub goes through the `gh` CLI (see [GitHub](#github))
 6. **Auto-memory** (Claude Code only) — sets `autoMemoryEnabled: true` in `.claude/settings.json` (turning on Claude Code's built-in auto-memory, the default) and pins `autoMemoryDirectory` to the absolute path of `./memory` in `.claude/settings.local.json` (project-local storage, git-tracked and shared with the team).
 7. **Hooks** — writes two hooks for each harness that has them: an allow-all pre-tool hook that approves every tool call, and a post-tool hook that re-injects the rules (see below)
@@ -74,7 +74,7 @@ Always on. `init.sh` renders each one into every selected harness (see [Harnesse
 
 | Rule | What it covers |
 |---|---|
-| [`global`](rules/global.md) | Project-wide baseline. Picks the weight of each unit of work (`solo`, `quick-edit` or the dedicated practices), then routes it. The lead rule: re-injected in full during long sessions (see [Rules re-injection](#rules-re-injection)) |
+| [`global`](rules/global.md) | Project-wide baseline. States when to run each practice skill, and the rules for the work that needs no skill: what to do before you build, while you build, and before you say it is done. The lead rule: re-injected in full during long sessions (see [Rules re-injection](#rules-re-injection)) |
 | [`step-back`](rules/step-back.md) | Stop patching and re-evaluate the design when the work goes in circles: the third attempt, a patch on a patch, a test bent to pass |
 | [`development`](rules/development.md) | Architectural standards — Lite DDD modular monolith by default |
 | [`github-source-control`](rules/github-source-control.md) | Branches, pull requests and code review through the `gh` CLI, as the workspace's GitHub account |
@@ -86,41 +86,45 @@ Always on. `init.sh` renders each one into every selected harness (see [Harnesse
 
 Ship with the repo. `init.sh` makes them visible to every selected harness.
 
-| Skill | Invoke it before you… |
+| Skill | Run it when… |
 |---|---|
-| [`brainstorm`](skills/brainstorm/SKILL.md) | plan, design or build anything when the request leaves open what to make or why. Asks one question at a time, lays out the approaches, and gets a written design approved. Runs in the main conversation, never as a subagent, because it talks to the user |
-| [`solo`](skills/solo/SKILL.md) | the `global` rule's weight check picks it: one pull request, one repository, no new boundary. Shapes, plans, builds test-first, verifies and ships in one pass. Keeps a `project.md` only when the work needs a record, and escalates to the dedicated practices when the work outgrows it |
-| [`plan`](skills/plan/SKILL.md) | create, split or re-scope a work item |
-| [`architect`](skills/architect/SKILL.md) | change a module boundary, add a dependency, or decide build-vs-buy |
-| [`design`](skills/design/SKILL.md) | build or change a screen, flow or component |
-| [`develop`](skills/develop/SKILL.md) | make the first edit of a change that will open a pull request (TDD, one slice at a time) |
-| [`test`](skills/test/SKILL.md) | claim an implementation meets its acceptance criteria |
-| [`debug`](skills/debug/SKILL.md) | fix anything reported as broken, even when the fix looks obvious (reproduce, prove, encode as a test) |
-| [`review`](skills/review/SKILL.md) | review code, a diff, a branch or a pull request (findings ranked by severity) |
-| [`quick-edit`](skills/quick-edit/SKILL.md) | make a small, fully specified edit that opens no pull request |
-| [`docs`](skills/docs/SKILL.md) | write or substantially rewrite prose for people: a README, a guide, a changelog |
+| [`brainstorm`](skills/brainstorm/SKILL.md) | the request leaves open what to make or why. Asks one question at a time, lays out the approaches, and gets a written design approved |
+| [`plan`](skills/plan/SKILL.md) | you create, split or re-scope work items. Without a tracker, it keeps the record in `project.md` |
+| [`design`](skills/design/SKILL.md) | you design or change a screen, flow or component |
+| [`review`](skills/review/SKILL.md) | the user asks for a review, or a change must be validated against its acceptance criteria. Findings are ranked by severity |
+
+[`memory-synthesis`](skills/memory-synthesis/SKILL.md) also ships. It audits and consolidates the memory bank when you ask for it.
+
+**Building needs no skill.** Earlier versions shipped `solo`, `architect`, `develop`, `test`, `debug`, `quick-edit`, `docs` and `explain`. Most of each one restated what a capable model does without instruction. The parts that are specific to this project, or that a model skips by default, are now short rules:
+
+| Earlier skill | Where it is now |
+|---|---|
+| `solo`, `develop`, `quick-edit` | `global` rule: read first, ask once, test first, stay in scope, keep the tracker current |
+| `debug` | `global` rule: reproduce before you fix |
+| `architect` | `global` rule: structural decisions belong to the user |
+| `test` | the `review` skill, and the `global` rule's checks before you say the work is done |
+| `docs` | `global` rule: check prose against the source. The `technical-writing` rule sets the language |
+| `explain` | `technical-writing` rule, conversational level |
 
 ### Practice subagents (Claude Code)
 
-In Claude Code, each skill with `category: practice` installs as `.claude/agents/<name>.md`, not as a skill, unless it is interactive (see below). The file holds the skill's description, the shared preamble ([`scripts/lib/subagent-preamble.md`](scripts/lib/subagent-preamble.md)) and the skill's method. The method is the subagent's system prompt, so it does not fade as the main session grows.
+In Claude Code, a skill with `category: practice` installs as `.claude/agents/<name>.md`, not as a skill, unless it is interactive (see below). Today that is `review`: a second read is worth more when the reader did not build the change. The file holds the skill's description, the shared preamble ([`scripts/lib/subagent-preamble.md`](scripts/lib/subagent-preamble.md)) and the skill's method.
 
-A subagent cannot ask the user. When a step needs a decision, it stops and returns **Needs decision**. The main session asks you, then resumes the subagent with the answer. When a practice hands work to another one, such as `debug` to `develop`, the subagent returns **Handoff**, and the main session delegates. Subagents return **Memory candidates**, and the main session writes them. The `global` rule tells the main session to do all of this.
+A subagent cannot ask the user. When a step needs a decision, it stops and returns **Needs decision**. The main session asks you, then resumes the subagent with the answer. Subagents return **Memory candidates**, and the main session writes them. The `global` rule tells the main session to do this.
 
-**Interactive practices stay in the main session.** `plan`, `architect` and `design` say `interactive: true` in their frontmatter. Their method is a conversation with you: confirm the framing, weigh the options, iterate until you agree. As subagents, every round would go through **Needs decision**. So Claude Code installs them as skills, in `.claude/skills/`, and runs them on the session's model. `init.sh` removes a subagent copy that an older install left. Mark a practice `interactive: true` only when talking to the user is most of its method. A practice that asks once and then works alone stays a subagent.
+**Interactive practices stay in the main session.** `plan` and `design` say `interactive: true` in their frontmatter. Their method is a conversation with you: confirm the framing, weigh the options, iterate until you agree. As subagents, every round would go through **Needs decision**. So Claude Code installs them as skills, in `.claude/skills/`, and runs them on the session's model. `init.sh` removes a subagent copy that an older install left. Mark a practice `interactive: true` only when talking to the user is most of its method.
 
 The other harnesses read the practice skills as skills, from `.agents/skills/`. OpenCode still makes an agent of every practice, interactive or not: you switch to an OpenCode agent with Tab and talk to it directly.
 
 #### Models for the subagents
 
-Each practice subagent runs on a fixed Claude model and effort. The interactive practices run on the session's model. The table is `harness_agent_model` in [`scripts/lib/harness.sh`](scripts/lib/harness.sh), maintained by hand:
+A practice subagent runs on a fixed Claude model and effort when it has an entry in `harness_agent_model` in [`scripts/lib/harness.sh`](scripts/lib/harness.sh). The table is maintained by hand. A practice with no entry runs on the session's model.
 
 | Subagents | Model | Effort |
 |---|---|---|
 | `review` | `opus` | `high` |
-| `develop`, `test`, `debug`, `docs` | `sonnet` | `high` |
-| `quick-edit` | `haiku` | the session's |
 
-The aliases follow the newest release of each family, so a new release needs no change. Edit the table to change a family or an effort, then re-run `init.sh`.
+The alias follows the newest release of its family, so a new release needs no change. Edit the table to change a family or an effort, then re-run `init.sh`.
 
 ### Tool skills
 
@@ -210,7 +214,7 @@ Run these separately when you want them (see [Setup Tools](#setup-tools)):
 
 ## OpenCode
 
-OpenCode 2 has its own installer in [`scripts/opencode/`](scripts/opencode/). It does not use `init.sh` or the harness adapters. The practice skills become **agents**, and each agent runs on the model that suits its kind of work.
+OpenCode 2 has its own installer in [`scripts/opencode/`](scripts/opencode/). It does not use `init.sh` or the harness adapters. The practice skills (`plan`, `design`, `review`) become **agents**, and each agent runs on the model that suits its kind of work. Building follows the rules, on OpenCode's default agent and the session's model.
 
 ```bash
 cd /your/project
@@ -262,16 +266,13 @@ Every run of `init.sh` and `init.sh evaluate` scores the models again:
 
 A dimension uses the benchmarks that a model has. A dimension with no data counts as 0.5, so a gap in the benchmarks never helps a model. Artificial Analysis publishes no instruction-following or hallucination data for current models, so neither is a dimension.
 
-**Profiles.** Each practice skill maps to one profile:
+**Profiles.** Each practice skill maps to one profile. All three shipped practices use `deep`:
 
 | Profile | Skills | Quality weights | Margin |
 |---|---|---|---|
-| `deep` | plan, architect, design, review | reasoning 0.35, intelligence 0.35, long-context 0.2, agentic 0.1 | 5% |
-| `build` | develop, test, debug | coding 0.4, agentic 0.4, intelligence 0.2 | 5% |
-| `write` | docs | intelligence 0.6, long-context 0.4 | 5% |
-| `fast` | quick-edit | coding 0.5, intelligence 0.5 | 50% |
+| `deep` | plan, design, review | reasoning 0.35, intelligence 0.35, long-context 0.2, agentic 0.1 | 5% |
 
-5% is about the noise between two benchmark runs. A quick edit needs a model that is good enough, not one near the best, so `fast` accepts half the best quality.
+5% is about the noise between two benchmark runs. To give a new practice skill other needs, add a profile to `PROFILES` in [`scripts/opencode/lib/evaluate.py`](scripts/opencode/lib/evaluate.py).
 
 **Cost.** Cost is the estimated price of one answer: 10,000 input tokens, 1,000 output tokens, and the thinking tokens. The thinking tokens are the time to the first answer token multiplied by the output speed. So a higher reasoning effort costs more, even at the same price per token. For example, Opus 5.5 at max effort thinks for about 390 seconds and costs about $0.82 per answer. At xhigh effort it thinks for about 50 seconds and costs about $0.14. The prices are the deployment's own when OpenCode lists them, so a free model costs nothing. Otherwise they are the Artificial Analysis list prices.
 

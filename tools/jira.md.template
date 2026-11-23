@@ -4,8 +4,8 @@ description: Owns work-item and project-board operations against Jira for this
   project: create work item, transition work item, comment on work item, set
   work item field (priority, story points, type, status), link work item (to
   epic, parent, dependency), place work item on board, create milestone (epic).
-  Consulted by any practice skill that needs to create, query, transition, or
-  annotate a work item. Configured for Jira site {{SITE}}, project {{PROJECT_KEY}}.
+  Consult it before you create, query, transition, or annotate a work
+  item. Configured for Jira site {{SITE}}, project {{PROJECT_KEY}}.
 category: tool
 ---
 
@@ -23,7 +23,7 @@ This project's project-management tool. Owns work items (Jira issues), epics, an
 - **place work item on board** — ensure the issue appears on project {{PROJECT_KEY}}'s board (by project and status — issues in the project show on its board automatically).
 - **create milestone** — create an Epic (epics represent milestones).
 
-Any practice skill that mentions one of these operations routes through this skill.
+Any step that needs one of these operations routes through this skill.
 
 ## Access
 

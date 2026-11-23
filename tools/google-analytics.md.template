@@ -2,8 +2,8 @@
 name: google-analytics
 description: Owns Google Analytics (GA4) reporting for this project — query
   traffic, engagement, real-time, and funnel data. Pull account and property
-  metadata. Read custom dimensions and metrics. Consulted by any practice skill
-  that needs to measure how the site is actually used (traffic to events/day
+  metadata. Read custom dimensions and metrics. Consult it when you need to
+  measure how the site is actually used (traffic to events/day
   views, top venues, referral sources, real-time spikes). Read-only. Configured
   for GA4 property {{PROPERTY_ID}} under Google Cloud project {{GCP_PROJECT}}.
 category: tool
@@ -23,7 +23,7 @@ This project's analytics tool. Owns **read-only** GA4 reporting for **property `
 - **read custom dimensions & metrics** — the property's custom definitions (`get_custom_dimensions_and_metrics`).
 - **list Google Ads links** — linked Ads accounts (`list_google_ads_links`).
 
-Any practice skill that asks "how much traffic…", "which events/venues are most viewed", "where are visitors coming from", or "is anything spiking right now" routes through this skill.
+Any question such as "how much traffic…", "which events/venues are most viewed", "where are visitors coming from", or "is anything spiking right now" routes through this skill.
 
 ## Access
 

@@ -2,7 +2,7 @@
 # Bootstrap a project for OpenCode 2 with Byrde Agents.
 #
 # OpenCode gets its own installer because it takes the practice skills as
-# AGENTS, not as skills: each practice skill (plan, develop, debug, …) becomes
+# AGENTS, not as skills: each practice skill (plan, design, review) becomes
 # an agent you can switch to, or that the main agent delegates to, and each one
 # runs on the model that suits its kind of work.
 #

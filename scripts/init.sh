@@ -694,6 +694,39 @@ migrate_github_source_control() {
   return 0
 }
 
+# Migrate older installs: these skills became rules, or were folded into
+# another skill. init only visits the skills that still ship, so the subagent
+# or the skill copy an older install made for each one would stay, and its
+# description would still tell the model to use it. A file is ours only when it
+# carries our mark, so a skill or an agent the project wrote under the same
+# name is left alone.
+RETIRED_SKILLS="architect develop test debug docs quick-edit solo explain"
+retire_removed_skills() {
+  local project_root="$1" name dir agent copy found=0
+  for name in $RETIRED_SKILLS; do
+    [[ -e "$SKILLS_DIR/$name" ]] && continue
+    agent="$project_root/.claude/agents/$name.md"
+    if [[ -f "$agent" ]] && grep -q "$HARNESS_MARK:agent" "$agent"; then
+      rm -f "$agent"; found=1
+    fi
+    for dir in .claude/skills .cursor/skills .agents/skills; do
+      copy="$project_root/$dir/$name"
+      if [[ -f "$copy/SKILL.md" ]] && grep -qE '^category: (practice|mode|communication)$' "$copy/SKILL.md"; then
+        rm -rf "$copy"; found=1
+      fi
+    done
+  done
+  for dir in .claude/skills .cursor/skills .agents/skills; do
+    copy="$project_root/$dir/CAPABILITIES.md"
+    if [[ ! -e "$SKILLS_DIR/CAPABILITIES.md" && -f "$copy" ]] && head -n 1 "$copy" | grep -qx '# Skill Capabilities'; then
+      rm -f "$copy"; found=1
+    fi
+  done
+  rmdir "$project_root/.claude/agents" 2>/dev/null || true
+  [[ "$found" -eq 1 ]] && echo "  ✓ retired the practice skills that are now rules (see .agents/rules/global.md)"
+  return 0
+}
+
 # ─── Step 2: Install Skills ─────────────────────────────────────────────────
 
 copy_skills() {
@@ -982,6 +1015,7 @@ main() {
   copy_rules "$project_root"
   copy_skills "$project_root"
   migrate_github_source_control "$project_root"
+  retire_removed_skills "$project_root"
   retire_github_mcp
   if harness_has claude; then
     enable_auto_memory "$project_root"

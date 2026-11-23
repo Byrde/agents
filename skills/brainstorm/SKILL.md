@@ -16,7 +16,7 @@ mention the way they would have made them.
 
 ## Mindset
 
-- **Know what you know.** Before you reply, ask: what do I know about what they want, and why? If everything that matters is in the request ("make the icon cornflower blue"), this skill is done. Go to the weight check in the `global` rule.
+- **Know what you know.** Before you reply, ask: what do I know about what they want, and why? If everything that matters is in the request ("make the icon cornflower blue"), this skill is done. Build under the `global` rule.
 - **Look before you ask.** Never ask what the project or their context already answers. Never reopen what they already decided.
 - **One question at a time,** and only one whose answer changes what gets built. Otherwise, state your call and your reason as a proposal they can correct.
 - **Open questions before options.** Until you know why they want it, ask with no example answers attached. Options steer. Their own words carry intent your options cannot.
@@ -34,7 +34,7 @@ mention the way they would have made them.
      - If nothing is open, there is one sensible way. End with the short design (the approach, a line on why the others do not fit, the design in a few lines) and ask for approval. That approval covers steps 4 to 6.
    - **They have not.** Ask one open question about the biggest thing the request leaves unsettled, and say what the answer changes. For "a website for my bakery": "If it's mostly for people deciding whether to stop by, I'd lead with hours and what's in the case today; taking orders is a different site. What do you want someone to do when they land on it?"
 
-   If they asked for a brainstorm or a design discussion, end there. If they did not, add one light line: "Or if you'd rather I just dive in, say so." If they take it, this skill is done. State any big how-it-gets-made choice (platform, language) in one line, and continue to the weight check in the `global` rule.
+   If they asked for a brainstorm or a design discussion, end there. If they did not, add one light line: "Or if you'd rather I just dive in, say so." If they take it, this skill is done. State any big how-it-gets-made choice (platform, language) in one line, and build under the `global` rule.
 
 3. **Have the conversation.** This is territory, not a script. Never read these out as questions:
    - what kind of thing this is, and what makes it special
@@ -80,7 +80,7 @@ mention the way they would have made them.
 
 7. **Get approval.** Hand over the document with a short list of the calls you made, so they can check those while reading. Iterate until they approve it.
 
-8. **Hand off.** The approved design is the input to the weight check in the `global` rule. If the work fits `solo`, `solo` builds from the design. If not, `plan` turns it into work items. Both run in this conversation and start from the design.
+8. **Hand off.** The approved design is the input to the build. If the work fits in one pull request, build from the design under the `global` rule. If not, `plan` turns it into work items. Both happen in this conversation and start from the design.
 
 ### Builder check prompt
 
@@ -106,7 +106,7 @@ If nothing important is left, say "nothing important left".
 
 ## The gate
 
-**Nothing gets built until the user approves the design doc:** the short one for a small change, the full one for a project. Building includes product code, scaffolding, installing dependencies, creating projects, and running `solo`, `develop` or `quick-edit`. Reading and exploring are fine.
+**Nothing gets built until the user approves the design doc:** the short one for a small change, the full one for a project. Building includes product code, scaffolding, installing dependencies, and creating projects. Reading and exploring are fine.
 
 Two exceptions. If they opted out of the questions, this skill is done and the gate goes with it. A spike they agreed to may be built. Keeping what it produced is a new request that comes back through this gate.
 
@@ -124,21 +124,19 @@ Two exceptions. If they opted out of the questions, this skill is done and the g
 ## When to halt
 
 - The answer needs someone who is not in the conversation. Write it into the design as an open question, never as a guess.
-- The work turns out to be structural: a module boundary, a new dependency, build-vs-buy. Settle the intent here, then run `architect` before you build.
+- The work turns out to be structural: a module boundary, a new dependency, build-vs-buy. Settle the intent here. The decision itself goes to the user before you build, as the `global` rule says.
 
 ## Composition
 
-**Check what is installed. Never assume a tool skill is absent.** A tool skill is inert
-until you invoke it. A rule is already in context. See `global.md` → Tool skills for
-which is which.
+**Read the skill list. Never assume a tool skill is absent.** A tool skill is inert
+until you invoke it. A rule is already in context.
 
 - **A documentation tool skill**, when one is installed, owns **create document** and
   **update document** for the design. Without one, write the file in the repository.
 - **`design`** owns a screen, flow or component once the intent is settled here.
-- **`architect`** owns structural decisions the design surfaces.
-- **`solo`** or **`plan`** takes the approved design, as the weight check decides.
+- **The `global` rule** sends structural decisions the design surfaces to the user.
+- **`plan`** takes an approved design that needs more than one pull request.
 - **Runs in the main conversation.** This skill is a conversation with the user, so it
-  is never a subagent. When a practice subagent returns **Needs decision** because the
-  intent is open, this skill settles it.
+  is never a subagent.
 - **The `technical-writing` rule** governs the design document. Replies in the
   conversation are conversational register.

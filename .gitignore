@@ -1,6 +1,7 @@
 .DS_Store
 .cursor
 .claude
+__pycache__/
 
 # Rendered tool skills — produced per-project by setup-*.sh scripts.
 # These are user-configured artefacts, not submodule-tracked content.

@@ -34,8 +34,8 @@
 
 # Per-project rendered/vendored tool skills — each owned by a setup-*.sh script
 # (rendered from a template or vendored from upstream), NOT submodule-tracked.
-# Returns 0 for a tool skill, 1 for a shared practice skill (plan, architect,
-# design, develop, test, debug, review, quick-edit, docs) that init.sh seeds.
+# Returns 0 for a tool skill, 1 for a shared skill (brainstorm, plan, design,
+# review, memory-synthesis) that init.sh seeds.
 # Keep in sync with .agents/.gitignore.
 is_tool_skill() {
   case "$1" in

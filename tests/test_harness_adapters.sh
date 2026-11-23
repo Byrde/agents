@@ -176,15 +176,14 @@ test_claude_gets_a_practice_skill_as_a_subagent() {
 test_each_practice_subagent_gets_its_model_and_effort() {
   load_lib
   local root="$SANDBOX/p" name src
-  for name in review develop quick-edit; do
+  for name in review other; do
     src="$root/.agents/skills/$name"
     mkdir -p "$src"
     printf -- '---\nname: %s\ndescription: "D."\ncategory: practice\n---\n\nbody\n' "$name" >"$src/SKILL.md"
     harness_skill_install "$root" claude "$src"
   done
   assert_contains "$(cat "$root/.claude/agents/review.md")" $'model: opus\neffort: high\n---' "review is not on Opus at high effort"
-  assert_contains "$(cat "$root/.claude/agents/develop.md")" $'model: sonnet\neffort: high\n---' "develop is not on Sonnet at high effort"
-  assert_contains "$(cat "$root/.claude/agents/quick-edit.md")" $'model: haiku\n---' "quick-edit is not on Haiku with the session's effort"
+  assert_not_contains "$(cat "$root/.claude/agents/other.md")" "model:" "a practice with no entry is pinned to a model"
 }
 
 test_claude_keeps_an_interactive_practice_skill_as_a_skill() {
@@ -202,10 +201,10 @@ test_claude_keeps_an_interactive_practice_skill_as_a_skill() {
 test_the_shipped_interactive_practices_stay_skills() {
   load_lib
   local name
-  for name in plan architect design; do
+  for name in plan design; do
     harness_is_subagent "$REPO_ROOT/skills/$name" && fail "$name would install as a subagent"
   done
-  harness_is_subagent "$REPO_ROOT/skills/develop" || fail "develop would not install as a subagent"
+  harness_is_subagent "$REPO_ROOT/skills/review" || fail "review would not install as a subagent"
   return 0
 }
 
@@ -398,10 +397,25 @@ test_init_installs_for_the_chosen_harnesses_and_drops_the_rest() {
   assert_json "$host/.workspace.agents.json" '.harnesses | join(" ")' "$HARNESS_ALL" "the choice was not saved"
   assert_file "$host/.github/instructions/global.instructions.md" "Copilot got no rules"
   assert_file "$host/.codex/hooks.json" "Codex got no hooks"
-  assert_file "$host/.claude/agents/develop.md" "Claude Code got no practice subagents"
-  assert_no_file "$host/.claude/skills/develop/SKILL.md" "Claude Code got develop as a skill too"
-  assert_file "$host/.claude/skills/solo/SKILL.md" "Claude Code did not get solo as a skill"
+  assert_file "$host/.claude/agents/review.md" "Claude Code got no practice subagents"
+  assert_no_file "$host/.claude/skills/review/SKILL.md" "Claude Code got review as a skill too"
+  assert_file "$host/.claude/skills/plan/SKILL.md" "Claude Code did not get plan as a skill"
   assert_file "$host/.claude/rules/step-back.md" "Claude Code did not get the step-back rule"
+
+  # An older install left these. The skills behind them are rules now.
+  printf -- '---\nname: develop\n---\n\n<!-- byrde-agents:agent — generated from .agents/skills/develop/SKILL.md by init.sh -->\n' >"$host/.claude/agents/develop.md"
+  printf -- '---\nname: debug\n---\n\nMY_OWN_AGENT\n' >"$host/.claude/agents/debug.md"
+  mkdir -p "$host/.claude/skills/solo" "$host/.claude/skills/docs"
+  printf -- '---\nname: solo\ncategory: mode\n---\n' >"$host/.claude/skills/solo/SKILL.md"
+  printf -- '---\nname: docs\n---\n\nMY_OWN_SKILL\n' >"$host/.claude/skills/docs/SKILL.md"
+  printf '# Skill Capabilities\n' >"$host/.claude/skills/CAPABILITIES.md"
+  run_init "$host" || fail "the init re-run failed"
+  assert_no_file "$host/.claude/agents/develop.md" "a retired practice kept its subagent"
+  assert_no_file "$host/.claude/skills/solo/SKILL.md" "a retired skill kept its copy"
+  assert_no_file "$host/.claude/skills/CAPABILITIES.md" "the retired taxonomy kept its copy"
+  assert_file "$host/.claude/agents/debug.md" "init removed an agent the project wrote"
+  assert_file "$host/.claude/skills/docs/SKILL.md" "init removed a skill the project wrote"
+  rm -rf "$host/.claude/agents/debug.md" "$host/.claude/skills/docs"
 
   run_init "$host" --harness cursor || fail "init --harness cursor failed"
   assert_json "$host/.workspace.agents.json" '.harnesses | join(",")' "cursor" "the new choice was not saved"
@@ -409,7 +423,7 @@ test_init_installs_for_the_chosen_harnesses_and_drops_the_rest() {
   assert_no_file "$host/.github/instructions/global.instructions.md" "a dropped harness kept its rules"
   assert_no_file "$host/.codex/hooks.json" "a dropped harness kept its hooks"
   assert_no_file "$host/.claude/rules/global.md" "Claude Code kept its rules after being dropped"
-  assert_no_file "$host/.claude/agents/develop.md" "Claude Code kept its subagents after being dropped"
+  assert_no_file "$host/.claude/agents/review.md" "Claude Code kept its subagents after being dropped"
 
   # A plain re-run follows the saved choice instead of the default.
   run_init "$host" || fail "init re-run failed"
