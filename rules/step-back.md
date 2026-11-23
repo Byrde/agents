@@ -33,8 +33,8 @@ Do not wait for two signals. One is enough.
 
 1. **Stop editing.** Make no further change to the code until step 5.
 2. **Write the record.** State the goal in one sentence. List each attempt, what it
-   changed, and what it showed. Write it in the conversation, or in `project.md` if one
-   is in use.
+   changed, and what it showed. Write it in the conversation, or in the feature
+   directory if a spec is in play.
 3. **Name the assumptions.** List what each attempt took as given: about the data, the
    contract, the library, the environment, the requirement. Mark each one as verified or
    assumed. An assumed one is the first suspect.

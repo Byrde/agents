@@ -5,9 +5,10 @@
 # GitHub Copilot, Google Antigravity — and adapts every asset (rules, skills,
 # hooks) to each one's own files and formats (see
 # lib/harness.sh for where each lands). Turns ON Claude Code's
-# built-in auto-memory (the default). Optional setup steps (the GitHub
-# projects, Jira, Google Analytics and Figma tool skills) are run separately
-# as their own scripts.
+# built-in auto-memory (the default). Installs GitHub Spec Kit through
+# setup/setup-spec-kit.sh, unless --no-spec-kit is given or uv is missing.
+# Optional setup steps (the GitHub projects, Jira, Google Analytics and Figma
+# tool skills) are run separately as their own scripts.
 #
 # Run from the repository/project root you want to initialise.
 # Writes, for each selected harness (the table in lib/harness.sh is canonical):
@@ -694,13 +695,13 @@ migrate_github_source_control() {
   return 0
 }
 
-# Migrate older installs: these skills became rules, or were folded into
-# another skill. init only visits the skills that still ship, so the subagent
-# or the skill copy an older install made for each one would stay, and its
-# description would still tell the model to use it. A file is ours only when it
-# carries our mark, so a skill or an agent the project wrote under the same
-# name is left alone.
-RETIRED_SKILLS="architect develop test debug docs quick-edit solo explain"
+# Migrate older installs: these skills became rules, were folded into another
+# skill, or gave way to Spec Kit (brainstorm, plan). init only visits the
+# skills that still ship, so the subagent or the skill copy an older install
+# made for each one would stay, and its description would still tell the model
+# to use it. A file is ours only when it carries our mark, so a skill or an
+# agent the project wrote under the same name is left alone.
+RETIRED_SKILLS="architect develop test debug docs quick-edit solo explain brainstorm plan"
 retire_removed_skills() {
   local project_root="$1" name dir agent copy found=0
   for name in $RETIRED_SKILLS; do
@@ -711,7 +712,7 @@ retire_removed_skills() {
     fi
     for dir in .claude/skills .cursor/skills .agents/skills; do
       copy="$project_root/$dir/$name"
-      if [[ -f "$copy/SKILL.md" ]] && grep -qE '^category: (practice|mode|communication)$' "$copy/SKILL.md"; then
+      if [[ -f "$copy/SKILL.md" ]] && grep -qE '^category: (practice|mode|communication|conversation)$' "$copy/SKILL.md"; then
         rm -rf "$copy"; found=1
       fi
     done
@@ -723,8 +724,25 @@ retire_removed_skills() {
     fi
   done
   rmdir "$project_root/.claude/agents" 2>/dev/null || true
-  [[ "$found" -eq 1 ]] && echo "  ✓ retired the practice skills that are now rules (see .agents/rules/global.md)"
+  [[ "$found" -eq 1 ]] && echo "  ✓ retired the skills that are now rules or Spec Kit phases (see .agents/rules/global.md)"
   return 0
+}
+
+# Spec Kit holds the phases of feature-sized work (see the `global` rule). Its
+# setup is its own script, so a failure there never stops this install.
+SPEC_KIT="${BYRDE_SPEC_KIT:-1}"
+install_spec_kit() {
+  local project_root="$1"
+  echo "── Spec Kit ───────────────────────────────────────────────────────"
+  echo ""
+  if [[ "$SPEC_KIT" == "0" ]]; then
+    echo "  – skipped (--no-spec-kit). The agent writes acceptance criteria on the"
+    echo "    work item or in the conversation."
+  elif ! (cd "$project_root" && "$SCRIPT_DIR/setup/setup-spec-kit.sh" --optional); then
+    echo "  ⚠ Spec Kit setup failed. The rest of the install continues."
+    echo "    Run it again with: .agents/scripts/setup/setup-spec-kit.sh"
+  fi
+  echo ""
 }
 
 # ─── Step 2: Install Skills ─────────────────────────────────────────────────
@@ -906,8 +924,8 @@ uninstall() {
   echo ""
   echo "  Removes the rules, skills and hooks init.sh installed, for every"
   echo "  harness, plus the autoMemoryEnabled flag and the allow-all permission"
-  echo "  mode it wrote. Does NOT touch tool skills' MCP/hooks config — run each"
-  echo "  setup-*.sh uninstall for those."
+  echo "  mode it wrote. Does NOT touch tool skills' MCP/hooks config, or Spec"
+  echo "  Kit — run each setup-*.sh uninstall for those."
   echo ""
   printf '  %-16s %s\n' "Project Root" "$project_root"
   echo "$bar"
@@ -944,7 +962,8 @@ uninstall() {
   echo "$bar"
   echo "  Done. Rules, skills, auto-memory, and the permission mode removed."
   echo "  Tool skills installed by setup-*.sh are untouched — uninstall those"
-  echo "  with their own scripts (e.g. setup-figma.sh uninstall)."
+  echo "  with their own scripts (e.g. setup-figma.sh uninstall). Spec Kit is"
+  echo "  untouched too: setup-spec-kit.sh uninstall."
   echo "$bar"
 }
 
@@ -957,6 +976,7 @@ main() {
     case "$1" in
       --harness | --harnesses) HARNESS_ARG="${2:-}"; shift 2 || shift ;;
       --harness=* | --harnesses=*) HARNESS_ARG="${1#*=}"; shift ;;
+      --no-spec-kit) SPEC_KIT=0; shift ;;
       *) args+=("$1"); shift ;;
     esac
   done
@@ -979,11 +999,13 @@ main() {
       echo "                   choice, or '$HARNESS_DEFAULT' on a first run); a non-interactive run"
       echo "                   uses the saved choice, or '$HARNESS_DEFAULT'. Fewer harnesses than"
       echo "                   last time removes what the dropped ones had."
+      echo "  --no-spec-kit    Do not install GitHub Spec Kit."
       echo "  uninstall        Remove rules, skills, hooks and settings from every"
       echo "                   harness (alias: remove). Tool skills from setup-*.sh stay."
       echo ""
       echo "Environment:"
       echo "  BYRDE_HARNESSES             Same as --harness (the flag wins)."
+      echo "  BYRDE_SPEC_KIT              0 is the same as --no-spec-kit."
       echo "  BYRDE_WORKSPACE_MODE        mono | multi — force the workspace flavour."
       echo "  BYRDE_RULES_REINJECT_EVERY  Re-inject the rules every N tool calls (default 12, 0 = off)."
       echo ""
@@ -1016,6 +1038,7 @@ main() {
   copy_skills "$project_root"
   migrate_github_source_control "$project_root"
   retire_removed_skills "$project_root"
+  install_spec_kit "$project_root"
   retire_github_mcp
   if harness_has claude; then
     enable_auto_memory "$project_root"

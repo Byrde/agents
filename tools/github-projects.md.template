@@ -1,6 +1,6 @@
 ---
 name: github-projects
-description: "**MUST be consulted** before you create, query, transition or annotate a work item. NEVER write an issue, set a field, or touch the board through a raw API call without loading this first. Skipping it means milestones, board status and the work-item/PR link go unset. Owns work-item and project-board operations against GitHub for this project: create work item, transition work item, comment on work item, set work item field (priority, size, type), link work item to milestone, place work item on board, create milestone. Configured for {{ACCOUNT}}/{{REPO}} project board {{PROJECT_ID}}."
+description: "**MUST be consulted** before you create, query, transition or annotate a work item, or publish a spec as one. NEVER write an issue, set a field, or touch the board through a raw API call without loading this first. Skipping it means milestones, board status and the work-item/PR link go unset. Owns work-item and project-board operations against GitHub for this project: create work item, transition work item, comment on work item, set work item field (priority, size, type), link work item to milestone, place work item on board, create milestone. Configured for {{ACCOUNT}}/{{REPO}} project board {{PROJECT_ID}}."
 category: tool
 ---
 
@@ -108,6 +108,18 @@ A work item that is not on the board with Size and Priority set is considered in
 - Move to **In Progress** when active implementation starts.
 - Move to the post-PR status (often **In review** or **Ready to Test** — resolve the actual status set with `gh project field-list {{PROJECT_ID}} --owner {{ACCOUNT}} --format json` once per session) when implementation is complete and a PR is open. The same status survives QA approval.
 - **Do not manually move to Done.** PR-merge automation moves the card to Done when the PR is merged. Manual transitions before merge bypass that gate.
+
+### Specs
+
+A spec is a file in the repository: `spec.md` in a feature directory under `specs/`. The work item is the published copy. People read it there, and the board holds its status. The file is the source.
+
+- **One spec, one work item.** The body is `spec.md` as it is, plus a last line with the path of the feature directory: `gh issue create … --body-file <file>`.
+- **A spec whose stories ship in separate pull requests** is an epic. Create a milestone for the spec and one work item for each user story.
+- **Name the directory for the work item:** `specs/<number>-<short-name>`, with the branch `feature/<number>`. If the directory was created before the work item, rename it and update `.specify/feature.json`.
+- **A work item that a person wrote.** Before you replace its body the first time, post the original body as a comment.
+- **A published spec that changed.** Read the body first: `gh issue view <number> --json body`. If it holds text that is not from the spec, a person edited it. Stop, and ask the user which text stays. If not, publish again with `gh issue edit <number> --body-file <file>`.
+- **Size and Priority** go in the project fields, not in the spec. Say which values you chose.
+- `plan.md` and `tasks.md` stay in the repository. Do not copy them to the work item.
 
 ### Milestones
 

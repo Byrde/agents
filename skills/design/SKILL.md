@@ -17,8 +17,9 @@ sentences, an onboarding flow is three rounds of conversation.
 2. **Sketch two options.** Use the cheapest fidelity that answers the question: an ASCII
    layout, a written spec, or visuals when the decision is visual. Give the trade-offs.
 3. **Decide and deliver.** Name what the user chose, what they rejected, and what is
-   deferred. Deliver what a developer needs to build it. Comment on the work item with
-   the summary when one is in play.
+   deferred. Deliver what a developer needs to build it. When a spec is in play, write
+   it to `design.md` in the feature directory. Comment on the work item with the
+   summary when one is in play.
 
 Cover the unhappy paths: empty, loading and error. Cover the interactive states where
 they apply: hover, disabled and focus.

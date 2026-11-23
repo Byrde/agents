@@ -201,7 +201,7 @@ test_claude_keeps_an_interactive_practice_skill_as_a_skill() {
 test_the_shipped_interactive_practices_stay_skills() {
   load_lib
   local name
-  for name in plan design; do
+  for name in design; do
     harness_is_subagent "$REPO_ROOT/skills/$name" && fail "$name would install as a subagent"
   done
   harness_is_subagent "$REPO_ROOT/skills/review" || fail "review would not install as a subagent"
@@ -377,14 +377,15 @@ make_host() {
   # Its own repo, as a submodule is, so "did init dirty it" has an answer.
   git -C "$host/.agents" init -q
   git -C "$host/.agents" add -A
-  git -C "$host/.agents" -c user.email=t@t -c user.name=t commit -qm fixture
+  # No signing: a fixture must not need the developer's signing agent.
+  git -C "$host/.agents" -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -qm fixture
   echo '{}' >"$SANDBOX/claude.json"
   echo "$host"
 }
 
 run_init() {
   (cd "$1" && shift && HOME="$SANDBOX/home" CLAUDE_USER_CONFIG="$SANDBOX/claude.json" \
-     BYRDE_HARNESSES= .agents/scripts/init.sh "$@" </dev/null >/dev/null 2>&1)
+     BYRDE_HARNESSES= BYRDE_SPEC_KIT=0 .agents/scripts/init.sh "$@" </dev/null >/dev/null 2>&1)
 }
 
 test_init_installs_for_the_chosen_harnesses_and_drops_the_rest() {
@@ -399,19 +400,21 @@ test_init_installs_for_the_chosen_harnesses_and_drops_the_rest() {
   assert_file "$host/.codex/hooks.json" "Codex got no hooks"
   assert_file "$host/.claude/agents/review.md" "Claude Code got no practice subagents"
   assert_no_file "$host/.claude/skills/review/SKILL.md" "Claude Code got review as a skill too"
-  assert_file "$host/.claude/skills/plan/SKILL.md" "Claude Code did not get plan as a skill"
+  assert_file "$host/.claude/skills/design/SKILL.md" "Claude Code did not get design as a skill"
   assert_file "$host/.claude/rules/step-back.md" "Claude Code did not get the step-back rule"
 
   # An older install left these. The skills behind them are rules now.
   printf -- '---\nname: develop\n---\n\n<!-- byrde-agents:agent — generated from .agents/skills/develop/SKILL.md by init.sh -->\n' >"$host/.claude/agents/develop.md"
   printf -- '---\nname: debug\n---\n\nMY_OWN_AGENT\n' >"$host/.claude/agents/debug.md"
-  mkdir -p "$host/.claude/skills/solo" "$host/.claude/skills/docs"
+  mkdir -p "$host/.claude/skills/solo" "$host/.claude/skills/docs" "$host/.claude/skills/brainstorm"
+  printf -- '---\nname: brainstorm\ncategory: conversation\n---\n' >"$host/.claude/skills/brainstorm/SKILL.md"
   printf -- '---\nname: solo\ncategory: mode\n---\n' >"$host/.claude/skills/solo/SKILL.md"
   printf -- '---\nname: docs\n---\n\nMY_OWN_SKILL\n' >"$host/.claude/skills/docs/SKILL.md"
   printf '# Skill Capabilities\n' >"$host/.claude/skills/CAPABILITIES.md"
   run_init "$host" || fail "the init re-run failed"
   assert_no_file "$host/.claude/agents/develop.md" "a retired practice kept its subagent"
   assert_no_file "$host/.claude/skills/solo/SKILL.md" "a retired skill kept its copy"
+  assert_no_file "$host/.claude/skills/brainstorm/SKILL.md" "a skill that Spec Kit replaced kept its copy"
   assert_no_file "$host/.claude/skills/CAPABILITIES.md" "the retired taxonomy kept its copy"
   assert_file "$host/.claude/agents/debug.md" "init removed an agent the project wrote"
   assert_file "$host/.claude/skills/docs/SKILL.md" "init removed a skill the project wrote"
