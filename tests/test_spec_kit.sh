@@ -262,7 +262,7 @@ test_init_leaves_the_spec_kit_skills_to_the_cli() {
   # shellcheck disable=SC1091
   . "$REPO_ROOT/scripts/lib/layout.sh"
   is_tool_skill speckit-specify || fail "init would copy a Spec Kit skill as one of its own"
-  is_tool_skill design && fail "design is no longer a shared skill"
+  is_tool_skill review && fail "review is no longer a shared skill"
   return 0
 }
 

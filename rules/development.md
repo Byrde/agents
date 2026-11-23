@@ -1,46 +1,16 @@
 ---
-description: Architectural standards — Lite DDD modular monolith by default
+description: Architecture default — domain-driven design
 trigger: always_on
 ---
 
-# Architecture — Lite DDD
+# Architecture — use DDD
 
-Unless scale demands otherwise, every new design and every code change defaults to
-**Lite DDD**, a modular monolith. It favors velocity and simplicity while keeping
-dependency inversion strict.
+Default to domain-driven design. Scale it to the project: a small one needs a few
+folders, not a framework.
 
-## Layout
-
-```
-api/              use-cases and orchestration — UserAPI, OrderAPI, …
-domain/           models, events, exceptions, ports
-infrastructure/   adapters — database, external_services
-Main.<ext>        the composition root
-```
-
-## Dependency rules
-
-- **`domain/`** depends on nothing. It holds the business logic for the whole
-  application. No ORM, no web framework, no infrastructure library. When the domain
-  needs to store data or send mail, it declares a port.
-- **`infrastructure/`** depends only on `domain/`. It implements the ports. It never
-  imports from `api/`.
-- **`api/`** depends only on `domain/`. It fetches entities through ports, runs domain
-  logic, and saves state. It never names a concrete adapter.
-- **`Main`** is the only file that imports every layer. It builds the adapters and
-  injects them into `api/`.
-
-## Separation without isolation
-
-The domain is shared, so internal calls need no anti-corruption layer. `OrderAPI` may
-use a `User` entity directly.
-
-Keep the separation logical anyway. User logic belongs in User models. Use domain
-events to trigger a side effect across conceptual domains.
-
-## Tests
-
-- **Unit tests** target `domain/` and `api/` only. They fake the ports and nothing
-  else, so they stay fast.
-- **Integration tests** target `infrastructure/` — real queries, real network, real
-  framework wiring.
+- **Keep the domain pure.** Business logic depends on nothing: no ORM, no web framework,
+  no infrastructure library. When it needs storage or mail, it declares a port.
+- **Point the dependencies inward.** Use cases and adapters depend on the domain. The
+  domain depends on neither. One composition root wires them.
+- **Test to match.** Unit tests cover the domain and the use cases, with fake ports.
+  Integration tests cover the adapters.

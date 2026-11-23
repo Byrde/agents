@@ -1,11 +1,12 @@
 ---
 name: jira
-description: Owns work-item and project-board operations against Jira for this
-  project: create work item, transition work item, comment on work item, set
+description: Adds work tracking in Jira. Owns work-item and project-board
+  operations against Jira for this project: create work item, transition work item, comment on work item, set
   work item field (priority, story points, type, status), link work item (to
   epic, parent, dependency), place work item on board, create milestone (epic).
   Consult it before you create, query, transition, or annotate a work
-  item, or publish a spec as one. Configured for Jira site {{SITE}}, project {{PROJECT_KEY}}.
+  item, and at four points in the work: when you start on a work item, when
+  a spec is approved, when a pull request opens, and after a review. Configured for Jira site {{SITE}}, project {{PROJECT_KEY}}.
 category: tool
 ---
 
@@ -24,6 +25,16 @@ This project's project-management tool. Owns work items (Jira issues), epics, an
 - **create milestone** — create an Epic (epics represent milestones).
 
 Any step that needs one of these operations routes through this skill.
+
+## What this skill adds to the work
+
+With this skill installed, the work gets these steps. Do them without being asked.
+
+- **Before you start on a work item:** read it and all its comments. Move it to **In Progress**.
+- **When a spec is approved:** publish it as a work item (see [Specs](#specs)).
+- **When you make a structural decision:** comment on the work item with the decision and the rejected option.
+- **When the pull request opens:** move the work item to the post-PR status. Comment with the pull request link and what a reviewer must know.
+- **After a review of the change:** comment with the result. For a rejection, move the work item back to **In Progress**. For a pass, leave it where it is.
 
 ## Access
 

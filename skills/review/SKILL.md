@@ -39,9 +39,9 @@ checked and found sound, and what you did not check.
 
 - **On a pull request:** leave review comments on the lines they concern, and give a
   verdict. The `github-source-control` rule has the mechanics.
-- **On a work item:** invoke the tracker's tool skill. Comment with the result. For a
-  rejection, transition the item to its in-progress state. For a pass, leave the item
-  where it is.
-- **With neither:** deliver the report in the conversation.
+- **With no pull request:** deliver the report in the conversation.
+
+A tool skill can add a step here, such as a comment on a work item. Read the skill
+list.
 
 If the change is too large to review well, say so, and propose a split or a focus.
