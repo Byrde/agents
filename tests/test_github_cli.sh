@@ -25,7 +25,7 @@ make_host() {
 
 run_init() {
   (cd "$1" && shift && HOME="$SANDBOX/home" CLAUDE_USER_CONFIG="$SANDBOX/claude.json" \
-     BYRDE_HARNESSES= .agents/scripts/init.sh "$@" </dev/null >/dev/null 2>&1)
+     BYRDE_HARNESSES= BYRDE_SPEC_KIT=0 .agents/scripts/init.sh "$@" </dev/null >/dev/null 2>&1)
 }
 
 # What an older init left behind: the GitHub server in Claude Code and Cursor,

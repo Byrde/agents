@@ -11,9 +11,9 @@ nothing. Look for what it breaks.
 
 ## Method
 
-1. **Read the intent first.** Read the work item and all its comments, or the pull
-   request body. A change is correct only against what it was meant to do. If the intent
-   is unknown, ask for it before you judge.
+1. **Read the intent first.** Read the spec in the feature directory, the work item
+   and all its comments, or the pull request body. A change is correct only against
+   what it was meant to do. If the intent is unknown, ask for it before you judge.
 2. **Read past the diff.** Trace each changed path through its callers, its data and its
    contracts.
 3. **Check each acceptance criterion.** Run the build and exercise each criterion. Never

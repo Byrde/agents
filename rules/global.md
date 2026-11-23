@@ -8,27 +8,49 @@ trigger: always_on
 You know how to plan, build, debug and document software. This rule states only what
 this project does differently, and the habits that fail when nobody states them.
 
-Scale the effort to the change. A one-line fix needs no ceremony. The user's word on how
-much process to use wins.
+## How much process
+
+Pick the level from the request. Say which level you picked, in one line, before you
+start. The user's word on the level wins. "Just build it" means the first level.
+
+| The request | What you do |
+|---|---|
+| A fix, or a change that is small and clear | Build it under the rules below. Write no spec. |
+| A feature, or a request that leaves open what to make | Write a spec, get it approved, then build from it. |
+| A new or changed screen, flow or component | Run `design` before you build. |
+
+### A spec
+
+When the project has a `.specify/` directory, Spec Kit holds the phases as `speckit-*`
+skills. You run them. Never ask the user to run one.
+
+1. Run `speckit-specify`. It asks its questions in one round and writes `spec.md`.
+2. Show the spec to the user, and wait for approval.
+3. When a tracker tool skill is installed, invoke it to publish the spec as a work item.
+4. Run `speckit-plan`, `speckit-tasks`, `speckit-implement` and `speckit-converge` in
+   sequence. Stop only for a structural decision in the plan. If `speckit-converge`
+   adds tasks, run `speckit-implement` again.
+5. Run `review` on the result.
+
+For a spec with more than three user stories, or with open questions, also run
+`speckit-clarify` before the plan and `speckit-analyze` before the implementation.
+
+Commit the feature directory with the change. The spec is the record of what the user
+asked for and why.
+
+Without `.specify/`, write the intent and the acceptance criteria, in
+`Given / When / Then` form, on the work item or in the conversation. Get them approved.
+Then build.
 
 ## Skills
 
-Four skills carry a process of their own. Everything else follows the rules below.
-
-| Run | When |
-|---|---|
-| `brainstorm` | the request leaves open what to make or why |
-| `plan` | you create, split or re-scope work items |
-| `design` | you design or change a screen, flow or component |
-| `review` | the user asks for a review, or a change must be validated against its acceptance criteria |
-
-`brainstorm`, `plan` and `design` are conversations with the user. Run them in this
-conversation.
+`design` is a conversation with the user. Run it in this conversation.
 
 `review` runs as a subagent where the harness has subagents. It sees none of this
 conversation. Give it the change, the intent and the scope. When it returns **Needs
 decision**, ask the user, then resume it with the answer. Write the **Memory candidates**
 it returns, under the `memory` rule. Read its evidence before you report its verdict.
+Run it when the user asks for a review, and at the end of a spec.
 
 **Tool skills.** A tool skill owns each external system: the tracker, the design file,
 analytics. Read the skill list. Never assume a tool skill is absent. Invoke it before you
@@ -42,8 +64,8 @@ touch its system, because it carries conventions you will otherwise get wrong.
   ask what the code or the request answers. State the assumptions you make.
 - **Structural decisions belong to the user.** Before you add a module boundary, a
   service, a data store, or a dependency that is hard to remove, stop. Give the options,
-  the trade-offs and your recommendation. Record the decision and the rejected option on
-  the work item or in the pull request body.
+  the trade-offs and your recommendation. Record the decision and the rejected option
+  in `plan.md`, on the work item, or in the pull request body.
 - **Distrust small dependencies.** For a small need, write a minimal version in the
   project before you add a library that has one maintainer.
 

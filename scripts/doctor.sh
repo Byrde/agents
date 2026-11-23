@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Diagnose the health of what the Byrde Agents setup scripts configured —
-# GitHub (the gh CLI), and the Figma, Google Analytics and Jira tools — for
-# every harness init.sh chose (see lib/harness.sh).
+# GitHub (the gh CLI), the Figma, Google Analytics and Jira tools, and Spec
+# Kit — for every harness init.sh chose (see lib/harness.sh).
 #
 # Only tools that are ACTUALLY set up are validated. The gitignored manifest
 # (.manifest.local.yml, written by setup-*.sh and pruned by their uninstall) is
@@ -398,6 +398,39 @@ check_jira() {
   esac
 }
 
+# ─── Spec Kit checks ─────────────────────────────────────────────────────────
+
+check_spec_kit() {
+  # manifest-gated, like the tool skills — only report when installed.
+  manifest_has spec-kit || return 0
+
+  echo ""
+  echo "Spec Kit"
+  echo "--------"
+
+  if [[ ! -f "$PROJECT_ROOT/.specify/integration.json" ]]; then
+    fail "Spec Kit in manifest but .specify/integration.json missing — re-run setup-spec-kit.sh"
+    return 0
+  fi
+  pass "Installed in .specify/ (integrations: $(jq -r '(.installed_integrations // []) | join(", ")' "$PROJECT_ROOT/.specify/integration.json"))"
+
+  # One skills folder for Claude Code, the shared one for every other harness.
+  local h dir seen="" skill
+  for h in $(harness_selected); do
+    dir="$(harness_skills_dir "$h")"
+    case " $seen " in *" $dir "*) continue ;; esac
+    seen="$seen $dir"
+    skill="$PROJECT_ROOT/$dir/speckit-specify/SKILL.md"
+    if [[ ! -f "$skill" ]]; then
+      fail "Skills missing from $dir/ — re-run setup-spec-kit.sh"
+    elif grep -q "Do not ask the user for it" "$skill"; then
+      pass "Skills in $dir/, with the byrde preset applied"
+    else
+      warn "Skills in $dir/ do not carry the byrde preset — re-run setup-spec-kit.sh"
+    fi
+  done
+}
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 main() {
@@ -413,6 +446,7 @@ main() {
       echo "  Figma      (setup-figma.sh)"
       echo "  Analytics  (setup-google-analytics.sh)"
       echo "  Jira       (setup-jira.sh)"
+      echo "  Spec Kit   (setup-spec-kit.sh)"
       exit 0
       ;;
   esac
@@ -438,6 +472,7 @@ main() {
   check_figma
   check_google_analytics
   check_jira
+  check_spec_kit
 
   # Summary
   echo ""

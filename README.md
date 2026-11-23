@@ -1,6 +1,6 @@
 # .agents
 
-A library of self-contained, opinionated agent skills and rules for software development, adapted on install to Claude Code, Cursor, OpenAI Codex, GitHub Copilot and Google Antigravity. Drop it into any repository as a submodule. Always-on **rules** carry how the team builds: the `global` rule covers building, debugging, verification and documentation in a few lines each. **Practice skills** carry the four processes that need a method of their own: `brainstorm`, `plan`, `design` and `review`. **Tool skills** (`github-projects`, `jira`, `google-analytics`, `figma`, the vendored `figma-use`) are installed per-project by setup scripts. In Claude Code, `review` installs as a subagent (see [Practice subagents](#practice-subagents-claude-code)). OpenCode has its own installer, which turns the practice skills into agents (see [OpenCode](#opencode)).
+A library of self-contained, opinionated agent skills and rules for software development, adapted on install to Claude Code, Cursor, OpenAI Codex, GitHub Copilot and Google Antigravity. Drop it into any repository as a submodule. Always-on **rules** carry how the team builds: the `global` rule sets how much process a change gets, and covers building, debugging, verification and documentation in a few lines each. Feature-sized work goes through [GitHub Spec Kit](#spec-kit), which the agent drives: you never type a phase. **Practice skills** carry the two processes that need a method of their own: `design` and `review`. **Tool skills** (`github-projects`, `jira`, `google-analytics`, `figma`, the vendored `figma-use`) are installed per-project by setup scripts. In Claude Code, `review` installs as a subagent (see [Practice subagents](#practice-subagents-claude-code)). OpenCode has its own installer, which turns the practice skills into agents (see [OpenCode](#opencode)).
 
 ## Usage
 
@@ -33,13 +33,16 @@ git submodule update --remote .agents
 | Parameter | Meaning |
 |---|---|
 | `--harness LIST` | Harnesses to install and adapt assets for, comma-separated. Names: `claude`, `cursor`, `codex`, `copilot`, `antigravity`, or `all`. Numbers select by position in `claude cursor codex copilot antigravity` (1–5). Also spelled `--harness=LIST` or `--harnesses LIST`. Skips the question. |
-| `uninstall` (alias `remove`) | Removes rules, skills, hooks and settings from **every** harness, not only the selected ones. Tool skills from `setup-*.sh` stay; uninstall those with their own scripts. |
+| `--no-spec-kit` | Does not install [Spec Kit](#spec-kit). |
+| `uninstall` (alias `remove`) | Removes rules, skills, hooks and settings from **every** harness, not only the selected ones. Tool skills from `setup-*.sh` and Spec Kit stay; uninstall those with their own scripts. |
 | `-h`, `--help`, `help` | Prints usage. |
 
 | Environment variable | Meaning |
 |---|---|
 | `BYRDE_HARNESSES` | Same as `--harness`, for one run. The flag wins when both are set. The setup scripts read it too. |
 | `BYRDE_WORKSPACE_MODE` | `mono` or `multi`: force the workspace flavor instead of auto-detecting it (see [Single-Repo or Multi-Repo Workspace](#single-repo-or-multi-repo-workspace)). |
+| `BYRDE_SPEC_KIT` | `0` is the same as `--no-spec-kit`. |
+| `BYRDE_SPECIFY` | Path of a `specify` binary for the Spec Kit setup to use in place of `uvx`. |
 | `BYRDE_RULES_REINJECT_EVERY` | Re-inject the rules every N tool calls (default `12`, `0` turns it off). Read at run time by the hooks, not by init. |
 
 Which harnesses are used, in order of precedence: `--harness` > `BYRDE_HARNESSES` > the answer to the question (terminal only) > `harnesses` saved in `.workspace.agents.json` > `claude`.
@@ -51,10 +54,11 @@ The choice is saved as `harnesses` in `.workspace.agents.json`. Re-runs and ever
 1. **Harnesses** — resolves the harnesses as described above
 2. **Workspace map** — generates `.workspace.agents.json` at the project root, auto-detecting mono vs multi-repo (see [Single-Repo or Multi-Repo Workspace](#single-repo-or-multi-repo-workspace)). Gitignored
 3. **Rules** — renders each `.agents/rules/*.md` into each harness's format (see [Harnesses](#harnesses))
-4. **Skills** — makes `.agents/skills/` visible to each harness. For Claude Code, a practice skill that is not interactive becomes a subagent in `.claude/agents/`, and an old `.claude/skills/` copy of it is removed. Init also removes the subagents and skill copies of the practice skills that are now rules
-5. **GitHub — removes the GitHub MCP server that an older install registered. GitHub goes through the `gh` CLI (see [GitHub](#github))
-6. **Auto-memory** (Claude Code only) — sets `autoMemoryEnabled: true` in `.claude/settings.json` (turning on Claude Code's built-in auto-memory, the default) and pins `autoMemoryDirectory` to the absolute path of `./memory` in `.claude/settings.local.json` (project-local storage, git-tracked and shared with the team).
-7. **Hooks** — writes two hooks for each harness that has them: an allow-all pre-tool hook that approves every tool call, and a post-tool hook that re-injects the rules (see below)
+4. **Skills** — makes `.agents/skills/` visible to each harness. For Claude Code, a practice skill that is not interactive becomes a subagent in `.claude/agents/`, and an old `.claude/skills/` copy of it is removed. Init also removes the subagents and skill copies of the practice skills that are now rules or Spec Kit phases
+5. **Spec Kit** — runs `setup-spec-kit.sh` (see [Spec Kit](#spec-kit)). Skipped with `--no-spec-kit`, or with a message when `uv` is missing. A failure here does not stop the install
+6. **GitHub** — removes the GitHub MCP server that an older install registered. GitHub goes through the `gh` CLI (see [GitHub](#github))
+7. **Auto-memory** (Claude Code only) — sets `autoMemoryEnabled: true` in `.claude/settings.json` (turning on Claude Code's built-in auto-memory, the default) and pins `autoMemoryDirectory` to the absolute path of `./memory` in `.claude/settings.local.json` (project-local storage, git-tracked and shared with the team).
+8. **Hooks** — writes two hooks for each harness that has them: an allow-all pre-tool hook that approves every tool call, and a post-tool hook that re-injects the rules (see below)
 
 ### Single-Repo or Multi-Repo Workspace
 
@@ -74,7 +78,7 @@ Always on. `init.sh` renders each one into every selected harness (see [Harnesse
 
 | Rule | What it covers |
 |---|---|
-| [`global`](rules/global.md) | Project-wide baseline. States when to run each practice skill, and the rules for the work that needs no skill: what to do before you build, while you build, and before you say it is done. The lead rule: re-injected in full during long sessions (see [Rules re-injection](#rules-re-injection)) |
+| [`global`](rules/global.md) | Project-wide baseline. States how much process a change gets (no spec for a fix, a spec for a feature), how to drive the Spec Kit phases, and the rules for all work: what to do before you build, while you build, and before you say it is done. The lead rule: re-injected in full during long sessions (see [Rules re-injection](#rules-re-injection)) |
 | [`step-back`](rules/step-back.md) | Stop patching and re-evaluate the design when the work goes in circles: the third attempt, a patch on a patch, a test bent to pass |
 | [`development`](rules/development.md) | Architectural standards — Lite DDD modular monolith by default |
 | [`github-source-control`](rules/github-source-control.md) | Branches, pull requests and code review through the `gh` CLI, as the workspace's GitHub account |
@@ -88,14 +92,12 @@ Ship with the repo. `init.sh` makes them visible to every selected harness.
 
 | Skill | Run it when… |
 |---|---|
-| [`brainstorm`](skills/brainstorm/SKILL.md) | the request leaves open what to make or why. Asks one question at a time, lays out the approaches, and gets a written design approved |
-| [`plan`](skills/plan/SKILL.md) | you create, split or re-scope work items. Without a tracker, it keeps the record in `project.md` |
 | [`design`](skills/design/SKILL.md) | you design or change a screen, flow or component |
 | [`review`](skills/review/SKILL.md) | the user asks for a review, or a change must be validated against its acceptance criteria. Findings are ranked by severity |
 
 [`memory-synthesis`](skills/memory-synthesis/SKILL.md) also ships. It audits and consolidates the memory bank when you ask for it.
 
-**Building needs no skill.** Earlier versions shipped `solo`, `architect`, `develop`, `test`, `debug`, `quick-edit`, `docs` and `explain`. Most of each one restated what a capable model does without instruction. The parts that are specific to this project, or that a model skips by default, are now short rules:
+**Building needs no skill.** Earlier versions shipped `solo`, `architect`, `develop`, `test`, `debug`, `quick-edit`, `docs`, `explain`, `brainstorm` and `plan`. Most of each one restated what a capable model does without instruction. The parts that are specific to this project, or that a model skips by default, are now short rules. Spec Kit holds the rest:
 
 | Earlier skill | Where it is now |
 |---|---|
@@ -105,6 +107,37 @@ Ship with the repo. `init.sh` makes them visible to every selected harness.
 | `test` | the `review` skill, and the `global` rule's checks before you say the work is done |
 | `docs` | `global` rule: check prose against the source. The `technical-writing` rule sets the language |
 | `explain` | `technical-writing` rule, conversational level |
+| `brainstorm` | Spec Kit: `speckit-specify`, with the questions in one round |
+| `plan` | Spec Kit: `speckit-plan` and `speckit-tasks`. The tracker tool skill publishes the spec as a work item |
+
+### Spec Kit
+
+[GitHub Spec Kit](https://github.com/github/spec-kit) holds the phases of feature-sized work. The `global` rule tells the agent to pick the level of process from the request, to say which level it picked, and to run the phases itself:
+
+| The request | What the agent does |
+|---|---|
+| A fix, or a change that is small and clear | Builds it under the rules. No spec |
+| A feature, or a request that leaves open what to make | `speckit-specify`, then your approval of the spec, then `speckit-plan`, `speckit-tasks`, `speckit-implement`, `speckit-converge` and `review` with no further stop |
+| A new or changed screen, flow or component | `design` first |
+
+You approve the spec. A structural decision in the plan is the only other stop. "Just build it" skips the spec.
+
+**What `setup-spec-kit.sh` installs.** `init.sh` runs it. It is also a script of its own.
+
+- Spec Kit, pinned to one version, through `uvx` from the GitHub repository. It needs [uv](https://docs.astral.sh/uv/).
+- One Spec Kit integration for each place the harnesses read skills from: `claude` writes `.claude/skills/speckit-*`, and `codex` writes the shared `.agents/skills/speckit-*` that Cursor, Codex, Copilot, Antigravity and OpenCode read.
+- The `lean` preset that ships with Spec Kit. It replaces the five core prompts with short ones.
+- The [`byrde` preset](spec-kit/preset/). It replaces the specify prompt: the agent names the feature directory itself, asks its questions in one round, and writes user stories with `Given / When / Then` acceptance scenarios.
+- A [constitution](spec-kit/constitution.md) that points at `.agents/rules/`. The setup writes it only while the file is still the empty template.
+
+**What to commit.** `specs/` and `.specify/` are the project's record. The setup ignores the state in `.specify/` that differs from one machine to the next. The skill files are generated, and a re-run restores them on a fresh clone.
+
+**Specs and the tracker.** A spec is a file: `specs/<work item>-<short-name>/spec.md`. With `github-projects` or `jira` installed, the agent publishes the spec as the body of one work item, and names the directory and the branch for it. The file is the source. `plan.md` and `tasks.md` stay in the repository. Without a tracker, the files are the record.
+
+```bash
+.agents/scripts/setup/setup-spec-kit.sh             # install or refresh
+.agents/scripts/setup/setup-spec-kit.sh uninstall   # remove the skills; .specify/ and specs/ stay
+```
 
 ### Practice subagents (Claude Code)
 
@@ -112,7 +145,7 @@ In Claude Code, a skill with `category: practice` installs as `.claude/agents/<n
 
 A subagent cannot ask the user. When a step needs a decision, it stops and returns **Needs decision**. The main session asks you, then resumes the subagent with the answer. Subagents return **Memory candidates**, and the main session writes them. The `global` rule tells the main session to do this.
 
-**Interactive practices stay in the main session.** `plan` and `design` say `interactive: true` in their frontmatter. Their method is a conversation with you: confirm the framing, weigh the options, iterate until you agree. As subagents, every round would go through **Needs decision**. So Claude Code installs them as skills, in `.claude/skills/`, and runs them on the session's model. `init.sh` removes a subagent copy that an older install left. Mark a practice `interactive: true` only when talking to the user is most of its method.
+**Interactive practices stay in the main session.** `design` says `interactive: true` in its frontmatter. Its method is a conversation with you: confirm the framing, weigh the options, iterate until you agree. As a subagent, every round would go through **Needs decision**. So Claude Code installs it as a skill, in `.claude/skills/`, and runs it on the session's model. `init.sh` removes a subagent copy that an older install left. Mark a practice `interactive: true` only when talking to the user is most of its method.
 
 The other harnesses read the practice skills as skills, from `.agents/skills/`. OpenCode still makes an agent of every practice, interactive or not: you switch to an OpenCode agent with Tab and talk to it directly.
 
@@ -202,6 +235,8 @@ Run these separately when you want them (see [Setup Tools](#setup-tools)):
 - `.agents/scripts/setup/setup-google-analytics.sh` — pin a GA4 property
 - `.agents/scripts/setup/setup-figma.sh` — the Figma tool skill
 
+`init.sh` runs `.agents/scripts/setup/setup-spec-kit.sh` itself (see [Spec Kit](#spec-kit)).
+
 **Uninstall.** Every setup script takes an `uninstall` subcommand that reverses exactly what its install wrote:
 
 ```bash
@@ -210,11 +245,12 @@ Run these separately when you want them (see [Setup Tools](#setup-tools)):
 .agents/scripts/setup/setup-jira.sh uninstall    # remove the jira skill + Atlassian MCP server
 .agents/scripts/setup/setup-google-analytics.sh uninstall  # remove the google-analytics skill + MCP server
 .agents/scripts/setup/setup-figma.sh uninstall    # remove Figma skills (incl. figma-use) + MCP server
+.agents/scripts/setup/setup-spec-kit.sh uninstall # remove the Spec Kit skills; .specify/ and specs/ stay
 ```
 
 ## OpenCode
 
-OpenCode 2 has its own installer in [`scripts/opencode/`](scripts/opencode/). It does not use `init.sh` or the harness adapters. The practice skills (`plan`, `design`, `review`) become **agents**, and each agent runs on the model that suits its kind of work. Building follows the rules, on OpenCode's default agent and the session's model.
+OpenCode 2 has its own installer in [`scripts/opencode/`](scripts/opencode/). It does not use `init.sh` or the harness adapters. The practice skills (`design`, `review`) become **agents**, and each agent runs on the model that suits its kind of work. Building follows the rules, on OpenCode's default agent and the session's model.
 
 ```bash
 cd /your/project
@@ -266,11 +302,11 @@ Every run of `init.sh` and `init.sh evaluate` scores the models again:
 
 A dimension uses the benchmarks that a model has. A dimension with no data counts as 0.5, so a gap in the benchmarks never helps a model. Artificial Analysis publishes no instruction-following or hallucination data for current models, so neither is a dimension.
 
-**Profiles.** Each practice skill maps to one profile. All three shipped practices use `deep`:
+**Profiles.** Each practice skill maps to one profile. Both shipped practices use `deep`:
 
 | Profile | Skills | Quality weights | Margin |
 |---|---|---|---|
-| `deep` | plan, design, review | reasoning 0.35, intelligence 0.35, long-context 0.2, agentic 0.1 | 5% |
+| `deep` | design, review | reasoning 0.35, intelligence 0.35, long-context 0.2, agentic 0.1 | 5% |
 
 5% is about the noise between two benchmark runs. To give a new practice skill other needs, add a profile to `PROFILES` in [`scripts/opencode/lib/evaluate.py`](scripts/opencode/lib/evaluate.py).
 
@@ -408,7 +444,7 @@ cd /your/project
 .agents/scripts/doctor.sh
 ```
 
-Reports, for each selected harness, whether its rules, skills and hooks are installed, and checks the workspace map. Then, for each tool that is set up (recorded in `.manifest.local.yml`), it reports the skill, the MCP configuration per harness, authentication, and server reachability. For GitHub (source control and projects), it checks the `gh` login as the workspace's account, and warns about an old GitHub MCP server. The other tools are Figma (`figma`, `figma-use`), Google Analytics and Jira. A tool you never installed, or uninstalled, is left out of the report.
+Reports, for each selected harness, whether its rules, skills and hooks are installed, and checks the workspace map. Then, for each tool that is set up (recorded in `.manifest.local.yml`), it reports the skill, the MCP configuration per harness, authentication, and server reachability. For GitHub (source control and projects), it checks the `gh` login as the workspace's account, and warns about an old GitHub MCP server. The other tools are Figma (`figma`, `figma-use`), Google Analytics and Jira. A tool you never installed, or uninstalled, is left out of the report. When Spec Kit is set up, it reports the installed integrations, and whether each skills folder carries the Spec Kit skills with the `byrde` preset applied.
 
 ## Tests
 
@@ -426,6 +462,7 @@ Offline suites cover the installer itself, and live tests verify that the hooks 
 | `test_github_cli.sh` | GitHub through `gh`: no MCP server, and the old one is removed |
 | `test_workspace_trust.sh` | init grants no workspace trust, and uninstall revokes an old grant |
 | `test_figma_setup.sh` | `setup-figma.sh` |
+| `test_spec_kit.sh` | `setup-spec-kit.sh` against a fake Spec Kit CLI: which integrations, in which order, and what is committed |
 | `test_opencode.sh` | The OpenCode installer, the model scoring, `setup-fuelix.sh` and the plugin |
 | `test_hooks_live.sh` | Live: the hooks inside a real `claude` session (calls the API) |
 

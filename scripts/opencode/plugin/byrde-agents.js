@@ -3,7 +3,7 @@
 // Three jobs, each on a hook that OpenCode 2.2 calls:
 //
 //   skill method      session.hook("context"): when the session runs a practice
-//                     agent (plan, review, …), add that skill's SKILL.md to the
+//                     agent (design, review, …), add that skill's SKILL.md to the
 //                     system prompt. The agent files carry no body, because a
 //                     body replaces OpenCode's default system prompt.
 //   memory            session.hook("context"): tell every agent where project

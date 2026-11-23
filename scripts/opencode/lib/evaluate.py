@@ -121,7 +121,6 @@ PROFILES = {
 # documentation are rules, not skills, so OpenCode's default agent does them
 # on the session's model.
 SKILLS = {
-    "plan": ("deep", "Turns a request into tracked, sized work items. Use it when the user wants work broken down, scoped, sized, or turned into issues or epics."),
     "design": ("deep", "Designs a feature, flow, screen or component before it is built. Use it when the user wants a screen, flow or component designed or changed."),
     "review": ("deep", "Reviews code, a diff or a pull request for defects, risk and fit, and validates a build against its acceptance criteria. Use it when the user asks for a review of code, a diff, a branch or a pull request."),
 }

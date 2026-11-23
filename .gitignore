@@ -13,6 +13,9 @@ skills/figma/
 # Vendored upstream skill — fetched from figma/mcp-server-guide by setup-figma.sh.
 skills/figma-use/
 
+# Spec Kit skills — written by the Spec Kit CLI through setup-spec-kit.sh.
+skills/speckit-*/
+
 # Antigravity reads its project MCP config from .agents/, which is this checkout.
 # Generated per project by the harness adapters (scripts/lib/harness.sh).
 mcp_config.json
