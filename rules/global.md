@@ -3,121 +3,89 @@ description: Project-wide baseline
 trigger: always_on
 ---
 
-# Working in this project
+# How we work
 
-This repo ships **practice skills** — `plan`, `architect`, `design`, `develop`, `test`,
-`debug`, `review`, `quick-edit`, `docs` — the team's methods for doing software work,
-and **`solo`**, which runs the same methods at a lighter weight in one pass. Treat them
-as the playbook. **`brainstorm`** comes before all of them when the intent is open.
+You know how to plan, build, debug and document software. This rule states only what
+this project does differently, and the habits that fail when nobody states them.
 
-## Settle what to build
+Scale the effort to the change. A one-line fix needs no ceremony. The user's word on how
+much process to use wins.
 
-If the request leaves open what to make or why, run `brainstorm` first, in this
-conversation, never as a subagent. It ends with an approved design. If everything that
-matters is in the request, skip it.
+## Skills
 
-## Pick the weight first
+Four skills carry a process of their own. Everything else follows the rules below.
 
-Before you start a unit of work, decide how much process it needs. Most work needs less
-than the full set of practices. Full ceremony on a small change is waste, not diligence.
-
-**Use `solo`** when every one of these is true:
-
-- The change fits in one pull request, in one repository.
-- It adds no module boundary, no service, no data store, and no dependency that is hard
-  to remove later.
-- The behavior is clear, or one round of questions makes it clear.
-- No decision belongs to a person outside this conversation.
-- The work is not one slice of an epic that is tracked on a board.
-
-**Use the dedicated practices** (below) when any one of these is false.
-
-**Use `quick-edit`** when the change is one file, fully specified, and opens no pull
-request.
-
-**The user's word wins.** "Full process" means the dedicated practices. "Solo" or "keep
-it light" means `solo`, with no exception. If the work breaks a condition above, name it
-in one line and carry on. Do not ask.
-
-State the decision in one line before you start, for example `solo: one PR, no new
-boundary`. If the work breaks a condition while you do it, `solo` tells you how to
-escalate.
-
-## The dedicated practices
-
-On the dedicated path, the trigger is mechanical. Never decide whether the work "needs"
-a method.
-
-| Run | Before you |
+| Run | When |
 |---|---|
-| `plan` | create, split, restructure or re-scope a work item |
-| `architect` | change a module boundary, add a dependency, or decide build-vs-buy |
-| `design` | build or change a screen, flow or component |
-| `develop` | make the first edit of any change that will open a pull request |
-| `test` | validate an implementation against its acceptance criteria |
-| `debug` | fix anything reported as broken — a failing test, an error, a regression — even when the fix looks obvious |
-| `review` | review code, a diff, a branch or a pull request |
-| `quick-edit` | make a small, fully specified edit that opens no pull request (a reported bug goes to `debug` first) |
-| `docs` | write or substantially rewrite prose for people: a README, a guide, a changelog |
+| `brainstorm` | the request leaves open what to make or why |
+| `plan` | you create, split or re-scope work items |
+| `design` | you design or change a screen, flow or component |
+| `review` | the user asks for a review, or a change must be validated against its acceptance criteria |
 
-**Run once per unit of work, not once per session.** A practice ends when it ships.
-Repeating the last slice from working memory is the failure, not a shortcut.
+`brainstorm`, `plan` and `design` are conversations with the user. Run them in this
+conversation.
 
-**What skipping costs.** Each practice consults the tool skills around it — the tracker,
-source control, the design file. Skip the practice and none of them are consulted. Work
-items go untracked, boards unset, reviews unrequested, and nobody notices.
+`review` runs as a subagent where the harness has subagents. It sees none of this
+conversation. Give it the change, the intent and the scope. When it returns **Needs
+decision**, ask the user, then resume it with the answer. Write the **Memory candidates**
+it returns, under the `memory` rule. Read its evidence before you report its verdict.
 
-## How a practice runs
+**Tool skills.** A tool skill owns each external system: the tracker, the design file,
+analytics. Read the skill list. Never assume a tool skill is absent. Invoke it before you
+touch its system, because it carries conventions you will otherwise get wrong.
 
-Where your harness installs the practices as **subagents** (Claude Code:
-`.claude/agents/`), delegate to the subagent of that name. Otherwise, invoke the skill.
+## Before you build
 
-**`plan`, `architect` and `design` are interactive.** Their method is a conversation with
-the user, so they are never subagents. Invoke them as skills in this conversation, on
-every harness. When a subagent returns **Handoff** to one of them, run it here.
+- **Read first.** Read the code around the change. Read a referenced work item and all
+  its comments.
+- **Ask once.** Collect the questions that block you, and ask them in one round. Do not
+  ask what the code or the request answers. State the assumptions you make.
+- **Structural decisions belong to the user.** Before you add a module boundary, a
+  service, a data store, or a dependency that is hard to remove, stop. Give the options,
+  the trade-offs and your recommendation. Record the decision and the rejected option on
+  the work item or in the pull request body.
+- **Distrust small dependencies.** For a small need, write a minimal version in the
+  project before you add a library that has one maintainer.
 
-A subagent sees none of this conversation. Its brief is all it knows.
+## While you build
 
-- **Brief it fully.** Give the request, the decisions already made, the work item
-  number, the repository, the files, and the constraints.
-- **Relay its questions.** A subagent cannot ask the user. When it returns **Needs
-  decision**, ask the user, then resume the same subagent with the answer. Never answer
-  for the user.
-- **Follow its handoff.** When it returns **Handoff**, delegate to the practice it names,
-  with the brief it gave.
-- **Write its memory.** It returns **Memory candidates**. Write the ones that qualify,
-  under the `memory` rule.
-- **Check its claims.** Read the evidence it reports before you tell the user the work is
-  done.
+- **Test first.** Write the test that encodes the acceptance criteria. Then implement
+  until it passes.
+- **Reproduce before you fix.** When something is reported as broken, make it fail on
+  demand before you edit. Fix the cause, not the place where the symptom shows. Leave a
+  test that fails without the fix.
+- **Stay in scope.** Change what the request asks for. Add no cleanup and no feature
+  beside it. If the work grows past the request, say so before you continue.
+- **Keep the tracker current.** When a work item is in play, transition it when you
+  start and when the pull request opens. Comment with the pull request link and what a
+  reviewer must know.
+- **Reuse UI components.** When the project keeps a `figma-code-map.json`, read it
+  before you build UI. Extend the mapped component before you add a second one. Update
+  the entry on an add or a rename, then run `.agents/tools/figma-code-map-lint.sh`.
+- **Check prose against the source.** Before you document a command, an option, a
+  default or a path, read it in the code. Run each example.
 
-## Re-grounding
+## Before you say it is done
 
-You are probably reading this again because a hook re-injected it. The session has run
-long. **Drift is the expected failure now, not an unlikely one.**
+- Run the tests, the linter and the build that cover the change. Read the results.
+- Check each acceptance criterion one by one.
+- Attack the change with two or three inputs it is likely to get wrong: empty, invalid,
+  the error path.
+- Report what changed, what you ran and its result, and what you did not check.
 
-Drift does not announce itself. You keep shipping. Tests pass. Nothing errors. And the
-method you started with has been replaced by a pattern you invented two slices ago.
+## Long sessions
 
-**Rules are re-injected. Skills loaded into your own context are not.** A subagent's
-method is its system prompt, so it does not fade. A skill you loaded yourself, such as
-`solo`, has faded by the time its later steps apply.
+A hook shows you this rule again during a long session. Drift is the expected failure
+then, and it does not announce itself. Check three things each time.
 
-Check five things every time you read this.
+1. **What did you skip?** Name it: a test, a tracker update, a memory, a review request.
+   An unnamed omission becomes a habit.
+2. **Whose process is this?** Point at the rule or skill that told you to work this way.
+   If you cannot, you invented it.
+3. **Are you going in circles?** A third fix in one area, a patch on your own patch, a
+   test you changed to make it pass. If yes, apply the `step-back` rule now.
 
-1. **Which practice applies now, at which weight?** If a unit of work began since you
-   last chose, choose again. Never carry the previous slice's procedure forward.
-2. **What is installed?** Read the available skill and agent lists. Never answer from
-   memory, and never infer a tool is absent because nobody mentioned it.
-3. **What have you skipped?** Name it. A memory, a board update, a review request, a work
-   item, `project.md`. An unnamed omission becomes a habit.
-4. **Whose process is this?** Point at the rule or skill that told you to work this way.
-   If you cannot, you invented it. Return to the documented one.
-5. **Are you going in circles?** A third fix in the same area, a patch on your own patch,
-   a test you changed to make it pass. If yes, apply the `step-back` rule now.
-
-The baselines drift the same way. Architectural standards, the writing standard, the
-branch and pull request conventions — each was agreed once, and each erodes as context
-fills. A long session is when you re-read them, not an excuse for not having.
+The other rules drift the same way. Read one again when your next step touches it.
 
 ## Evidence
 

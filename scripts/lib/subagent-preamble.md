@@ -24,22 +24,15 @@ ask:
 
 Never invent an answer to keep going. A guess that ships is worse than a stop.
 
-## When the method hands work to another practice
-
-Where the method says to follow another practice, such as `develop` after `debug`,
-finish your own part and return a **Handoff** section. Name the practice, and give the
-brief it needs: the contract, the evidence, the files. The caller delegates it. Do not
-start the other practice yourself.
-
 ## What you return
 
 End every run with a report in this order. Leave out a section that is empty.
 
-- **Outcome** — done, halted (and why), needs decision, or handoff.
+- **Outcome** — done, halted (and why), or needs decision.
 - **Changes** — files, branches, pull requests and work items you created or changed,
   with links.
 - **Evidence** — the commands you ran and their results. Say what you did not run.
-- **Needs decision** or **Handoff** — as described above.
+- **Needs decision** — as described above.
 - **Memory candidates** — facts that qualify under the `memory` rule. The caller writes
   them. Do not write memory yourself.
 

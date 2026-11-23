@@ -153,15 +153,15 @@ check_harnesses() {
       fail "$(harness_label "$h"): rules missing — run init.sh"
     fi
     if harness_has_agents "$h"; then
-      if [[ -f "$PROJECT_ROOT/.claude/agents/develop.md" ]]; then
+      if [[ -f "$PROJECT_ROOT/.claude/agents/review.md" ]]; then
         pass "$(harness_label "$h"): practice skills as subagents in .claude/agents/"
       else
         fail "$(harness_label "$h"): practice subagents missing from .claude/agents/ — run init.sh"
       fi
-      if [[ -d "$PROJECT_ROOT/.claude/skills/develop" ]]; then
-        warn "$(harness_label "$h"): an old skill copy of develop is in .claude/skills/ — run init.sh to remove it"
+      if [[ -d "$PROJECT_ROOT/.claude/skills/review" ]]; then
+        warn "$(harness_label "$h"): an old skill copy of review is in .claude/skills/ — run init.sh to remove it"
       fi
-    elif [[ -f "$PROJECT_ROOT/$(harness_skills_dir "$h")/develop/SKILL.md" ]]; then
+    elif [[ -f "$PROJECT_ROOT/$(harness_skills_dir "$h")/review/SKILL.md" ]]; then
       pass "$(harness_label "$h"): practice skills in $(harness_skills_dir "$h")/"
     else
       fail "$(harness_label "$h"): practice skills missing from $(harness_skills_dir "$h")/ — run init.sh"

@@ -40,7 +40,7 @@
 # is installed as .claude/agents/<name>.md, not as a skill: the shared preamble
 # (subagent-preamble.md) followed by the skill's method. The method is then the
 # subagent's system prompt, so it does not fade as the main session grows.
-# Except a practice with `interactive: true` (plan, architect, design): its
+# Except a practice with `interactive: true` (plan, design): its
 # method is a conversation with the user, and a subagent cannot ask the user
 # anything. It stays a skill, in the main session.
 # Every other harness reads the practice skills as skills.
@@ -379,14 +379,11 @@ harness_has_agents() { [[ "$1" == "claude" ]]; }
 
 # The Claude model and effort of each practice subagent: "<model> <effort>".
 # Maintained by hand. The aliases follow the newest release of each family.
-# Deep work runs on Opus, building and writing on Sonnet, quick edits on
-# Haiku. An empty effort leaves the session's own.
+# A practice with no entry runs on the session's model and effort.
 harness_agent_model() {
   case "$1" in
-    review)                             echo "opus high" ;;
-    develop | test | debug | docs)      echo "sonnet high" ;;
-    quick-edit)                         echo "haiku" ;;
-    *)                                  echo "" ;;
+    review) echo "opus high" ;;
+    *)      echo "" ;;
   esac
 }
 

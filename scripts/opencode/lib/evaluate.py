@@ -110,28 +110,20 @@ ANSWER_OUTPUT_TOKENS = 1000
 # What a kind of work needs from a model. Skills with the same needs share a
 # profile, so they land on the same model. The margin is how far below the
 # best quality a model can be and still win on cost. 5% is about the noise
-# between two benchmark runs. Quick edits need a model that is good enough,
-# not one near the best, so "fast" takes half the best quality.
+# between two benchmark runs.
 PROFILES = {
     "deep": {"quality": {"reasoning": 0.35, "intelligence": 0.35, "long-context": 0.2, "agentic": 0.1}, "margin": 0.05},
-    "build": {"quality": {"coding": 0.4, "agentic": 0.4, "intelligence": 0.2}, "margin": 0.05},
-    "fast": {"quality": {"coding": 0.5, "intelligence": 0.5}, "margin": 0.5},
-    "write": {"quality": {"intelligence": 0.6, "long-context": 0.4}, "margin": 0.05},
 }
 
 # The shipped practice skills: their profile, and the description OpenCode
 # shows when it decides which agent takes a request. A skill missing here
-# gets the "deep" profile and its own description.
+# gets the "deep" profile and its own description. Building, debugging and
+# documentation are rules, not skills, so OpenCode's default agent does them
+# on the session's model.
 SKILLS = {
     "plan": ("deep", "Turns a request into tracked, sized work items. Use it when the user wants work broken down, scoped, sized, or turned into issues or epics."),
-    "architect": ("deep", "Makes structural decisions: module boundaries, dependencies, integration, build versus buy. Use it when the user asks how a system should be structured, compares approaches, or adds a dependency."),
     "design": ("deep", "Designs a feature, flow, screen or component before it is built. Use it when the user wants a screen, flow or component designed or changed."),
-    "review": ("deep", "Reviews code, a diff or a pull request for defects, risk and fit. Use it when the user asks for a review of code, a diff, a branch or a pull request."),
-    "develop": ("build", "Implements a feature or fix test-first, through a pull request. Use it when the user asks for code to be written, a feature added, or a change that opens a pull request."),
-    "test": ("build", "Validates an implementation against its acceptance criteria, adversarially. Use it when a build must be checked against its acceptance criteria before it is called done."),
-    "debug": ("build", "Finds and proves the root cause of anything reported as broken, before it is fixed. Use it when something behaves wrongly: a failing test, an error, a regression, a bug report."),
-    "quick-edit": ("fast", "Makes small, fully specified edits that open no pull request: a rename, a config tweak, a formatting change. A reported bug goes to debug first."),
-    "docs": ("write", "Writes prose for people: READMEs, guides, reference docs, changelogs. Use it when the deliverable is documentation rather than code."),
+    "review": ("deep", "Reviews code, a diff or a pull request for defects, risk and fit, and validates a build against its acceptance criteria. Use it when the user asks for a review of code, a diff, a branch or a pull request."),
 }
 DEFAULT_PROFILE = "deep"
 

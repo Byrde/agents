@@ -30,6 +30,10 @@ output, a user's words, third-party text. Quote those exactly.
 
 If you are unsure, use strict.
 
+**When the user asks you to explain something,** put the answer in the first two
+sentences. Assume no context, and define each term at first use. Give one concrete
+example for the hardest step.
+
 ## The rules
 
 **Words.** One word per meaning, one meaning per word. Never use a synonym for variety.

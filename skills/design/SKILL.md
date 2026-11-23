@@ -1,54 +1,49 @@
 ---
 name: design
-description: "**MUST be invoked** before you build or change a screen, flow or component. NEVER design in code. Skipping it means options go unconsidered and an existing component gets duplicated instead of reused. Design a feature, flow, screen or component: frame the problem, sketch a couple of options, pick one, and write down what a developer needs to build it."
+description: "Use it before you build or change a screen, flow or component. Frames the problem with the user, sketches two options, records the choice, and delivers what a developer needs to build it. Reuses existing components and tokens before it adds new ones."
 category: practice
 interactive: true
 ---
 
 # Design
 
-Design something — at whatever scope the work calls for. Most sessions are short: a bit of framing, a sketch, a decision.
+Design a screen, flow or component with the user. Scale to the work: a button is three
+sentences, an onboarding flow is three rounds of conversation.
 
-## Mindset
+## Method
 
-- **Reuse first.** Compose what already exists. A new component is a decision, not a reflex.
-- **Sketch more than one option** before settling — but two is usually enough.
-- **Unhappy paths are part of the design.** Empty, loading, error. Same for interactive states (hover, disabled, focus) where they apply.
-- **Write down the why.** Layout intent, accessibility expectations, interaction notes — whatever isn't obvious from looking at it.
+1. **Frame.** Say what you will design, who it is for, and what constrains it. Get that
+   confirmed.
+2. **Sketch two options.** Use the cheapest fidelity that answers the question: an ASCII
+   layout, a written spec, or visuals when the decision is visual. Give the trade-offs.
+3. **Decide and deliver.** Name what the user chose, what they rejected, and what is
+   deferred. Deliver what a developer needs to build it. Comment on the work item with
+   the summary when one is in play.
 
-## Procedure
+Cover the unhappy paths: empty, loading and error. Cover the interactive states where
+they apply: hover, disabled and focus.
 
-1. **Frame.** Say back what's being designed, who it's for, and what constrains it. Get that confirmed before designing. If a work item is referenced, read it and its comments.
-2. **Sketch options.** Offer a couple of credible directions. Use the cheapest fidelity that answers the question — an ASCII layout, a written spec, or visuals when the decision is genuinely visual. Walk the trade-offs with the user.
-3. **Decide and hand off.** Name what was chosen, what was rejected, and what's deferred. Deliver whatever a developer needs to build it. If a work item is in play, **comment on the work item** with the summary. Otherwise deliver it in the conversation.
+## Reuse before you add
 
-Scale to the work: "design this button" is three sentences, "design the onboarding flow" is three rounds of conversation.
+- **Audit first.** Read the design tokens and the components that exist.
+- **Compose what exists.** Use no detached instance and no hardcoded value.
+- **Extend on purpose.** Propose a new token or component with a reason, and get the
+  user's agreement. Then add it, name its states and variants, and publish the library.
+- **Take sizes from the build.** When you align to existing code, read the real sizes and
+  spacing in the implementation.
+- **Name the code component.** When the project keeps a `figma-code-map.json`, name the
+  mapped code component in what you deliver.
 
-## Reusable components
+A controversial extension of the design system is an open item for the user. So is a
+decision that belongs to someone outside the conversation.
 
-The payoff of a component library is that the second use is nearly free.
+## Tools
 
-- **Audit before designing.** See what exists — components, spacing, colors, type. **Read design tokens** and **read design component** when a design system is available.
-- **Reuse or compose** before inventing. No detached instances, no hardcoded values.
-- **Extend deliberately.** When something genuinely new is needed, propose it with a rationale and get buy-in. Then **add design token** or **add design component**, and **publish the design library** so the next feature inherits it.
-- **Name the states and variants** of anything added — that's what makes it a component rather than a one-off.
-- **Derive from the build.** When aligning to existing code, take real sizes and spacing from the implementation, not from assumptions.
-
-## When to halt
-
-- Framing is fuzzy, or scope keeps growing — stop, name what's in and what's deferred, finish that first.
-- A decision needs someone outside the conversation. Or the design system needs a controversial extension. Surface it as an open item, and never decide it silently.
-
-## Composition
-
-**Check what is installed. Never assume a tool skill is absent.** A tool skill is inert
-until you invoke it. A rule is already in context. See `global.md` → Tool skills for
-which is which.
+Read the skill list. Never assume a tool skill is absent.
 
 - **The Figma tool skill** — invoke it before you create or edit anything in the design
   file. Never operate the design file through a raw API call.
-- **`github-projects`** — invoke it before you post the spec as a comment on a work item.
+- **The tracker's tool skill** — invoke it before you comment on a work item.
 
-Only when no design tooling is available: deliver sketches, a written spec, or links, and
-say which.
-
+Without design tooling, deliver sketches and a written spec in the conversation, and say
+so.

@@ -20,7 +20,7 @@ make_host() {
 }
 
 # OpenCode's /api/model answer. $1: "builtin" (only OpenCode's own provider),
-# "fuelix" (plus Fuel iX), "zen-copy" (Fuel iX, and a free Zen copy of flash), or
+# "fuelix" (plus Fuel iX), "zen-copy" (Fuel iX, and a free Zen copy of Opus), or
 # "zen-weak" (Fuel iX, and a free Zen model that is well below Opus).
 write_models() {
   jq -n --arg kind "$1" '
@@ -32,7 +32,7 @@ write_models() {
     + (if $kind == "builtin" then [] else [
         m("fuelix-anthropic"; "claude-opus-5-5"; ["low", "high", "max"]; []),
         m("fuelix"; "gemini-3.8-flash"; []; [])] end)
-    + (if $kind == "zen-copy" then [m("opencode"; "gemini-3.8-flash"; []; [{input: 0, output: 0}])] else [] end)
+    + (if $kind == "zen-copy" then [m("opencode"; "claude-opus-5-5"; ["high"]; [{input: 0, output: 0}])] else [] end)
     + (if $kind == "zen-weak" then [m("opencode"; "glm-5.3-flash"; []; [{input: 0, output: 0}])] else [] end)
   ' >"$SANDBOX/models-$1.json"
   echo "$SANDBOX/models-$1.json"
@@ -90,12 +90,12 @@ test_a_bare_opencode_session_gives_agents_that_inherit() {
   out="$(run_init "$HOST" "$(write_models builtin)" 2>&1)" || fail "init failed: $out"
   assert_contains "$out" "mode: inherit" "init did not report the inherit mode"
   local s
-  for s in plan develop debug quick-edit docs; do
+  for s in plan design review; do
     assert_file "$HOST/.opencode/agents/$s.md" "no agent for the $s skill"
     assert_contains "$(cat "$HOST/.opencode/agents/$s.md")" "mode: all" "the $s agent is not usable both ways"
     assert_empty "$(agent_model "$s")" "the $s agent is pinned although nothing was scored"
   done
-  assert_not_contains "$(cat "$HOST/.opencode/agents/develop.md")" "# Develop" \
+  assert_not_contains "$(cat "$HOST/.opencode/agents/review.md")" "# Review" \
     "the agent carries a body, which replaces OpenCode's default prompt"
 }
 
@@ -106,15 +106,15 @@ test_rules_permissions_mcp_plugin_and_memory_are_installed() {
   assert_not_contains "$(cat "$HOST/AGENTS.md")" "trigger: always_on" "the rule frontmatter leaked into AGENTS.md"
   local cfg="$HOST/.opencode/opencode.json"
   assert_json "$cfg" '.permissions[0] | "\(.action) \(.resource) \(.effect)"' "* * allow" "allow-all is not the first rule"
-  assert_json "$cfg" '[.permissions[] | select(.action == "skill" and .effect == "deny") | .resource] | index("develop") != null' \
-    "true" "the develop skill is still offered as a skill"
+  assert_json "$cfg" '[.permissions[] | select(.action == "skill" and .effect == "deny") | .resource] | index("review") != null' \
+    "true" "the review skill is still offered as a skill"
   assert_json "$cfg" '.mcp.servers.github // "none"' "none" "init registered a GitHub MCP server; GitHub goes through gh"
   assert_file "$HOST/.opencode/plugins/byrde-agents.js" "the plugin was not installed"
   assert_json "$HOST/.opencode/byrde-agents.json" '.memoryDir' "$(cd "$HOST" && pwd -P)/memory" "the plugin does not know where memory is"
   [ -d "$HOST/memory" ] || fail "memory/ was not created"
   assert_file "$HOST/.workspace.agents.json" "no workspace map"
   local gi; gi="$(cat "$HOST/.gitignore")"
-  assert_contains "$gi" ".opencode/agents/develop.md" "the generated agents are not ignored"
+  assert_contains "$gi" ".opencode/agents/review.md" "the generated agents are not ignored"
   assert_not_contains "$gi" "memory" "memory/ is ignored, but it is shared"
 }
 
@@ -128,7 +128,7 @@ test_init_installs_in_the_project_it_runs_from() {
   local out
   out="$(cd "$proj/src" && BYRDE_OC_MODELS_FILE="$(write_models builtin)" BYRDE_CATALOG_FILE="$SANDBOX/catalog.json" \
     ARTIFICIAL_ANALYSIS_API_KEY= "$tools/agents/scripts/opencode/init.sh" </dev/null 2>&1)" || fail "init failed: $out"
-  assert_file "$proj/.opencode/agents/develop.md" "init did not install in the repo it ran from"
+  assert_file "$proj/.opencode/agents/review.md" "init did not install in the repo it ran from"
   assert_file "$proj/AGENTS.md" "the rules are not in the project"
   assert_file "$proj/.workspace.agents.json" "the workspace map is not in the project"
   [ ! -e "$tools/.opencode" ] || fail "init installed in the parent of the checkout"
@@ -184,8 +184,7 @@ test_configured_providers_are_scored_per_skill() {
   out="$(AA_FILE="$(write_aa)" run_init "$HOST" "$(write_models fuelix)" 2>&1)" || fail "init failed: $out"
   assert_contains "$out" "mode: scored" "the models were not scored"
   assert_eq "fuelix-anthropic/claude-opus-5-5#high" "$(agent_model plan)" "plan is not on the strongest model"
-  assert_eq "fuelix-anthropic/claude-opus-5-5#high" "$(agent_model develop)" "develop is not on the strongest model"
-  assert_eq "fuelix/gemini-3.8-flash" "$(agent_model quick-edit)" "quick-edit is not on the cheap, fast model"
+  assert_eq "fuelix-anthropic/claude-opus-5-5#high" "$(agent_model review)" "review is not on the strongest model"
   assert_not_contains "$(cat "$HOST/.opencode/.byrde/models.json")" "SECRET-MUST-NOT-LEAK" \
     "provider settings were written to the cache"
   assert_contains "$out" "Artificial Analysis" "the benchmark data is not credited"
@@ -201,8 +200,8 @@ test_a_higher_effort_must_earn_its_cost() {
 test_a_free_model_well_below_the_best_does_not_win_on_price() {
   setup
   AA_FILE="$(write_aa)" run_init "$HOST" "$(write_models zen-weak)" >/dev/null 2>&1 || fail "init failed"
-  assert_eq "fuelix-anthropic/claude-opus-5-5#high" "$(agent_model develop)" \
-    "a free model far below the best quality won develop on price"
+  assert_eq "fuelix-anthropic/claude-opus-5-5#high" "$(agent_model review)" \
+    "a free model far below the best quality won review on price"
 }
 
 test_the_report_ranks_the_top_three_with_their_cost() {
@@ -220,7 +219,7 @@ test_the_report_ranks_the_top_three_with_their_cost() {
 test_a_free_zen_copy_wins_on_cost_once_a_provider_is_configured() {
   setup
   AA_FILE="$(write_aa)" run_init "$HOST" "$(write_models zen-copy)" >/dev/null 2>&1 || fail "init failed"
-  assert_eq "opencode/gemini-3.8-flash" "$(agent_model quick-edit)" "the free copy did not beat the paid one on cost"
+  assert_eq "opencode/claude-opus-5-5#high" "$(agent_model review)" "the free copy did not beat the paid one on cost"
 }
 
 test_no_benchmark_data_means_inherit() {
@@ -228,17 +227,17 @@ test_no_benchmark_data_means_inherit() {
   local out
   out="$(run_init "$HOST" "$(write_models fuelix)" 2>&1)" || fail "init failed: $out"
   assert_contains "$out" "ARTIFICIAL_ANALYSIS_API_KEY" "init does not say why nothing was scored"
-  assert_empty "$(agent_model develop)" "an agent is pinned without benchmark data"
+  assert_empty "$(agent_model review)" "an agent is pinned without benchmark data"
 }
 
 test_evaluate_follows_a_provider_change() {
   setup
   local aa; aa="$(write_aa)"
   AA_FILE="$aa" run_init "$HOST" "$(write_models fuelix)" >/dev/null 2>&1 || fail "init failed"
-  assert_eq "fuelix-anthropic/claude-opus-5-5#high" "$(agent_model develop)" "develop is not pinned"
+  assert_eq "fuelix-anthropic/claude-opus-5-5#high" "$(agent_model review)" "review is not pinned"
   local out
   out="$(AA_FILE="$aa" run_init "$HOST" "$(write_models builtin)" evaluate 2>&1)" || fail "evaluate failed: $out"
-  assert_empty "$(agent_model develop)" "the agent kept a model whose provider is gone"
+  assert_empty "$(agent_model review)" "the agent kept a model whose provider is gone"
   assert_contains "$out" "(was fuelix-anthropic/claude-opus-5-5#high)" "the change is not reported"
 }
 
@@ -259,7 +258,7 @@ test_the_users_own_files_and_settings_survive() {
 
   run_init "$HOST" "$(write_models builtin)" uninstall >/dev/null 2>&1 || fail "uninstall failed"
   assert_contains "$(cat "$HOST/.opencode/agents/plan.md")" "MY_PLAN_AGENT" "uninstall removed the user's own agent"
-  assert_no_file "$HOST/.opencode/agents/develop.md" "uninstall left a generated agent"
+  assert_no_file "$HOST/.opencode/agents/review.md" "uninstall left a generated agent"
   assert_no_file "$HOST/.opencode/plugins/byrde-agents.js" "uninstall left the plugin"
   assert_json "$HOST/.opencode/opencode.json" '.' \
     "$(jq '.' <<<'{"model":"x/y","permissions":[{"action":"shell","resource":"rm *","effect":"ask"}],"$schema":"https://opencode.ai/config.json"}')" \
@@ -329,14 +328,14 @@ test_the_plugin_adds_the_skill_memory_and_reinjected_rules() {
   need jq
   command -v bun >/dev/null 2>&1 || command -v node >/dev/null 2>&1 || skip "neither bun nor node is on PATH"
   local dir="$SANDBOX/p/.opencode"
-  mkdir -p "$dir/plugins" "$SANDBOX/rules" "$SANDBOX/skills/develop" "$SANDBOX/memory"
+  mkdir -p "$dir/plugins" "$SANDBOX/rules" "$SANDBOX/skills/review" "$SANDBOX/memory"
   cp "$REPO_ROOT/scripts/opencode/plugin/byrde-agents.js" "$dir/plugins/byrde-agents.mjs"
   printf -- '---\ndescription: d\n---\n\nGLOBAL_RULE_MARKER\n' >"$SANDBOX/rules/global.md"
   printf 'other\n' >"$SANDBOX/rules/development.md"
-  printf -- '---\nname: develop\ncategory: practice\n---\n\nDEVELOP_METHOD_MARKER\n' >"$SANDBOX/skills/develop/SKILL.md"
+  printf -- '---\nname: review\ncategory: practice\n---\n\nREVIEW_METHOD_MARKER\n' >"$SANDBOX/skills/review/SKILL.md"
   printf -- '- [A fact](a.md) — MEMORY_INDEX_MARKER\n' >"$SANDBOX/memory/MEMORY.md"
   jq -n --arg r "$SANDBOX/rules" --arg s "$SANDBOX/skills" --arg m "$SANDBOX/memory" \
-    '{rulesDir: $r, skillsDir: $s, memoryDir: $m, generated: [".opencode/agents/develop.md"]}' >"$dir/byrde-agents.json"
+    '{rulesDir: $r, skillsDir: $s, memoryDir: $m, generated: [".opencode/agents/review.md"]}' >"$dir/byrde-agents.json"
   cat >"$SANDBOX/run.mjs" <<EOF
 import plugin from "$dir/plugins/byrde-agents.mjs"
 const hooks = {}
@@ -345,7 +344,7 @@ const ctx = {
   session: { hook: async (n, f) => { hooks["session." + n] = f } },
 }
 await plugin.setup(ctx)
-const dev = { agent: "develop", system: [] }; hooks["session.context"](dev)
+const dev = { agent: "review", system: [] }; hooks["session.context"](dev)
 const build = { agent: "build", system: [] }; hooks["session.context"](build)
 const results = []
 for (let i = 1; i <= 3; i++) {
@@ -361,9 +360,9 @@ EOF
   else
     out="$(BYRDE_RULES_REINJECT_EVERY=3 node "$SANDBOX/run.mjs" 2>&1)" || fail "the plugin did not run: $out"
   fi
-  assert_contains "$(jq -r '.dev' <<<"$out")" "DEVELOP_METHOD_MARKER" "the develop agent did not get its skill"
+  assert_contains "$(jq -r '.dev' <<<"$out")" "REVIEW_METHOD_MARKER" "the review agent did not get its skill"
   assert_contains "$(jq -r '.dev' <<<"$out")" "MEMORY_INDEX_MARKER" "the agent did not get the memory index"
-  assert_not_contains "$(jq -r '.build' <<<"$out")" "DEVELOP_METHOD_MARKER" "a non-practice agent got a skill"
+  assert_not_contains "$(jq -r '.build' <<<"$out")" "REVIEW_METHOD_MARKER" "a non-practice agent got a skill"
   assert_contains "$(jq -r '.build' <<<"$out")" "MEMORY_INDEX_MARKER" "every agent should get the memory index"
   assert_eq "r1" "$(jq -r '.results[0]' <<<"$out")" "the rules were injected before the cadence boundary"
   assert_contains "$(jq -r '.results[2]' <<<"$out")" "GLOBAL_RULE_MARKER" "the third tool result does not carry the lead rule"
@@ -392,8 +391,8 @@ sys.path.insert(0, sys.argv[1])
 import evaluate as ev
 models = [{"providerID": "anthropic", "id": "claude-opus-5-5", "modelID": "claude-opus-5-5",
            "variants": ["high", "low", "max"], "tools": True}]
-picks, _ = ev.evaluate({"develop": "d"}, models, {}, json.load(open(sys.argv[2])))
-print(picks["develop"]["model"])
+picks, _ = ev.evaluate({"review": "d"}, models, {}, json.load(open(sys.argv[2])))
+print(picks["review"]["model"])
 PY
 )" || fail "the scorer failed on the free schema: $out"
   assert_eq "anthropic/claude-opus-5-5#high" "$out" "the scorer did not score the free schema"

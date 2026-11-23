@@ -1,64 +1,75 @@
 ---
 name: plan
-description: "**MUST be invoked** before you create, split, restructure or re-scope a work item. NEVER write an issue, epic or acceptance criteria without loading this first. Skipping it leaves work untracked, unsized and off the board, because this skill is what consults the tracker. Decompose a request — vague or detailed — into trackable work, sized and prioritised at the right granularity. Surfaces dependencies and architectural concerns alongside the breakdown. Adapts to the work: a small fix becomes one item, an epic becomes a container plus its slices."
+description: "Use it before you create, split, restructure or re-scope work items: an issue, an epic, acceptance criteria. Turns a request or an approved design into tracked work items with acceptance criteria, size, priority and dependencies, through the project's tracker. Without a tracker, keeps the record in `project.md`."
 category: practice
 interactive: true
 ---
 
 # Plan
 
-Turn a raw request into a set of tracked work items the team can actually pick up.
+Turn a request into work items the team can pick up. This is a conversation with the
+user. Confirm the intent before you slice, and confirm the breakdown before you create
+anything.
 
-## Mindset
+## Shape
 
-- **Understand intent before slicing.** Size, risk, and dependencies inform the bucket — don't classify on instinct.
-- **Right-sized granularity.** Don't decompose a one-line fix into three issues. Don't pack an epic into a single ticket. Match the slices to the work.
-- **Explicit dependencies beat implicit ones.** If item A blocks item B, say so on the work items.
-- **Architectural surface gets flagged early.** When a slice has structural implications, surface them on the work item. Integration points, data modeling and build-vs-buy calls ambush implementation otherwise.
-- **Make ambiguity visible.** Name an edge case between buckets, such as "a small epic or a large feature". Decide it *with* the user, never for them.
+Match the slices to the work. A one-line fix is one item. Decide a borderline case with
+the user, and record the decision on the work item.
 
-## Inputs
+- **Epic** — several user journeys or systems, or a direction more than an outcome.
+  Create a container (a milestone or its equivalent) plus the slices.
+- **Feature** — one shippable slice with tight acceptance criteria. Usually one item.
+- **Bugfix** — a failure that reproduces, with expected against actual. The scope is the
+  fix.
 
-- **The request** — feature idea, bug report, initiative, or vague direction. Whatever shape it arrives in.
-- **Tech stack** — languages, frameworks, databases, key libraries.
-- **Non-negotiables** — compliance, performance budgets, dependency policies, compatibility guarantees.
-- **Conventions** — team norms beyond what's already captured in installed tool skills.
+## Each work item carries
 
-Elicit only what the scope at hand needs. Keep it conversational.
+- **Acceptance criteria**, one testable statement per line, in `Given / When / Then`
+  form. The `technical-writing` rule sets the level.
+- **Size** (XS, S, M, L, XL) and **priority**, in the tracker's structured fields.
+- **Dependencies**, as explicit links to the blockers.
+- **A structural note**, only when the item touches a module boundary, a data model or a
+  build-versus-buy decision: the decision, the constraints and the open questions.
 
-## Procedure
+A decision that belongs to someone outside the conversation is an open item. Never guess
+it.
 
-1. **Frame the request.** Restate what the user is asking for. Confirm the intent before slicing.
-2. **Pick a scope shape.** Default buckets:
-   - **Epic** — a multi-slice initiative that needs a container. Signals: multiple user journeys, several systems touched, or "direction" rather than "outcome." Create a container (milestone or equivalent) plus the slices.
-   - **Feature** — a concrete, shippable slice with tight acceptance criteria. Usually one work item, occasionally a small set.
-   - **Bugfix** — corrective work with a reproducible failure, expected-vs-actual, and scope limited to the fix.
+## Tracker
 
-   If the request straddles buckets, decide explicitly with the user and record the call on the work item.
-3. **Decompose.** Break the work into items at the granularity that matches the bucket. Don't over-fragment. Don't under-specify.
-4. **Spec each item.** Every work item should include:
-   - Acceptance criteria — the conditions that make it done.
-   - Size (XS/S/M/L/XL) and priority — set via the project's structured fields when a tracker is installed. Set them in conversation otherwise.
-   - Dependencies — link blockers and prerequisites explicitly.
-5. **Flag architectural surface.** For items with meaningful structural implications, attach a short architectural note — key decisions, constraints, recommended approach, open questions. Skip cosmetic or copy-only items. Mermaid diagrams only when a picture earns its keep.
-6. **Present the breakdown.** Walk through the plan with the user. Iterate until they confirm.
+Invoke the tracker's tool skill (`github-projects` or `jira`) before you create an item,
+set a field, or place anything on a board. Read the skill list. Never assume it is
+absent.
 
-## When to halt
+## Without a tracker: project.md
 
-- The request is too vague to slice — go back to framing.
-- A decision needs a stakeholder who isn't in the conversation — log it as an open item rather than guessing.
-- The architectural surface is bigger than expected — pause planning, suggest running `architect` first to nail the structure, then come back.
+Keep a `project.md` at the root of the repository only when the work needs a record:
+it has more than one slice, it continues in a later session, or the user asks for one.
+When a work item tracks the work, the work item is the record. Do not keep both.
 
-## Composition
+```markdown
+# <Project name>
 
-**Check what is installed. Never assume a tool skill is absent.** A tool skill is inert
-until you invoke it. A rule is already in context. See `global.md` → Tool skills for
-which is which.
+## Intent
+<What the user asked for and why, in two or three sentences. Confirmed: yes/no.>
 
-- **`github-projects`** — invoke it before you create a work item, set a field, or place
-  anything on a board. It carries conventions you will otherwise get wrong: milestones
-  are epics, and PR-merge automation owns the transition to Done.
+## Scope
+Shape: feature | bugfix | small epic. In: <…>. Out: <…>.
 
-Only when no tracker is available: deliver the breakdown in the conversation as a
-structured list, and say that is what you are doing.
+## Slices
+### 1. <Imperative title> — <todo | doing | done>
+- Size: XS | S | M | L. Priority: <…>. Depends on: <slice or none>.
+- Acceptance criteria:
+  - Given <…>, when <…>, then <…>.
+- Notes: <structural surface, risks>
 
+## Decisions
+- <Date>: <decision>. Rejected: <option>, because <reason>.
+
+## Open questions
+- <Question> — owner: <who decides>.
+
+## Log
+- <Date>: <what shipped, pull request link>.
+```
+
+Update it in the same step as the work it records. Use absolute dates.
