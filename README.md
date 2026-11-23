@@ -1,6 +1,6 @@
 # .agents
 
-A library of self-contained, opinionated agent skills and rules for software development, adapted on install to Claude Code, Cursor, OpenAI Codex, GitHub Copilot and Google Antigravity. Drop it into any repository as a submodule. Always-on **rules** carry how the team builds: the `global` rule sets how much process a change gets, and covers building, debugging, verification and documentation in a few lines each. Feature-sized work goes through [GitHub Spec Kit](#spec-kit), which the agent drives: you never type a phase. **Practice skills** carry the two processes that need a method of their own: `design` and `review`. **Tool skills** (`github-projects`, `jira`, `google-analytics`, `figma`, the vendored `figma-use`) are installed per-project by setup scripts. In Claude Code, `review` installs as a subagent (see [Practice subagents](#practice-subagents-claude-code)). OpenCode has its own installer, which turns the practice skills into agents (see [OpenCode](#opencode)).
+A library of self-contained, opinionated agent skills and rules for software development, adapted on install to Claude Code, Cursor, OpenAI Codex, GitHub Copilot and Google Antigravity. Drop it into any repository as a submodule. Always-on **rules** carry how the team builds: the `global` rule sets how much process a change gets, and covers building, debugging, verification and documentation in a few lines each. Feature-sized work goes through [GitHub Spec Kit](#spec-kit), which the agent drives: you never type a phase. One **practice skill** ships: `review`. That is the core, and it is complete alone. **Tool skills** (`github-projects`, `jira`, `google-analytics`, `figma`, the vendored `figma-use`) are installed per-project by setup scripts. Each one adds a capability to the core: with `figma` the agent designs before it builds, and with `github-projects` or `jira` it tracks the work. In Claude Code, `review` installs as a subagent (see [Practice subagents](#practice-subagents-claude-code)). OpenCode has its own installer, which turns the practice skills into agents (see [OpenCode](#opencode)).
 
 ## Usage
 
@@ -80,7 +80,7 @@ Always on. `init.sh` renders each one into every selected harness (see [Harnesse
 |---|---|
 | [`global`](rules/global.md) | Project-wide baseline. States how much process a change gets (no spec for a fix, a spec for a feature), how to drive the Spec Kit phases, and the rules for all work: what to do before you build, while you build, and before you say it is done. The lead rule: re-injected in full during long sessions (see [Rules re-injection](#rules-re-injection)) |
 | [`step-back`](rules/step-back.md) | Stop patching and re-evaluate the design when the work goes in circles: the third attempt, a patch on a patch, a test bent to pass |
-| [`development`](rules/development.md) | Architectural standards — Lite DDD modular monolith by default |
+| [`development`](rules/development.md) | The architecture default, in three lines: use domain-driven design |
 | [`github-source-control`](rules/github-source-control.md) | Branches, pull requests and code review through the `gh` CLI, as the workspace's GitHub account |
 | [`workspace`](rules/workspace.md) | Finds which repository a task belongs to in a multi-repo workspace, and works inside it |
 | [`memory`](rules/memory.md) | When to write memory, and what belongs in it (pairs with Claude Code's built-in auto-memory) |
@@ -92,12 +92,11 @@ Ship with the repo. `init.sh` makes them visible to every selected harness.
 
 | Skill | Run it when… |
 |---|---|
-| [`design`](skills/design/SKILL.md) | you design or change a screen, flow or component |
 | [`review`](skills/review/SKILL.md) | the user asks for a review, or a change must be validated against its acceptance criteria. Findings are ranked by severity |
 
 [`memory-synthesis`](skills/memory-synthesis/SKILL.md) also ships. It audits and consolidates the memory bank when you ask for it.
 
-**Building needs no skill.** Earlier versions shipped `solo`, `architect`, `develop`, `test`, `debug`, `quick-edit`, `docs`, `explain`, `brainstorm` and `plan`. Most of each one restated what a capable model does without instruction. The parts that are specific to this project, or that a model skips by default, are now short rules. Spec Kit holds the rest:
+**Building needs no skill.** Earlier versions shipped `solo`, `architect`, `develop`, `test`, `debug`, `quick-edit`, `docs`, `explain`, `brainstorm`, `plan` and `design`. Most of each one restated what a capable model does without instruction. The parts that are specific to this project, or that a model skips by default, are now short rules. Spec Kit holds the rest:
 
 | Earlier skill | Where it is now |
 |---|---|
@@ -109,6 +108,7 @@ Ship with the repo. `init.sh` makes them visible to every selected harness.
 | `explain` | `technical-writing` rule, conversational level |
 | `brainstorm` | Spec Kit: `speckit-specify`, with the questions in one round |
 | `plan` | Spec Kit: `speckit-plan` and `speckit-tasks`. The tracker tool skill publishes the spec as a work item |
+| `design` | the `figma` tool skill, which carries the design method |
 
 ### Spec Kit
 
@@ -118,7 +118,6 @@ Ship with the repo. `init.sh` makes them visible to every selected harness.
 |---|---|
 | A fix, or a change that is small and clear | Builds it under the rules. No spec |
 | A feature, or a request that leaves open what to make | `speckit-specify`, then your approval of the spec, then `speckit-plan`, `speckit-tasks`, `speckit-implement`, `speckit-converge` and `review` with no further stop |
-| A new or changed screen, flow or component | `design` first |
 
 You approve the spec. A structural decision in the plan is the only other stop. "Just build it" skips the spec.
 
@@ -145,7 +144,7 @@ In Claude Code, a skill with `category: practice` installs as `.claude/agents/<n
 
 A subagent cannot ask the user. When a step needs a decision, it stops and returns **Needs decision**. The main session asks you, then resumes the subagent with the answer. Subagents return **Memory candidates**, and the main session writes them. The `global` rule tells the main session to do this.
 
-**Interactive practices stay in the main session.** `design` says `interactive: true` in its frontmatter. Its method is a conversation with you: confirm the framing, weigh the options, iterate until you agree. As a subagent, every round would go through **Needs decision**. So Claude Code installs it as a skill, in `.claude/skills/`, and runs it on the session's model. `init.sh` removes a subagent copy that an older install left. Mark a practice `interactive: true` only when talking to the user is most of its method.
+**Interactive practices stay in the main session.** A practice that says `interactive: true` in its frontmatter is a conversation with you. As a subagent, every round would go through **Needs decision**. So Claude Code installs it as a skill, in `.claude/skills/`, and runs it on the session's model. No shipped practice is interactive today.
 
 The other harnesses read the practice skills as skills, from `.agents/skills/`. OpenCode still makes an agent of every practice, interactive or not: you switch to an OpenCode agent with Tab and talk to it directly.
 
@@ -161,14 +160,14 @@ The alias follows the newest release of its family, so a new release needs no ch
 
 ### Tool skills
 
-Opt-in, one setup script each (see [Setup Tools](#setup-tools)). Each renders its skill from a template in [`tools/`](tools/) (`figma-use` is vendored from upstream instead) and registers the MCP server it needs, if any.
+Opt-in, one setup script each (see [Setup Tools](#setup-tools)). A tool skill adds steps to the work, and its description says when. The core names no tool skill, so everything works without them. Each renders its skill from a template in [`tools/`](tools/) (`figma-use` is vendored from upstream instead) and registers the MCP server it needs, if any.
 
 | Skill | Setup script | Owns | MCP server |
 |---|---|---|---|
 | `github-projects` | `setup-github-project.sh` | Work items, milestones, board state on a GitHub project board | GitHub (shared with source control) |
 | `jira` | `setup-jira.sh` | Work items and the project board in Jira | Atlassian Remote MCP |
 | `google-analytics` | `setup-google-analytics.sh` | GA4 reporting queries | Google `analytics-mcp` |
-| `figma` + `figma-use` | `setup-figma.sh` | Design tokens, components and design work in one Figma file | Figma |
+| `figma` + `figma-use` | `setup-figma.sh` | The design method, and the design tokens, components and design work in one Figma file | Figma |
 
 Pick one work-item tracker per project: `github-projects` and `jira` claim the same operations.
 
@@ -250,7 +249,7 @@ Run these separately when you want them (see [Setup Tools](#setup-tools)):
 
 ## OpenCode
 
-OpenCode 2 has its own installer in [`scripts/opencode/`](scripts/opencode/). It does not use `init.sh` or the harness adapters. The practice skills (`design`, `review`) become **agents**, and each agent runs on the model that suits its kind of work. Building follows the rules, on OpenCode's default agent and the session's model.
+OpenCode 2 has its own installer in [`scripts/opencode/`](scripts/opencode/). It does not use `init.sh` or the harness adapters. Each practice skill (today, `review`) becomes an **agent**, and each agent runs on the model that suits its kind of work. Building follows the rules, on OpenCode's default agent and the session's model.
 
 ```bash
 cd /your/project
@@ -302,11 +301,11 @@ Every run of `init.sh` and `init.sh evaluate` scores the models again:
 
 A dimension uses the benchmarks that a model has. A dimension with no data counts as 0.5, so a gap in the benchmarks never helps a model. Artificial Analysis publishes no instruction-following or hallucination data for current models, so neither is a dimension.
 
-**Profiles.** Each practice skill maps to one profile. Both shipped practices use `deep`:
+**Profiles.** Each practice skill maps to one profile. The shipped practice uses `deep`:
 
 | Profile | Skills | Quality weights | Margin |
 |---|---|---|---|
-| `deep` | design, review | reasoning 0.35, intelligence 0.35, long-context 0.2, agentic 0.1 | 5% |
+| `deep` | review | reasoning 0.35, intelligence 0.35, long-context 0.2, agentic 0.1 | 5% |
 
 5% is about the noise between two benchmark runs. To give a new practice skill other needs, add a profile to `PROFILES` in [`scripts/opencode/lib/evaluate.py`](scripts/opencode/lib/evaluate.py).
 

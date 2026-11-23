@@ -198,12 +198,8 @@ test_claude_keeps_an_interactive_practice_skill_as_a_skill() {
   assert_eq ".claude/skills/chat" "$(_HARNESS_AGENTS_ROOT="$root/.agents" harness_skill_where claude chat)" "the install log names the wrong place"
 }
 
-test_the_shipped_interactive_practices_stay_skills() {
+test_review_installs_as_a_subagent() {
   load_lib
-  local name
-  for name in design; do
-    harness_is_subagent "$REPO_ROOT/skills/$name" && fail "$name would install as a subagent"
-  done
   harness_is_subagent "$REPO_ROOT/skills/review" || fail "review would not install as a subagent"
   return 0
 }
@@ -400,13 +396,14 @@ test_init_installs_for_the_chosen_harnesses_and_drops_the_rest() {
   assert_file "$host/.codex/hooks.json" "Codex got no hooks"
   assert_file "$host/.claude/agents/review.md" "Claude Code got no practice subagents"
   assert_no_file "$host/.claude/skills/review/SKILL.md" "Claude Code got review as a skill too"
-  assert_file "$host/.claude/skills/design/SKILL.md" "Claude Code did not get design as a skill"
+  assert_file "$host/.claude/skills/memory-synthesis/SKILL.md" "Claude Code did not get memory-synthesis as a skill"
   assert_file "$host/.claude/rules/step-back.md" "Claude Code did not get the step-back rule"
 
   # An older install left these. The skills behind them are rules now.
   printf -- '---\nname: develop\n---\n\n<!-- byrde-agents:agent — generated from .agents/skills/develop/SKILL.md by init.sh -->\n' >"$host/.claude/agents/develop.md"
   printf -- '---\nname: debug\n---\n\nMY_OWN_AGENT\n' >"$host/.claude/agents/debug.md"
-  mkdir -p "$host/.claude/skills/solo" "$host/.claude/skills/docs" "$host/.claude/skills/brainstorm"
+  mkdir -p "$host/.claude/skills/solo" "$host/.claude/skills/docs" "$host/.claude/skills/brainstorm" "$host/.claude/skills/design"
+  printf -- '---\nname: design\ncategory: practice\ninteractive: true\n---\n' >"$host/.claude/skills/design/SKILL.md"
   printf -- '---\nname: brainstorm\ncategory: conversation\n---\n' >"$host/.claude/skills/brainstorm/SKILL.md"
   printf -- '---\nname: solo\ncategory: mode\n---\n' >"$host/.claude/skills/solo/SKILL.md"
   printf -- '---\nname: docs\n---\n\nMY_OWN_SKILL\n' >"$host/.claude/skills/docs/SKILL.md"
@@ -415,6 +412,7 @@ test_init_installs_for_the_chosen_harnesses_and_drops_the_rest() {
   assert_no_file "$host/.claude/agents/develop.md" "a retired practice kept its subagent"
   assert_no_file "$host/.claude/skills/solo/SKILL.md" "a retired skill kept its copy"
   assert_no_file "$host/.claude/skills/brainstorm/SKILL.md" "a skill that Spec Kit replaced kept its copy"
+  assert_no_file "$host/.claude/skills/design/SKILL.md" "a skill that moved into a tool skill kept its copy"
   assert_no_file "$host/.claude/skills/CAPABILITIES.md" "the retired taxonomy kept its copy"
   assert_file "$host/.claude/agents/debug.md" "init removed an agent the project wrote"
   assert_file "$host/.claude/skills/docs/SKILL.md" "init removed a skill the project wrote"

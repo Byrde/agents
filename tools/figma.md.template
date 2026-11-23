@@ -1,10 +1,12 @@
 ---
 name: figma
-description: Owns Figma operations for this project: read design tokens, read
-  design component, add design token, add design component, publish design
-  library, open design file, comment on design, mark frame ready for
-  development. Consulted whenever design work needs the project's reusable
-  components or a place to put a screen. Configured for the {{TEAM}} team,
+description: Adds design to the work. Consult it before you design or change a
+  screen, a flow or a component, and before you build UI code. Frames the
+  problem with the user, sketches two options, and builds the choice from the
+  components and tokens that exist. Owns Figma operations for this project:
+  read design tokens, read design component, add design token, add design
+  component, publish design library, open design file, comment on design,
+  mark frame ready for development. Configured for the {{TEAM}} team,
   folder {{FOLDER}}, file {{FIGMA_FILE}}. Overlays on top of figma-use, which
   owns the Figma plugin-API mechanics — load both when executing operations.
 category: tool
@@ -21,6 +23,25 @@ Figma calls a folder a **Folder**. It was called a Project until 2025, and the R
 This skill is an **overlay** on [figma-use](../figma-use/SKILL.md), Figma's official skill for driving the MCP server. `figma-use` owns the plugin-API mechanics — the `use_figma` tool, page loading, font loading, query/set helpers, error recovery. This skill owns only the project's conventions.
 
 **Whenever an operation here requires programmatic execution in Figma, follow `figma-use` for how to drive the API.** This skill never duplicates that material.
+
+## Design method
+
+With this skill installed, the agent designs a screen, a flow or a component with the user before it is built. Scale to the work: a button is three sentences, an onboarding flow is three rounds of conversation.
+
+1. **Frame.** Say what you will design, who it is for, and what constrains it. Get that confirmed.
+2. **Sketch two options.** Use the cheapest fidelity that answers the question: an ASCII layout, a written spec, or frames in the file when the decision is visual. Give the trade-offs.
+3. **Decide and deliver.** Name what the user chose, what they rejected, and what is deferred. Build the chosen option in the file. When a spec is in play, write the decision to `design.md` in the feature directory.
+
+Cover the unhappy paths: empty, loading and error. Cover the interactive states where they apply: hover, disabled and focus.
+
+**Reuse before you add.**
+
+- Read the tokens and the components that exist before you draw.
+- Compose what exists. Use no detached instance and no hardcoded value.
+- Propose a new token or component with a reason, and get the user's agreement before you add it.
+- A decision that belongs to someone outside the conversation is an open item. Never guess it.
+
+**Before you build UI code,** read the [code map](#code-map). Extend the mapped component before you add a second one.
 
 ## Owned operations
 

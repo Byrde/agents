@@ -40,7 +40,7 @@
 # is installed as .claude/agents/<name>.md, not as a skill: the shared preamble
 # (subagent-preamble.md) followed by the skill's method. The method is then the
 # subagent's system prompt, so it does not fade as the main session grows.
-# Except a practice with `interactive: true` (design): its
+# Except a practice with `interactive: true` (none ships today): its
 # method is a conversation with the user, and a subagent cannot ask the user
 # anything. It stays a skill, in the main session.
 # Every other harness reads the practice skills as skills.

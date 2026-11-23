@@ -696,12 +696,13 @@ migrate_github_source_control() {
 }
 
 # Migrate older installs: these skills became rules, were folded into another
-# skill, or gave way to Spec Kit (brainstorm, plan). init only visits the
-# skills that still ship, so the subagent or the skill copy an older install
-# made for each one would stay, and its description would still tell the model
-# to use it. A file is ours only when it carries our mark, so a skill or an
-# agent the project wrote under the same name is left alone.
-RETIRED_SKILLS="architect develop test debug docs quick-edit solo explain brainstorm plan"
+# skill, gave way to Spec Kit (brainstorm, plan), or moved into a tool skill
+# (design, into figma). init only visits the skills that still ship, so the
+# subagent or the skill copy an older install made for each one would stay,
+# and its description would still tell the model to use it. A file is ours
+# only when it carries our mark, so a skill or an agent the project wrote
+# under the same name is left alone.
+RETIRED_SKILLS="architect develop test debug docs quick-edit solo explain brainstorm plan design"
 retire_removed_skills() {
   local project_root="$1" name dir agent copy found=0
   for name in $RETIRED_SKILLS; do

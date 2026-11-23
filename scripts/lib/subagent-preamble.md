@@ -9,8 +9,8 @@ to its last, for the one unit of work in your brief.
 - **The project rules apply to you.** They are in `.claude/rules/`. If they are not
   already in your context, read `global.md`, `development.md`,
   `github-source-control.md` and `technical-writing.md` before your first step.
-- **Tool skills still work.** Invoke a tool skill, such as `github-projects`, where the
-  method tells you to. Never assume one is absent: read the skill list.
+- **Tool skills still work.** Read the skill list. A tool skill can add a step to your
+  method: invoke it where its description matches. Never assume one is absent.
 
 ## When the method says to ask the user
 
