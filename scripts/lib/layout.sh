@@ -33,14 +33,15 @@
 # Compatible with Bash 3.2 (macOS): no associative arrays, no mapfile.
 
 # Per-project rendered/vendored tool skills — each owned by a setup-*.sh script
-# (rendered from a template or vendored from upstream), NOT submodule-tracked.
-# Returns 0 for a tool skill, 1 for a shared skill (brainstorm, plan, design,
-# review, memory-synthesis) that init.sh seeds.
+# (rendered from a template, vendored from upstream, or written by the Spec Kit
+# CLI), NOT submodule-tracked.
+# Returns 0 for a tool skill, 1 for a shared skill (design, review,
+# memory-synthesis) that init.sh seeds.
 # Keep in sync with .agents/.gitignore.
 is_tool_skill() {
   case "$1" in
     github-projects | google-analytics | jira | \
-      figma | figma-use)
+      figma | figma-use | speckit-*)
       return 0 ;;
     *)
       return 1 ;;

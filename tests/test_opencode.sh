@@ -90,7 +90,7 @@ test_a_bare_opencode_session_gives_agents_that_inherit() {
   out="$(run_init "$HOST" "$(write_models builtin)" 2>&1)" || fail "init failed: $out"
   assert_contains "$out" "mode: inherit" "init did not report the inherit mode"
   local s
-  for s in plan design review; do
+  for s in design review; do
     assert_file "$HOST/.opencode/agents/$s.md" "no agent for the $s skill"
     assert_contains "$(cat "$HOST/.opencode/agents/$s.md")" "mode: all" "the $s agent is not usable both ways"
     assert_empty "$(agent_model "$s")" "the $s agent is pinned although nothing was scored"
@@ -183,7 +183,7 @@ test_configured_providers_are_scored_per_skill() {
   local out
   out="$(AA_FILE="$(write_aa)" run_init "$HOST" "$(write_models fuelix)" 2>&1)" || fail "init failed: $out"
   assert_contains "$out" "mode: scored" "the models were not scored"
-  assert_eq "fuelix-anthropic/claude-opus-5-5#high" "$(agent_model plan)" "plan is not on the strongest model"
+  assert_eq "fuelix-anthropic/claude-opus-5-5#high" "$(agent_model design)" "design is not on the strongest model"
   assert_eq "fuelix-anthropic/claude-opus-5-5#high" "$(agent_model review)" "review is not on the strongest model"
   assert_not_contains "$(cat "$HOST/.opencode/.byrde/models.json")" "SECRET-MUST-NOT-LEAK" \
     "provider settings were written to the cache"
@@ -193,7 +193,7 @@ test_configured_providers_are_scored_per_skill() {
 test_a_higher_effort_must_earn_its_cost() {
   setup
   AA_FILE="$(write_aa)" run_init "$HOST" "$(write_models fuelix)" >/dev/null 2>&1 || fail "init failed"
-  assert_eq "fuelix-anthropic/claude-opus-5-5#high" "$(agent_model plan)" \
+  assert_eq "fuelix-anthropic/claude-opus-5-5#high" "$(agent_model design)" \
     "max effort won on one point of quality, at about 25 times the thinking"
 }
 
@@ -208,7 +208,7 @@ test_the_report_ranks_the_top_three_with_their_cost() {
   setup
   local out
   out="$(AA_FILE="$(write_aa)" run_init "$HOST" "$(write_models fuelix)" 2>&1)" || fail "init failed: $out"
-  local block; block="$(printf '%s\n' "$out" | sed -n '/^  plan /,/^  [a-z]/p')"
+  local block; block="$(printf '%s\n' "$out" | sed -n '/^  design /,/^  [a-z]/p')"
   assert_contains "$block" "1. fuelix-anthropic/claude-opus-5-5#high" "the pick is not ranked first"
   assert_contains "$block" "2. " "the report does not show a second candidate"
   assert_contains "$block" "3. " "the report does not show a third candidate"
@@ -246,18 +246,18 @@ test_evaluate_follows_a_provider_change() {
 test_the_users_own_files_and_settings_survive() {
   setup
   mkdir -p "$HOST/.opencode/agents"
-  printf -- '---\ndescription: mine\n---\nMY_PLAN_AGENT\n' >"$HOST/.opencode/agents/plan.md"
+  printf -- '---\ndescription: mine\n---\nMY_DESIGN_AGENT\n' >"$HOST/.opencode/agents/design.md"
   jq -n '{model: "x/y", permissions: [{action: "shell", resource: "rm *", effect: "ask"}]}' >"$HOST/.opencode/opencode.json"
   printf '# Host notes\n\nKeep me.\n' >"$HOST/AGENTS.md"
 
   run_init "$HOST" "$(write_models builtin)" >/dev/null 2>&1 || fail "init failed"
-  assert_contains "$(cat "$HOST/.opencode/agents/plan.md")" "MY_PLAN_AGENT" "init overwrote the user's own agent"
+  assert_contains "$(cat "$HOST/.opencode/agents/design.md")" "MY_DESIGN_AGENT" "init overwrote the user's own agent"
   assert_json "$HOST/.opencode/opencode.json" '.model' "x/y" "init dropped the user's settings"
   assert_json "$HOST/.opencode/opencode.json" '[.permissions[] | select(.action == "shell")] | length' "1" \
     "init dropped the user's permission rule"
 
   run_init "$HOST" "$(write_models builtin)" uninstall >/dev/null 2>&1 || fail "uninstall failed"
-  assert_contains "$(cat "$HOST/.opencode/agents/plan.md")" "MY_PLAN_AGENT" "uninstall removed the user's own agent"
+  assert_contains "$(cat "$HOST/.opencode/agents/design.md")" "MY_DESIGN_AGENT" "uninstall removed the user's own agent"
   assert_no_file "$HOST/.opencode/agents/review.md" "uninstall left a generated agent"
   assert_no_file "$HOST/.opencode/plugins/byrde-agents.js" "uninstall left the plugin"
   assert_json "$HOST/.opencode/opencode.json" '.' \

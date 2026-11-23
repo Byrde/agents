@@ -5,7 +5,7 @@ description: Owns work-item and project-board operations against Jira for this
   work item field (priority, story points, type, status), link work item (to
   epic, parent, dependency), place work item on board, create milestone (epic).
   Consult it before you create, query, transition, or annotate a work
-  item. Configured for Jira site {{SITE}}, project {{PROJECT_KEY}}.
+  item, or publish a spec as one. Configured for Jira site {{SITE}}, project {{PROJECT_KEY}}.
 category: tool
 ---
 
@@ -87,6 +87,18 @@ Transitions are workflow-driven — resolve the valid transitions for an issue w
 - Move to **In Progress** when active implementation starts.
 - Move to the post-PR status (often **In Review** or **Ready to Test** — resolve the actual status with `getTransitionsForJiraIssue`) when implementation is complete and a PR is open. The same status survives QA approval.
 - **Do not manually move to Done.** PR-merge automation moves the issue to Done when the PR is merged. Manual transitions before merge bypass that gate.
+
+### Specs
+
+A spec is a file in the repository: `spec.md` in a feature directory under `specs/`. The work item is the published copy. People read it there, and the board holds its status. The file is the source.
+
+- **One spec, one work item.** The description is `spec.md` as it is, plus a last line with the path of the feature directory.
+- **A spec whose stories ship in separate pull requests** is an epic. Create an Epic for the spec and one Story for each user story.
+- **Name the directory for the work item:** `specs/<issue key>-<short-name>`, for example `specs/{{PROJECT_KEY}}-123-export-csv`. If the directory was created before the work item, rename it and update `.specify/feature.json`.
+- **A work item that a person wrote.** Before you replace its description the first time, post the original description as a comment.
+- **A published spec that changed.** Read the description first. If it holds text that is not from the spec, a person edited it. Stop, and ask the user which text stays. If not, publish again with `editJiraIssue`.
+- **Story Points and Priority** go in the project fields, not in the spec. Say which values you chose.
+- `plan.md` and `tasks.md` stay in the repository. Do not copy them to the work item.
 
 ### Milestones (epics)
 

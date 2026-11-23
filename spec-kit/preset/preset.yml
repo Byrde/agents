@@ -1,0 +1,25 @@
+schema_version: "1.0"
+
+preset:
+  id: "byrde"
+  name: "Byrde Agents"
+  version: "1.0.0"
+  description: "Specify without a question about the directory, in a form that a work item can carry"
+  author: "byrde"
+  repository: "https://github.com/Byrde/agents"
+  license: "MIT"
+
+requires:
+  speckit_version: ">=1.4.0"
+
+provides:
+  templates:
+    - type: "command"
+      name: "speckit.specify"
+      file: "commands/speckit.specify.md"
+      description: "Create spec.md as user stories with acceptance scenarios"
+      replaces: "speckit.specify"
+
+tags:
+  - "byrde"
+  - "lean"
